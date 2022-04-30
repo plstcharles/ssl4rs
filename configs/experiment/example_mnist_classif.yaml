@@ -1,0 +1,50 @@
+# @package _global_
+
+# To execute this experiment, run one of the entrypoints while specifying this config, e.g.:
+#     python train.py experiment=example_mnist_classif
+
+defaults:
+  - /model/optimization: default.yaml # use default optim settings (adam + step scheduler)
+  - override /data: mnist.yaml # defines the datamodule for MNIST classification tasks
+  - override /callbacks: classification.yaml # adds a few useful callbacks for classification tasks
+  - _self_
+
+experiment_name: mnist_with_simple_cnn # experiment name used in output paths
+
+model: # specified which LightningModule-derived implementation provides the training/inference logic
+  _recursive_: False
+  _target_: ssl4rs.models.mnist.MNISTClassifier
+  encoder_config:
+    _target_: ssl4rs.models.components.simple_cnn.SimpleConvNet
+    in_channels: 1
+    hidden_channels: [32, 64, 128]
+    kernel_sizes: [[5, 5], [5, 5], [3, 3]]
+    paddings: [[2, 2], [1, 1], [0, 0]]
+  head_config:
+    _target_: ssl4rs.models.components.simple_mlp.SimpleMLP
+    in_channels: 512 # = the element count after flattening a 128 x 2 x 2 feature map
+    hidden_channels: [256]
+    out_channels: 10
+  loss_config: # in this case, we'll instantiate the cross-entropy loss module directly
+    _target_: torch.nn.CrossEntropyLoss
+
+data:
+  datamodule:
+    dataloader_fn_map:
+      _default_: # this group provides shared (but overridable) settings for all data loader types
+        batch_size: 256 # bump up the batch size from the default
+
+trainer:
+  precision: 16 # we'll run with PyTorch-Lightning's AMP mode enabled by default
+  max_epochs: 15
+
+target_metric: valid/accuracy # name of the metric we will be targeting for hparam optimization
+target_metric_mode: max # optimization mode of the target metric defined above
+
+utils:
+  print_config: True
+
+profiler: # in case we run the data profiler, these are the modified setting to use
+  use_parser: False
+  batch_count: 100
+  loop_count: 10

@@ -1,0 +1,8 @@
+defaults:
+  - default.yaml # reloads all the default training settings and overrides with those below
+  - _self_
+
+accelerator: gpu # this config assumes we'll do distributed data parallel on GPUs
+devices: 4 # this config assumes there are 4 GPUs that can be used per node
+strategy: ddp # sets the special training strategy to 'distributed data parallel'
+sync_batchnorm: True # toggles batchnorm synchronization across devices during training

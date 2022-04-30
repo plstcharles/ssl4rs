@@ -1,0 +1,29 @@
+# @package _global_
+#
+# This root config is associated to the 'test.py' entrypoint provided with the framework.
+#
+# Note: when launching with this config, you likely need an experiment subconfig! For example:
+#     python test.py experiment=example_mnist_classif
+#
+# To change the output folder location, see the output/default.yaml definitions.
+
+defaults:
+  - _self_
+  - utils: default.yaml # utility configs contain general-use-but-not-so-important settings
+  - output: default.yaml # output configs define the root path and name patterns to use for logging
+  - data: default.yaml # data configs define the datamodule and dataloaders to instantiate
+  - model: default.yaml # model configs define the LightningModule-derived models to instantiate
+  - callbacks: null # callbacks configs define pytorch lightning callbacks to be enabled
+  - logger: default.yaml # logger configs define what kind of logging to use (e.g. MLFlow, wandb)
+  - trainer: default.yaml # trainer configs define the (lightning-derived) trainer to instantiate
+  - experiment: null # experiment configs allow for overrides and version control of all settings
+  - optional local: default.yaml # optional overriding config for machine/user specific settings
+  - debug: null # debugging configs allow for extra logging and deactivation of optimization stuff
+
+ckpt_path: ??? # MANDATORY path to the pytorch lightning checkpoint to be reloaded for testing
+experiment_name: default # defines the experiment name used in various output/logging paths
+run_type: test # should always remain as 'test' unless a derivation of the testing pipeline is used
+run_name: ${utils.curr_timestamp} # defines the run name used in various output/logging paths
+job_name: ${oc.select:hydra.job.num,0} # defines the job name used in various output/logging paths
+seed: null # seed for random number generators (null = auto-seed based e.g. on datetime)
+seed_workers: True # toggles whether to initialize workers with the above seed as well

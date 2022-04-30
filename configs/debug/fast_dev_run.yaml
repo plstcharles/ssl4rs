@@ -1,0 +1,8 @@
+# @package _global_
+
+defaults:
+  - default.yaml
+  - _self_
+
+trainer:
+  fast_dev_run: True # runs 1 train, 1 validation and 1 test step only before stopping

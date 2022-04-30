@@ -1,0 +1,15 @@
+framework_name: ssl4rs # name of the 'framework' that will be running the training/evaluation code
+project_name: ${utils.framework_name}-default # name of the project that encompasses all experiments
+data_root_dir: ${oc.env:DATA_ROOT,???} # this is the root from which we can look for datasets
+output_root_dir: ${oc.env:OUTPUT_ROOT,???} # this is where logging/results/viz for all jobs go
+output_dir_prefix: ${utils.output_root_dir} # this will be used to define the full hydra output paths
+curr_timestamp: ${now:%Y-%m-%d}_${now:%H-%M-%S} # sets up the current-datetime string pattern
+experiment_folder_name: ${experiment_name} # defines the experiment folder name inside the output dir
+run_folder_name: ${run_name} # defines the run folder name inside the experiment directory
+job_folder_name: ${job_name} # defines the job folder name inside the run directory
+run_and_job_name: ${run_name}_${oc.select:job_name,0} # always-valid version of the run+job name
+checkpoint_name: e{epoch:03d}_s{step:06d} # default pattern has zero-padded values for sorting
+print_config: False # toggles whether to pretty-print the config at the start of the run
+ignore_warnings: False # used to disable python warnings if they annoy you
+log_installed_pkgs: True # toggles whether to log all installed packages in the python env
+log_runtime_tags: True # toggles whether to log all runtime tags (e.g. platform name)

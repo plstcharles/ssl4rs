@@ -1,0 +1,9 @@
+# @package _global_
+
+# this config specifies info for the main LightningModule used for its model training/inference logic
+
+model:
+  _target_: ??? # MANDATORY class to be instantiated (should be derived from a pl.LightningModule)
+
+target_metric: val/loss # name of the metric we will be targeting for hparam optimization (if any)
+target_metric_mode: min # optimization mode of the target metric defined above (should be min or max)

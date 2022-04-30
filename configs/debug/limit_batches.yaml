@@ -1,0 +1,11 @@
+# @package _global_
+
+defaults:
+  - default.yaml
+  - _self_
+
+trainer:
+  max_epochs: 2 # will run through the washer for two cycles only
+  limit_train_batches: 3 # ... and using three batches in each stage
+  limit_val_batches: 3
+  limit_test_batches: 3
