@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - default.yaml
+
+trainer:
+  max_epochs: 1
+  # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.profiler.SimpleProfiler.htm
+  profiler: simple
+  # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.profiler.AdvancedProfiler.html
+  # profiler: advanced
+  # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.profiler.PyTorchProfiler.html
+  # profiler: pytorch

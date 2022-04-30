@@ -1,0 +1,36 @@
+# @package _global_
+# NOTE: THIS FILE IS UNUSED (AND ORIGINALLY FROM THE TEMPLATE) AS OF 2022-06-25
+# To execute this experiment run:
+#     python train.py experiment=example
+
+defaults:
+  - override /data: mnist.yaml
+  - override /model: mnist.yaml
+  - override /callbacks: default.yaml
+  - override /logger: tboard_and_wandb.yaml
+  - override /trainer: default.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+
+experiment_name: simple_dense_net
+
+seed: 12345
+
+trainer:
+  min_epochs: 10
+  max_epochs: 10
+  gradient_clip_val: 0.5
+
+model:
+  lr: 0.002
+  net:
+    lin1_size: 128
+    lin2_size: 256
+    lin3_size: 64
+
+data:
+  batch_size: 64
+
+logger:
+  wandb:
+    tags: ["mnist"]

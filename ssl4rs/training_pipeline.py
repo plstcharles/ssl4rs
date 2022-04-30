@@ -1,0 +1,142 @@
+import os
+import typing
+
+import hydra
+from omegaconf import DictConfig
+from pytorch_lightning import (
+    Callback,
+    LightningDataModule,
+    LightningModule,
+    Trainer,
+    seed_everything,
+)
+import pytorch_lightning
+import pytorch_lightning.loggers
+import wandb
+
+from ssl4rs import utils
+
+logger = ssl4rs.utils.get_logger(__name__)
+
+
+def train(config: DictConfig) -> typing.Optional[float]:
+    """Runs the training pipeline, and possibly tests the model as well following that.
+
+    If testing is enabled, the 'best' model weights found during training will be reloaded
+    automatically inside this function. Thios
+
+    Args:
+        config (DictConfig): Configuration composed by Hydra.
+
+    Returns:
+        Optional[float]: Metric score for hyperparameter optimization.
+    """
+
+    # Set seed for random number generators in pytorch, numpy and python.random
+    if config.get("seed"):
+        seed_everything(config.seed, workers=True)
+
+    # Convert relative ckpt path to absolute path if necessary
+    # @@@@@@@@@@@@@@@@ REMOVE ME
+    ckpt_path = config.trainer.get("resume_from_checkpoint")
+    if ckpt_path and not os.path.isabs(ckpt_path):
+        config.trainer.resume_from_checkpoint = os.path.join(
+            hydra.utils.get_original_cwd(), ckpt_path
+        )
+
+    # Init lightning datamodule
+    log.info(f"Instantiating datamodule <{config.data._target_}>")
+    datamodule: LightningDataModule = hydra.utils.instantiate(config.data)
+
+    # Init lightning model
+    log.info(f"Instantiating model <{config.model._target_}>")
+    model: LightningModule = hydra.utils.instantiate(config.model)
+
+    # Init lightning callbacks
+    callbacks: List[Callback] = []
+    if "callbacks" in config:
+        for _, cb_conf in config.callbacks.items():
+            if "_target_" in cb_conf:
+                log.info(f"Instantiating callback <{cb_conf._target_}>")
+                callbacks.append(hydra.utils.instantiate(cb_conf))
+
+    # Init lightning loggers
+    loggers: List[LightningLoggerBase] = []
+    if "logger" in config:
+        for _, lg_conf in config.logger.items():
+            if "_target_" in lg_conf:
+                log.info(f"Instantiating logger <{lg_conf._target_}>")
+                logger.append(hydra.utils.instantiate(lg_conf))
+
+    # Init lightning trainer
+    log.info(f"Instantiating trainer <{config.trainer._target_}>")
+    trainer: Trainer = hydra.utils.instantiate(
+        config.trainer, callbacks=callbacks, logger=logger, _convert_="partial"
+    )
+
+    # Send some parameters from config to all lightning loggers
+    log.info("Logging hyperparameters!")
+    utils.log_hyperparameters(
+        config=config,
+        model=model,
+        datamodule=datamodule,
+        trainer=trainer,
+        callbacks=callbacks,
+        loggers=loggers,
+    )
+
+    # Train the model
+    if config.get("train"):
+        log.info("Starting training!")
+        trainer.fit(model=model, datamodule=datamodule)
+
+    # Get metric score for hyperparameter optimization
+    optimized_metric = config.get("optimized_metric")
+    if optimized_metric and optimized_metric not in trainer.callback_metrics:
+        raise Exception(
+            "Metric for hyperparameter optimization not found! "
+            "Make sure the `optimized_metric` in `hparams_search` config is correct!"
+        )
+    score = trainer.callback_metrics.get(optimized_metric)
+
+    # Test the model
+    if config.get("test"):
+        ckpt_path = "best"
+        if not config.get("train") or config.trainer.get("fast_dev_run"):
+            ckpt_path = None
+        log.info("Starting testing!")
+        trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
+
+    # Make sure everything closed properly
+    log.info("Finalizing!")
+    utils.finish(
+        config=config,
+        model=model,
+        datamodule=datamodule,
+        trainer=trainer,
+        callbacks=callbacks,
+        loggers=loggers,
+    )
+
+    # Print path to best checkpoint
+    if not config.trainer.get("fast_dev_run") and config.get("train"):
+        log.info(f"Best model ckpt at {trainer.checkpoint_callback.best_model_path}")
+
+    # Return metric score for hyperparameter optimization
+    return score
+
+
+def finish(
+    config: DictConfig,
+    model: pytorch_lightning.LightningModule,
+    datamodule: pytorch_lightning.LightningDataModule,
+    trainer: pytorch_lightning.Trainer,
+    callbacks: typing.List[pytorch_lightning.Callback],
+    loggers: typing.List[pytorch_lightning.loggers.LightningLoggerBase],
+) -> None:
+    """Makes sure everything is logged and closed properly before ending the session."""
+
+    # without this sweeps with wandb logger might crash!
+    for lg in loggers:
+        if isinstance(lg, pytorch_lightning.loggers.wandb.WandbLogger):
+            wandb.finish()

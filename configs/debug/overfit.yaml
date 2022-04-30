@@ -1,0 +1,8 @@
+# @package _global_
+
+defaults:
+  - default.yaml
+
+trainer:
+  overfit_batches: 3  # will try to overfit to 3 training data batches only...
+  max_epochs: 20  # ... over 20 epochs (max)

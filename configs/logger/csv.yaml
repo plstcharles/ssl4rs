@@ -1,0 +1,12 @@
+# NOTE: THIS FILE IS UNUSED (AND ORIGINALLY FROM THE TEMPLATE) AS OF 2022-06-25
+
+# For more information on the following hyperparameters, see the PyTorch Lightning documentation:
+# https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.loggers.csv_logs.html
+
+csv:
+  _target_: pytorch_lightning.loggers.csv_logs.CSVLogger
+  save_dir: ${hydra.runtime.output_dir}  # location where the CSV files will be written (directly)
+  name: ${experiment_name}  # name of the experiment also used in csv loggers
+  version: ${run_and_job_name}  # experiment version (if multi-run/job); auto-set if needed
+  prefix: ""  # the string to prefix to all metric keys that will be logged
+  # flush_logs_every_n_steps: 100  # controls how often to flush logs to disk

@@ -1,0 +1,6 @@
+# @package _global_
+
+defaults:
+  - default.yaml
+
+run_type: test  # sets run type as test-only, possibly avoiding training altogether

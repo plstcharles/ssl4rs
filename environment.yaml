@@ -1,0 +1,50 @@
+# Note: this is the configuration file used by Miniconda/Anaconda to create a Python environment
+# with the list of packages below that were used to run our own experiments.
+#
+# To create such an environment, use:
+#    conda env create -f environment.yaml
+#
+# Then, to activate it in a terminal, use:
+#    conda activate ssl4rs
+
+name: ssl4rs
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - black # code formatting
+  - flake8 # code formatting
+  - flake8-docstrings # code formatting
+  - gitpython # for git i/o and hash tagging
+  - h5py # i/o library for HDF5 datasets
+  - isort # code formatting
+  - jupyter # data exploration
+  - matplotlib # visualization/logging
+  - mlflow # visualization/logging
+  - mock # testing
+  - nbstripout # code formatting
+  - numpy # generic utility
+  - pip
+  - pre-commit # core formatting
+  - pytest # testing
+  - python~=3.9
+  - python-dotenv # loads env variables from .env
+  - pytorch-lightning>=1.5.10 # training helper
+  - pytorch # training backbone
+  - pyyaml # configuration/logging
+  - rich # better text formatting
+  - segmentation-models-pytorch # model architectures
+  - setuptools # install tool
+  - torchvision # model architectures + data utilities
+  - torchmetrics # model evaluation
+  - tqdm # logging
+  - pip:
+      - deepdiff # generic utility
+      - hub # i/o library for activeloop hub data
+      - hydra-core # configuration/logging
+      - hydra-colorlog # configuration/logging
+      - imagesize # generic imgproc utility
+      - lz4 # data compression
+      - opencv-python # generic imgproc utility
+      - sh  # script launching utility used for utests
+      - wandb # visualization/logging

@@ -1,0 +1,6 @@
+# @package _global_
+
+defaults:
+  - default.yaml  # reloads all the default training settings and overrides with those below
+
+output_dir_prefix: ${output_root_dir}/debug

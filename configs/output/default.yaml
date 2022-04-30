@@ -1,0 +1,10 @@
+# @package _global_
+
+output_dir_prefix: ${output_root_dir}
+
+hydra:
+  run:
+    dir: ${output_dir_prefix}/runs/${experiment_folder_name}/${run_folder_name}
+  sweep:
+    dir: ${output_dir_prefix}/multiruns/${experiment_folder_name}/${run_folder_name}
+    subdir: ${job_folder_name}

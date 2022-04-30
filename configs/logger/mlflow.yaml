@@ -1,0 +1,14 @@
+# NOTE: THIS FILE IS UNUSED (AND ORIGINALLY FROM THE TEMPLATE) AS OF 2022-06-25
+
+# For more information on the following hyperparameters, see the PyTorch Lightning documentation:
+# https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.loggers.wandb.html
+
+mlflow:
+  _target_: pytorch_lightning.loggers.mlflow.MLFlowLogger
+  experiment_name: ${experiment_name}  # name of the experiment also used in mlflow
+  run_name: ${run_and_job_name}  # run name (if multi-run/job); auto-set if needed
+  tracking_uri: ${output_dir_prefix}/mlruns/  # run `mlflow ui` in output prefix dir to open the UI
+  tags: null  # a list of tags to use for this run (used to facilitate filtering in the UI)
+  prefix: ""  # the string to prefix to all metric keys that will be logged
+  artifact_location: null  # artifact storing location, if it needs to be different from the logs
+  run_id: ${run_and_job_name}  # run name (if multi-run/job); auto-set if needed

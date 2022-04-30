@@ -1,0 +1,29 @@
+# @package _global_
+# This config will be loaded in all debug sessions in order to simplify the debugging process!
+# (we'll run single-epoch training sessions with deterministic behavior and verbose settings)
+
+defaults:
+  - override /output: debug.yaml
+
+trainer:
+  benchmark: False  # turn benchmark mode off, we don't need crazy performance here
+  deterministic: True  # ... and of course, we'd like each session to behave the same as the last
+  max_epochs: 1  # run a single epoch by default (other debug configs might try overfit instead)
+  gpus: 0  # debuggers don't like gpus, let's not use any in the default config
+  detect_anomaly: true  # raise an exception if NaN or +/-inf is detected in any tensor
+  track_grad_norm: 2  # track gradient norm with loggers
+  enable_model_summary: True  # make sure we're printing the model summary
+
+data:
+  num_workers: 0  # debuggers don't like multiprocessing, let's run everything on the main thread
+  pin_memory: False  # disable gpu memory pin (no pre-allocation on the GPU at all might help)
+
+hydra:
+  verbose: True  # this will set the level of all command line loggers to 'DEBUG' for max verbosity
+
+print_config: False  # no need, the config is already printed by hydra when hydra.verbose is True
+ignore_warnings: False  # let's always enable all warnings by default in the debug configs
+seed: 0  # seed is set to a fixed number by default to also make sure the RNG behavior is static
+seed_workers: True  # will initialize workers with the above seed as well
+log_installed_pkgs: True  # always log all installed packages in the python env to the output dir
+log_runtime_tags: True  # always log all runtime tags (e.g. platform name) to the output dir
