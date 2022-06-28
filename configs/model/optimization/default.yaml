@@ -1,0 +1,22 @@
+# For more info on the contents and default values in this file, refer to PyTorch-Lightning:
+# https://pytorch-lightning.readthedocs.io/en/latest/common/lightning_module.html#configure-optimizers
+
+optimizer:
+  _target_: torch.optim.Adam  # it's a good default, really! https://arxiv.org/abs/1910.05446
+  # lr: 0.001
+  # betas: [0.9, 0.999]
+  # eps: 1e-08
+  # weight_decay: 0
+  # amsgrad: False
+
+lr_scheduler:
+  scheduler:  # this field is actually MANDATORY when specifying the lr scheduler config!
+    _target_: torch.optim.lr_scheduler.StepLR  # just a dummy one, really, pick whatever you want
+    step_size: 1000  # again, unlikely we get there, this is just a dummy value
+  interval: epoch  # default unit of the scheduler's step size (could also be 'step')
+  frequency: 1  # default number of epochs/steps that should pass between `scheduler.step()` calls
+  monitor: ${target_metric}  # name of the metric to monitor (if needed, for some scheduler types)
+  strict: True  # toggles whether the monitor metric must be strictly found or not when needed
+  name: null  # related to the `LearningRateMonitor` callback for monitoring (likely not needed)
+
+freeze_no_grad_params: True  # toggles whether to freeze (wrt regularization/momentum) no-grad params

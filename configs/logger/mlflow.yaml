@@ -6,9 +6,9 @@
 mlflow:
   _target_: pytorch_lightning.loggers.mlflow.MLFlowLogger
   experiment_name: ${experiment_name}  # name of the experiment also used in mlflow
-  run_name: ${run_and_job_name}  # run name (if multi-run/job); auto-set if needed
-  tracking_uri: ${output_dir_prefix}/mlruns/  # run `mlflow ui` in output prefix dir to open the UI
+  run_name: ${utils.run_and_job_name}  # run name (if multi-run/job); auto-set if needed
+  tracking_uri: ${utils.output_dir_prefix}/mlruns/  # run `mlflow ui` in output prefix dir to open the UI
   tags: null  # a list of tags to use for this run (used to facilitate filtering in the UI)
   prefix: ""  # the string to prefix to all metric keys that will be logged
   artifact_location: null  # artifact storing location, if it needs to be different from the logs
-  run_id: ${run_and_job_name}  # run name (if multi-run/job); auto-set if needed
+  run_id: ${utils.run_and_job_name}  # run name (if multi-run/job); auto-set if needed

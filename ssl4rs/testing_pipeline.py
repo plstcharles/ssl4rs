@@ -1,57 +1,72 @@
-import os
-from typing import List
+import pathlib
+import typing
 
 import hydra
-from omegaconf import DictConfig
-from pytorch_lightning import LightningDataModule, LightningModule, Trainer, seed_everything
-from pytorch_lightning.loggers import LightningLoggerBase
+import hydra.core.hydra_config
+import omegaconf
+import pytorch_lightning as pl
+import pytorch_lightning.loggers as pl_log
 
 import ssl4rs
 
 logger = ssl4rs.utils.get_logger(__name__)
 
 
-def test(config: DictConfig) -> None:
-    """Contains minimal example of the testing pipeline. Evaluates given checkpoint on a testset.
+def test(config: omegaconf.DictConfig) -> None:
+    """Runs the testing pipeline based on a specified model checkpoint path.
 
     Args:
         config (DictConfig): Configuration composed by Hydra.
-
-    Returns:
-        None
     """
+    exp_name, run_name, run_type, job_name = \
+        config.experiment_name, config.run_name, config.run_type, config.job_name
+    logger.info(f"Launching ({exp_name}: {run_name}, '{run_type}', job={job_name})")
 
-    # Set seed for random number generators in pytorch, numpy and python.random
-    if config.get("seed"):
-        seed_everything(config.seed, workers=True)
+    output_dir = pathlib.Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
+    logger.info(f"Output directory: {output_dir.absolute()}")
+    ssl4rs.utils.config.extra_inits(config, output_dir=output_dir)
 
-    # Convert relative ckpt path to absolute path if necessary
-    if not os.path.isabs(config.ckpt_path):
-        config.ckpt_path = os.path.join(hydra.utils.get_original_cwd(), config.ckpt_path)
+    logger.info(f"Instantiating datamodule: {config.data.datamodule._target_}")
+    datamodule: pl.LightningDataModule = hydra.utils.instantiate(config.data.datamodule)
 
-    # Init lightning datamodule
-    log.info(f"Instantiating datamodule <{config.data._target_}>")
-    datamodule: LightningDataModule = hydra.utils.instantiate(config.data)
+    logger.info(f"Instantiating model: {config.model._target_}")
+    model: pl.LightningModule = hydra.utils.instantiate(config.model)
 
-    # Init lightning model
-    log.info(f"Instantiating model <{config.model._target_}>")
-    model: LightningModule = hydra.utils.instantiate(config.model)
-
-    # Init lightning loggers
-    logger: List[LightningLoggerBase] = []
+    loggers: typing.List[pl_log.LightningLoggerBase] = []
     if "logger" in config:
-        for _, lg_conf in config.logger.items():
-            if "_target_" in lg_conf:
-                log.info(f"Instantiating logger <{lg_conf._target_}>")
-                logger.append(hydra.utils.instantiate(lg_conf))
+        for lg_name, lg_config in config.logger.items():
+            logger.info(f"Instantiating '{lg_name}' logger: {lg_config._target_}")
+            loggers.append(hydra.utils.instantiate(lg_config))
 
-    # Init lightning trainer
-    log.info(f"Instantiating trainer <{config.trainer._target_}>")
-    trainer: Trainer = hydra.utils.instantiate(config.trainer, logger=logger)
+    logger.info(f"Instantiating trainer: {config.trainer._target_}")
+    trainer: pl.Trainer = hydra.utils.instantiate(config.trainer, logger=loggers)
 
-    # Log hyperparameters
-    if trainer.logger:
-        trainer.logger.log_hyperparams({"ckpt_path": config.ckpt_path})  # type: ignore
+    logger.info("Logging hyperparameters...")
+    ssl4rs.utils.logging.log_hyperparameters(
+        config=config,
+        model=model,
+        datamodule=datamodule,
+        trainer=trainer,
+        callbacks=[],
+        loggers=loggers,
+    )
 
-    log.info("Starting testing!")
+    logger.info("Running trainer.test()...")
     trainer.test(model=model, datamodule=datamodule, ckpt_path=config.ckpt_path)
+
+    if hasattr(model, "compute_metrics") and callable(model.compute_metrics):
+        metrics = model.compute_metrics(loop_type="test")
+        for metric_name, metric_val in metrics.items():
+            logger.info(f"{metric_name}: {metric_val}")
+
+    logger.info("Finalizing logs...")
+    ssl4rs.utils.logging.finalize_logs(
+        config=config,
+        model=model,
+        datamodule=datamodule,
+        trainer=trainer,
+        callbacks=[],
+        loggers=loggers,
+    )
+
+    logger.info(f"Done ({exp_name}: {run_name}, '{run_type}', job={job_name})")

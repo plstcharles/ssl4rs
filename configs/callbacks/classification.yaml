@@ -1,14 +1,17 @@
+defaults:
+  - default.yaml
+  - training.yaml
 
 model_checkpoint:
   _target_: pytorch_lightning.callbacks.ModelCheckpoint
   # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.ModelCheckpoint.html
-  dirpath: ${hydra.runtime.output_dir}  # save all checkpoints in the run's output directory
-  filename: ${checkpoint_name}  # default filename pattern has zero-padded values for sorting
-  monitor: valid/accuracy  # name of the logged metric which determines when model is improving
+  dirpath: ${hydra:runtime.output_dir}/ckpts  # save all checkpoints in the run's output directory
+  filename: ${utils.checkpoint_name}  # default filename pattern has zero-padded values for sorting
+  monitor: ${target_metric}  # name of the logged metric which determines when model is improving
   verbose: False  # verbosity mode for the callback
   save_last: True  # additionally always save model at the latest epoch
   save_top_k: 1  # save the k best models instead of just the best (if k > 1)
-  mode: max  # "max" means higher metric value is better (can be also "min")
+  mode: ${target_metric_mode}  # "max" means higher metric value is better (can be also "min")
   auto_insert_metric_name: False  # do not put the metric name/value inside the checkpoints
   save_weights_only: False  # we'll save the optimizer state + lr scheduler state (and possibly more)
   # every_n_train_steps: null  # we could set a number of steps between checkpoints if needed
@@ -19,11 +22,11 @@ model_checkpoint:
 early_stopping:
   _target_: pytorch_lightning.callbacks.EarlyStopping
   # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.EarlyStopping.html
-  monitor: valid/accuracy  # name of the logged metric which determines when model is improving
+  monitor: ${target_metric}  # name of the logged metric which determines when model is improving
   # min_delta: 0.0  # minimum improvement in monitored value to consider it truly improved
   patience: 100  # number of failed checks (either steps or epochs, based on trainer) before stopping
   verbose: False  # verbosity mode for the callback
-  mode: max  # "max" means higher metric value is better (can be also "min")
+  mode: ${target_metric_mode}  # "max" means higher metric value is better (can be also "min")
   strict: True  # whether to crash the training process if the metric is not found
   check_finite: True  # whether to stop training if NaN or infinite value is found
   # stopping_threshold: null  # stop training as soon as the metric becomes better than this

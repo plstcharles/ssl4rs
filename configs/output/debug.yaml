@@ -2,5 +2,7 @@
 
 defaults:
   - default.yaml  # reloads all the default training settings and overrides with those below
+  - _self_
 
-output_dir_prefix: ${output_root_dir}/debug
+utils:
+  output_dir_prefix: ${utils.output_root_dir}/debug

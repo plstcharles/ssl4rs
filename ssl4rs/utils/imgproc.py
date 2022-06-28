@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 
-import ssl4rs.utils
+import ssl4rs.utils.patch_coord
 
 
 def get_image_shape_from_file(file_path: typing.AnyStr) -> typing.Tuple[int, int]:
@@ -24,7 +24,7 @@ def get_image_shape_from_file(file_path: typing.AnyStr) -> typing.Tuple[int, int
 
 def flex_crop(
     image: typing.Union[np.ndarray, torch.Tensor],
-    patch: ssl4rs.utils.PatchCoord,
+    patch: "ssl4rs.utils.patch_coord.PatchCoord",
     padding_val: typing.Union[int, float] = 0,
     force_copy: bool = False,
 ) -> typing.Union[np.ndarray, torch.Tensor]:
@@ -55,7 +55,7 @@ def flex_crop(
         # special handling for OpenCV-like arrays (where the channel is the last dimension)
         assert image.ndim == 2 or image.shape[2] in [1, 2, 3, 4], \
             "cannot handle channel counts outside [1, 2, 3, 4] with opencv crop!"
-        image_region = ssl4rs.utils.PatchCoord((0, 0), shape=image.shape[:2])
+        image_region = ssl4rs.utils.patch_coord.PatchCoord((0, 0), shape=image.shape[:2])
         if patch not in image_region:
             # special handling for crop coordinates falling outside the image bounds...
             crop_out_shape = patch.shape if image.ndim == 2 else (patch.shape, image.shape[2])
@@ -83,7 +83,10 @@ def flex_crop(
     # regular handling (we crop along the spatial dimensions located at the end of the array)
     assert patch.ndim <= image.ndim, \
         "patch dim count should be equal to or lower than image dimension count!"
-    image_region = ssl4rs.utils.PatchCoord([0] * patch.ndim, shape=image.shape[-patch.ndim:])
+    image_region = ssl4rs.utils.patch_coord.PatchCoord(
+        top_left=[0] * patch.ndim,
+        shape=image.shape[-patch.ndim:]
+    )
     crop_out_shape = tuple(image.shape[:-patch.ndim]) + patch.shape
 
     # first check: figure out if there is anything to crop at all

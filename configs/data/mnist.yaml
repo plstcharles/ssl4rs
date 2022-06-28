@@ -1,8 +1,10 @@
-# NOTE: THIS FILE IS UNUSED (AND ORIGINALLY FROM THE TEMPLATE) AS OF 2022-06-25
+defaults:
+  - default.yaml  # reloads all the default data settings and overrides with those below
 
-_target_: ssl4rs.data.mnist_datamodule.MNISTDataModule
-data_dir: ${data_root_dir}/mnist/
-batch_size: 64
-train_val_test_split: [55_000, 5_000, 10_000]
-num_workers: 0
-pin_memory: False
+datamodule:  # the mnist dataset comes with its own custom data module for classification tasks
+  _target_: ssl4rs.data.datamodules.mnist.DataModule
+  data_dir: ${utils.data_root_dir}/mnist/
+  train_val_test_split: [55_000, 5_000, 10_000]
+  dataloader_fn_map:
+    _default_: # this group provides shared (but overridable) settings for all data loader types
+      batch_size: 32  # bump up the default batch size for all data loaders

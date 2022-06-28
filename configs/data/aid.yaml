@@ -1,0 +1,15 @@
+defaults:
+  - default.yaml  # reloads all the default data settings and overrides with those below
+
+datamodule:  # the aid dataset comes with its own custom data module for classification tasks
+  _target_: ssl4rs.data.datamodules.aid.DataModule
+  data_dir: ${utils.data_root_dir}/aid/aid.hub
+  train_val_test_split: [0.8, 0.1, 0.1]
+  hub_kwargs: null
+
+dataloader:
+  _base_:
+    batch_size: 32  # bump up the default batch size for all data loaders
+
+# @@@@@@@@@@@@ TODO: replace torch data loaders w/ hub data loaders (faster!)
+# @@@@@@@@@@@@@@@@@@@@@@ TODO: or even w/ ffcv loaders?

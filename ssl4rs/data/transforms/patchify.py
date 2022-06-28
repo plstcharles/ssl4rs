@@ -7,7 +7,7 @@ import PIL.Image
 import torch
 
 import ssl4rs.utils.imgproc
-import ssl4rs.utils.patches
+import ssl4rs.utils.patch_coord
 
 
 class Patchify:
@@ -174,6 +174,7 @@ class Patchify:
         """
         assert isinstance(image, (PIL.Image.Image, np.ndarray, torch.Tensor))
         if isinstance(image, PIL.Image.Image):
+            # noinspection PyTypeChecker
             image = np.asarray(image)
             assert image.ndim in [2, 3]
             if image.ndim == 3:
@@ -184,6 +185,7 @@ class Patchify:
         if mask is not None:
             assert isinstance(mask, (PIL.Image.Image, np.ndarray, torch.Tensor))
             if isinstance(mask, PIL.Image.Image):
+                # noinspection PyTypeChecker
                 mask = np.asarray(mask)
                 assert mask.ndim in [2, 3]
                 if mask.ndim == 3:
@@ -254,7 +256,7 @@ class Patchify:
                 # if we need to take a jittered-and-padded subcrop of the patch...
                 subcrop = ssl4rs.utils.imgproc.flex_crop(  # this call takes a subview without copy
                     image=image,
-                    patch=ssl4rs.utils.patches.PatchCoord(
+                    patch=ssl4rs.utils.patch_coord.PatchCoord(
                         top_left=[
                             patch_coords.top_left[d] + np.random.choice(subcrop_offsets[d])
                             for d in range(len(patch_shape))
@@ -266,7 +268,7 @@ class Patchify:
                 )
                 padded_subcrop = ssl4rs.utils.imgproc.flex_crop(  # reallocates into a padded array
                     image=subcrop,
-                    patch=ssl4rs.utils.patches.PatchCoord(
+                    patch=ssl4rs.utils.patch_coord.PatchCoord(
                         top_left=[-(shape_diff // 2) for shape_diff in subcrop_shape_diffs],
                         shape=patch_coords.shape,
                     ),
@@ -322,7 +324,7 @@ class Patchify:
     def _check_if_mask_crop_is_good(
         self,
         mask: typing.Union[np.ndarray, torch.Tensor],
-        patch_coord: ssl4rs.utils.patches.PatchCoord,
+        patch_coord: ssl4rs.utils.patch_coord.PatchCoord,
     ) -> bool:
         """Returns whether the mask crop at the specified location passes the IoU threshold or not."""
         mask_crop = ssl4rs.utils.imgproc.flex_crop(mask, patch_coord, force_copy=False)
@@ -357,7 +359,7 @@ class Patchify:
         ])
         found_idxs = None  # will remain none if mask never provides a good first hit
         for idxs in itertools.product(*spatial_dim_ranges):
-            curr_patch = ssl4rs.utils.patches.PatchCoord(idxs, shape=patch_shape)
+            curr_patch = ssl4rs.utils.patch_coord.PatchCoord(idxs, shape=patch_shape)
             if self._check_if_mask_crop_is_good(mask, curr_patch):
                 found_idxs = tuple(idxs)
                 break
@@ -395,7 +397,7 @@ class Patchify:
         self,
         image: typing.Union[np.ndarray, torch.Tensor],
         mask: typing.Optional[typing.Union[np.ndarray, torch.Tensor]] = None,
-    ) -> typing.Dict[typing.Tuple[int, ...], ssl4rs.utils.patches.PatchCoord]:
+    ) -> typing.Dict[typing.Tuple[int, ...], ssl4rs.utils.patch_coord.PatchCoord]:
         """Returns the coordinates of the patches that would be extracted from the given input.
 
         When calling the transform with a mask argument or with `make_contiguous` as false, the
@@ -435,17 +437,9 @@ class Patchify:
         for idxs in itertools.product(*spatial_dim_ranges):
             idxs = tuple(idxs)
             assert idxs not in output  # we should never have duplicates...?
-            curr_patch = ssl4rs.utils.patches.PatchCoord(idxs, shape=patch_shape)
+            curr_patch = ssl4rs.utils.patch_coord.PatchCoord(idxs, shape=patch_shape)
             if mask is None or self._check_if_mask_crop_is_good(mask, curr_patch):
                 output[idxs] = curr_patch
         if mask is None:
             self._patch_coords_cache[cache_key] = output
         return output
-
-    def __repr__(self) -> str:
-        """Provides print-friendly output for class attributes."""
-        return self.__class__.__module__ + "." + self.__class__.__qualname__ + \
-            f"(patch_shape={self.patch_shape}, patch_overlap={self.patch_overlap}, " \
-            f"min_mask_iou={self.min_mask_iou}, offset_overlap={self.offset_overlap}, " \
-            f"padding_val={self.padding_val}, make_contiguous={self.make_contiguous}," \
-            f"jittered_subcrop_shape={self.jittered_subcrop_shape})"

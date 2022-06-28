@@ -10,3 +10,8 @@ rich_progress_bar:
   _target_: pytorch_lightning.callbacks.RichProgressBar
   # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.RichProgressBar.html
   refresh_rate: 1  # frequency (in batches) at which the progress bar gets updated
+
+device_monitor:
+  _target_: pytorch_lightning.callbacks.DeviceStatsMonitor
+  # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.DeviceStatsMonitor.html
+  # NOTE: this callback requires at least one logger to be passed to the trainer!

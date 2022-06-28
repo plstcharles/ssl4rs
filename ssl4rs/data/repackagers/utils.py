@@ -1,3 +1,5 @@
+"""Implements generic data repackaging and utilities for common dataset formats."""
+
 import abc
 import typing
 
@@ -15,7 +17,7 @@ import ssl4rs
 
 
 class HubDatasetRepackager:
-    """Base interface used to provide common definitions for all dataset exporters.
+    """Base interface used to provide common definitions for all Hub dataset exporters/repackagers.
 
     The abstract properties defined below should be overridden in the derived classes based on
     the dataset info, either statically or at runtime.
@@ -60,7 +62,7 @@ class HubDatasetRepackager:
 
     @abc.abstractmethod
     def __len__(self) -> int:
-        """Returns the total size (data sample count) of the dataset that will be exported."""
+        """Returns the total size (sample count) of the dataset that will be exported."""
         raise NotImplementedError
 
     @abc.abstractmethod

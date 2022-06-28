@@ -1,3 +1,9 @@
+"""Implements a data repackager (for the Hub format) for the AID dataset.
+
+See the following URL for more info on this dataset:
+    https://captain-whu.github.io/AID/
+"""
+
 import pathlib
 import typing
 
@@ -9,7 +15,7 @@ import ssl4rs.utils.imgproc
 
 
 class AIDRepackager(ssl4rs.data.repackagers.utils.HubDatasetRepackager):
-    """Repackages the Aerial Image Dataset (AID) into a hub-compatible object.
+    """Repackages the Aerial Image Dataset (AID) into a hub-compatible format.
 
     This dataset contains large-scale aerial images that can be used for classification. There are
     10,000 images (600x600, RGB) in this dataset, and these are given one of 30 class labels.

@@ -7,14 +7,13 @@ import omegaconf
 import pytorch_lightning
 import pytorch_lightning.loggers
 import pytorch_lightning.utilities
+import pytorch_lightning.utilities.memory
 import rich.syntax
 import rich.tree
 
 import ssl4rs
 
 default_print_configs = (
-    "utils",
-    "output",
     "data",
     "model",
     "callbacks",
@@ -71,8 +70,6 @@ def print_config(
     for config_name in print_configs:
         if config_name in config:
             quee.append(config_name)
-        else:
-            logger.warning(f"Could not found (sub)config with name '{config_name}'")
     for field in config:
         if field not in quee:
             quee.append(field)
@@ -105,13 +102,13 @@ def log_hyperparameters(
     """Forwards all notable/interesting/important hyperparameters to the model logger.
 
     If the model does not have a logger that implements the `log_hyperparams`, this function
-    does nothing. Note that hyperparameters (at least, those define via config files) will
-    always be automatically logged in `${hydra.runtime.output_dir}`.
+    does nothing. Note that hyperparameters (at least, those defined via config files) will
+    always be automatically logged in `${hydra:runtime.output_dir}`.
     """
     if not trainer.logger:
         return  # no logger to use, nothing to do...
 
-    hparams = {}  # we'll fill this dict with all the hyperparams we want to log
+    hparams = dict()  # we'll fill this dict with all the hyperparams we want to log
     hparams["model"] = config["model"]  # all model-related stuff is going in for sure
     hparams["model/params/total"] = sum(p.numel() for p in model.parameters())
     hparams["model/params/trainable"] = sum(
@@ -120,25 +117,28 @@ def log_hyperparameters(
     hparams["model/params/non_trainable"] = sum(
         p.numel() for p in model.parameters() if not p.requires_grad
     )
+    model_size_in_MB = pytorch_lightning.utilities.memory.get_model_size_mb(model)
+    hparams["model/size_in_MB"] = model_size_in_MB
     # data and training configs should also go in for sure (they should also always exist)
     hparams["data"] = config["data"]
     hparams["trainer"] = config["trainer"]
     # the following hyperparameters are individually picked and might be missing (no big deal)
     optional_hyperparams_to_log = (
-        "callbacks",
-        "data_root_dir",
-        "output_root_dir",
         "experiment_name",
-        "run_and_job_name",
         "run_type",
+        "run_name",
+        "job_name",
         "seed",
+        "seed_workers",
     )
     for hyperparam_name in optional_hyperparams_to_log:
         if hyperparam_name in config:
             hparams[hyperparam_name] = config[hyperparam_name]
-
-    # send hparams to the trainer's logger(s)
-    trainer.logger.log_hyperparams(hparams)  # type: ignore
+    for lgger in trainer.loggers:
+        if hasattr(lgger, "log_hyperparams"):
+            trainer.logger.log_hyperparams(hparams)  # type: ignore
+    for hparam_key, hparam_val in hparams.items():
+        logger.debug(f"{hparam_key}: {hparam_val}")
 
 
 def log_runtime_tags(
@@ -171,3 +171,19 @@ def log_installed_packages(
     with open(str(output_log_path), "w") as fd:
         for pkg_name in ssl4rs.utils.config.get_installed_packages():
             fd.write(f"{pkg_name}\n")
+
+
+def finalize_logs(
+    config: omegaconf.DictConfig,
+    model: pytorch_lightning.LightningModule,
+    datamodule: pytorch_lightning.LightningDataModule,
+    trainer: pytorch_lightning.Trainer,
+    callbacks: typing.List[pytorch_lightning.Callback],
+    loggers: typing.List[pytorch_lightning.loggers.LightningLoggerBase],
+) -> None:
+    """Makes sure everything is logged and closed properly before ending the session."""
+    for lg in loggers:
+        if isinstance(lg, pytorch_lightning.loggers.wandb.WandbLogger):
+            # without this sweeps with wandb logger might crash!
+            import wandb
+            wandb.finish()
