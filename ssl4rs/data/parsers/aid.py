@@ -7,11 +7,11 @@ See the following URL for more info on this dataset:
 import ssl4rs.data.parsers
 import ssl4rs.data.repackagers.aid
 
-# TODO: add a regular parser that does not rely on Hub?
+# TODO: add a regular parser that does not rely on deeplake?
 
 
-class HubParser(ssl4rs.data.parsers.HubParser):
-    """The AID dataset does not require any special handling on top of the base Hub parser.
+class DeepLakeParser(ssl4rs.data.parsers.DeepLakeParser):
+    """The AID dataset does not require any special handling on top of the base deeplake parser.
 
     This means that apart from the utility attributes/defines, this class is empty.
     """

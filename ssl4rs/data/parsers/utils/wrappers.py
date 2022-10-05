@@ -21,7 +21,7 @@ class ParserWrapper(torch.utils.data.dataset.Dataset):
         batch_transforms: typing.Sequence["ssl4rs.data.BatchTransformType"] = (),
         batch_id_prefix: typing.AnyStr = "",
     ):
-        """Parses a hub dataset file or wraps an already-opened object.
+        """Parses a deeplake archive or wraps an already-opened object.
 
         Note that due to the design of this class (and in contrast to the exporter class), all
         datasets should only ever be opened in read-only mode here.

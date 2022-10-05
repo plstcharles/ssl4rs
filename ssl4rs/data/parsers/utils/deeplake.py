@@ -1,19 +1,19 @@
-"""Implements parsing utilities for the ActiveLoop hub dataset format."""
+"""Implements parsing utilities for the ActiveLoop DeepLake format."""
 
 import typing
 
-import hub
+import deeplake
 import numpy as np
 import torch.utils.data.dataset
 import torchvision.transforms
 
 import ssl4rs
 
-HubParserDerived = typing.TypeVar("HubParserDerived")
+DeepLakeParserDerived = typing.TypeVar("DeepLakeParserDerived")
 
 
-class HubParser(torch.utils.data.dataset.Dataset):
-    """Base interface used to provide common definitions for all Hub dataset parsers.
+class DeepLakeParser(torch.utils.data.dataset.Dataset):
+    """Base interface used to provide common definitions for all deeplake parsers.
 
     For very simple datasets (e.g. those used for image classification), this wrapper should be
     sufficient to load the data directly. Other datasets that need to preprocess/unpack sample
@@ -22,21 +22,21 @@ class HubParser(torch.utils.data.dataset.Dataset):
 
     def __init__(
         self,
-        dataset_path_or_object: typing.Union[typing.AnyStr, hub.Dataset],
+        dataset_path_or_object: typing.Union[typing.AnyStr, deeplake.Dataset],
         batch_transforms: typing.Sequence["ssl4rs.data.BatchTransformType"] = (),
         batch_id_prefix: typing.AnyStr = "",
-        **extra_hub_kwargs,
+        **extra_deeplake_kwargs,
     ):
-        """Parses a hub dataset file or wraps an already-opened object.
+        """Parses a deeplake archive or wraps an already-opened object.
 
         Note that due to the design of this class (and in contrast to the exporter class), all
         datasets should only ever be opened in read-only mode here.
         """
-        if isinstance(dataset_path_or_object, hub.Dataset):
-            assert not extra_hub_kwargs, "dataset is already opened, can't use kwargs"
+        if isinstance(dataset_path_or_object, deeplake.Dataset):
+            assert not extra_deeplake_kwargs, "dataset is already opened, can't use kwargs"
             self.dataset = dataset_path_or_object
         else:
-            self.dataset = hub.load(dataset_path_or_object, read_only=True, **extra_hub_kwargs)
+            self.dataset = deeplake.load(dataset_path_or_object, read_only=True, **extra_deeplake_kwargs)
         if batch_transforms is not None and len(batch_transforms) > 0:
             batch_transforms = torchvision.transforms.Compose(batch_transforms)
         self.batch_transforms = batch_transforms
@@ -53,7 +53,7 @@ class HubParser(torch.utils.data.dataset.Dataset):
         above should each be the keys to tensors. Additional tensors may also be returned.
         """
         if np.issubdtype(type(item), np.integer):
-            item = int(item)  # in case we're using numpy ints, as hub is not familiar w/ those
+            item = int(item)  # in case we're using numpy ints, as deeplake is not familiar w/ those
         data = self.dataset[item]
         batch = {
             tensor_name: data[tensor_name].numpy()
@@ -68,7 +68,7 @@ class HubParser(torch.utils.data.dataset.Dataset):
 
     @property
     def tensor_info(self) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
-        """Returns the dictionary of tensor info objects (hub-defined) parsed from the dataset.
+        """Returns the dictionary of tensor info objects (deeplake-defined) parsed from the dataset.
 
         The returned objects can help downstream processing stages figure out what kind of data
         they will be receiving from this parser.
@@ -86,7 +86,7 @@ class HubParser(torch.utils.data.dataset.Dataset):
 
     @property
     def dataset_info(self) -> typing.Dict[str, typing.Any]:
-        """Returns metadata information parsed from the hub dataset object."""
+        """Returns metadata information parsed from the deeplake object."""
         return dict(self.dataset.info)
 
     @property
@@ -103,18 +103,18 @@ class HubParser(torch.utils.data.dataset.Dataset):
         return self.dataset.visualize(*args, **kwargs)
 
 
-def get_hub_parser_subset(
-    parser: HubParserDerived,
+def get_deeplake_parser_subset(
+    parser: DeepLakeParserDerived,
     indices: typing.Sequence[int],
-) -> HubParserDerived:
-    """Returns a parser for a subset of a Hub dataset."""
+) -> DeepLakeParserDerived:
+    """Returns a parser for a subset of a deeplake."""
 
-    assert isinstance(parser, HubParser), "need to derive from HubParser!"
-    assert hasattr(parser, "dataset") and isinstance(parser.dataset, hub.Dataset)
+    assert isinstance(parser, DeepLakeParser), "need to derive from DeepLakeParser!"
+    assert hasattr(parser, "dataset") and isinstance(parser.dataset, deeplake.Dataset)
     assert all([idx < len(parser) for idx in indices]), "some indices are out-of-range!"
     TODO  # @@@@@@@@@@ TODO IMPL ME! (might be much faster than regular)
 
-    #@hub.compute
+    #@deeplake.compute
     def filter_indices(sample_in) -> bool:
         return todo
 

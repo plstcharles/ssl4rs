@@ -1,4 +1,4 @@
-"""Implements a data repackager (for the Hub format) for the AID dataset.
+"""Implements a data repackager (for the DeepLake format) for the AID dataset.
 
 See the following URL for more info on this dataset:
     https://captain-whu.github.io/AID/
@@ -7,15 +7,15 @@ See the following URL for more info on this dataset:
 import pathlib
 import typing
 
+import deeplake
 import numpy as np
-import hub
 
 import ssl4rs.data.repackagers.utils
 import ssl4rs.utils.imgproc
 
 
-class AIDRepackager(ssl4rs.data.repackagers.utils.HubDatasetRepackager):
-    """Repackages the Aerial Image Dataset (AID) into a hub-compatible format.
+class AIDRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
+    """Repackages the Aerial Image Dataset (AID) into a deeplake-compatible format.
 
     This dataset contains large-scale aerial images that can be used for classification. There are
     10,000 images (600x600, RGB) in this dataset, and these are given one of 30 class labels.
@@ -72,12 +72,12 @@ class AIDRepackager(ssl4rs.data.repackagers.utils.HubDatasetRepackager):
 
     @property  # we need to provide this for the base class!
     def dataset_info(self):
-        """Returns metadata information that will be exported in the hub dataset object."""
+        """Returns metadata information that will be exported in the deeplake object."""
         return dict(
             name="AID",
             class_names=self.class_names,
             class_distrib=self.class_distrib,
-            image_shape=list(self.image_shape),  # tuples will be changed to lists by hub...
+            image_shape=list(self.image_shape),  # tuples will be changed to lists by deeplake...
         )
 
     @property  # we need to provide this for the base class!
@@ -130,7 +130,7 @@ class AIDRepackager(ssl4rs.data.repackagers.utils.HubDatasetRepackager):
         """Fetches and returns a data sample for this dataset.
 
         In this case, we return an image and its associated class label into a dictionary. Note that
-        this code will likely be slower than the hub fetching implementation, thus why this is a
+        this code will likely be slower than the deeplake fetching implementation, thus why this is a
         "repackager" object, and not a dataset parser (although it could be used as one...).
         """
         assert 0 <= item < len(self), f"invalid data sample index being queried: {item}"
@@ -144,14 +144,14 @@ class AIDRepackager(ssl4rs.data.repackagers.utils.HubDatasetRepackager):
         image_path = self.data_root_path / class_name / image_name
         assert image_path.exists(), f"unexpected invalid image path in getitem: {image_path}"
         return dict(  # note: the tensor names here must match with the ones in `tensor_info`!
-            image=hub.read(str(image_path)),  # this will defer loading the full image data if needed
+            image=deeplake.read(str(image_path)),  # this will defer loading the full image data if needed
             label=class_idx,
         )
 
 
 def _repackage_aid(data_root_path: typing.AnyStr):
     repackager = AIDRepackager(data_root_path)
-    output_path = data_root_path + "aid.hub"
+    output_path = data_root_path + "aid.deeplake"
     repackager.export(output_path)
     assert pathlib.Path(output_path).exists()
 

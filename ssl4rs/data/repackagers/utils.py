@@ -3,9 +3,9 @@
 import abc
 import typing
 
+import deeplake
+import deeplake.util.exceptions
 import deepdiff
-import hub
-import hub.util.exceptions
 import numpy as np
 import tqdm
 
@@ -16,8 +16,8 @@ import ssl4rs
 # TODO @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 
-class HubDatasetRepackager:
-    """Base interface used to provide common definitions for all Hub dataset exporters/repackagers.
+class DeepLakeRepackager:
+    """Base interface used to provide common definitions for all deeplake exporters/repackagers.
 
     The abstract properties defined below should be overridden in the derived classes based on
     the dataset info, either statically or at runtime.
@@ -29,8 +29,8 @@ class HubDatasetRepackager:
         """Returns the dictionary of tensor info (declaration) arguments used during creation.
 
         Note: the arguments used for each key in the returned dictionary should be usable directly
-        in the `hub.Dataset.create_tensor` function; see
-        https://api-docs.activeloop.ai/#hub.Dataset.create_tensor for more information.
+        in the `deeplake.Dataset.create_tensor` function; see
+        https://api-docs.activeloop.ai/#deeplake.Dataset.create_tensor for more information.
         """
         raise NotImplementedError
 
@@ -45,8 +45,8 @@ class HubDatasetRepackager:
         """Returns metadata information that will be exported in the hub dataset object.
 
         Note: the values provided in the dictionary should be compatible with the values that
-        can be exported in the `hub.Dataset.info` object; see
-        https://api-docs.activeloop.ai/#hub.Dataset.info for more information.
+        can be exported in the `deeplake.Dataset.info` object; see
+        https://api-docs.activeloop.ai/#deeplake.Dataset.info for more information.
         """
         raise NotImplementedError
 
@@ -75,7 +75,7 @@ class HubDatasetRepackager:
         raise NotImplementedError
 
     @staticmethod
-    @hub.compute
+    @deeplake.compute
     def _data_sample_exporter(sample_index, sample_out, exporter):
         """Fetches a data sample from a derived class getitem implementation for hub exportation."""
         sample_data = exporter[sample_index]  # this is where the __getitem__ is called...
@@ -91,7 +91,7 @@ class HubDatasetRepackager:
         num_workers: int = 4,
         scheduler: str = "threaded",
         progressbar: bool = True,
-        **extra_hub_kwargs,
+        **extra_deeplake_kwargs,
     ) -> None:
         """Exports the dataset to a hub file at the specified location.
 
@@ -108,8 +108,8 @@ class HubDatasetRepackager:
             existing_dataset = None
             try:
                 existing_dataset = \
-                    hub.load(output_path, read_only=True, verbose=verbose, **extra_hub_kwargs)
-            except hub.util.exceptions.DatasetHandlerError:
+                    deeplake.load(output_path, read_only=True, verbose=verbose, **extra_deeplake_kwargs)
+            except deeplake.util.exceptions.DatasetHandlerError:
                 pass  # dataset does not exist, we won't be overwriting anything, perfect
             if existing_dataset is not None:
                 # if we get here, we need to verify dataset overlap...
@@ -118,9 +118,9 @@ class HubDatasetRepackager:
                 )
                 # if the above check passed, we can return right away, as the dataset is all good!
                 return
-            dataset = hub.empty(output_path, overwrite=False, **extra_hub_kwargs)
+            dataset = deeplake.empty(output_path, overwrite=False, **extra_deeplake_kwargs)
         else:
-            dataset = hub.empty(output_path, overwrite=True, **extra_hub_kwargs)
+            dataset = deeplake.empty(output_path, overwrite=True, **extra_deeplake_kwargs)
 
         # time to do the actual export now!
         with dataset:  # this will make sure the export is cached/buffered properly
@@ -154,7 +154,7 @@ class HubDatasetRepackager:
 
 
 def check_info_overlap(
-    dataset: hub.Dataset,
+    dataset: deeplake.Dataset,
     expected_dataset_info: typing.Dict[typing.AnyStr, typing.Any],
     expected_tensor_info: typing.Dict[typing.AnyStr, typing.Dict[typing.AnyStr, typing.Any]],
     strict: bool = False,

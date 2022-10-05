@@ -35,7 +35,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         data_dir: typing.Union[typing.AnyStr, pathlib.Path],
         dataloader_fn_map: ssl4rs.data.datamodules.utils.DataLoaderFnMap,
         train_val_test_split: typing.Tuple[float, float, float] = (0.8, 0.1, 0.1),
-        hub_kwargs: typing.Optional[typing.Dict[typing.AnyStr, typing.Any]] = None,
+        deeplake_kwargs: typing.Optional[typing.Dict[typing.AnyStr, typing.Any]] = None,
     ):
         """Initializes the AID data module.
 
@@ -47,9 +47,9 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         assert data_dir is not None and pathlib.Path(data_dir).is_dir(), f"invalid dir: {data_dir}"
         assert len(train_val_test_split) == 3 and sum(train_val_test_split) == 1.0
         self.save_hyperparameters(logger=False)
-        self.data_train: typing.Optional[ssl4rs.data.parsers.aid.HubParser] = None
-        self.data_valid: typing.Optional[ssl4rs.data.parsers.aid.HubParser] = None
-        self.data_test: typing.Optional[ssl4rs.data.parsers.aid.HubParser] = None
+        self.data_train: typing.Optional[ssl4rs.data.parsers.aid.DeepLakeParser] = None
+        self.data_valid: typing.Optional[ssl4rs.data.parsers.aid.DeepLakeParser] = None
+        self.data_test: typing.Optional[ssl4rs.data.parsers.aid.DeepLakeParser] = None
 
     @property
     def num_classes(self) -> int:
@@ -69,10 +69,10 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         """
         # load datasets only if they're not loaded already (no matter the requested stage)
         if not self.data_train and not self.data_valid and not self.data_test:
-            hub_kwargs = self.hparams.hub_kwargs or {}
-            dataset = ssl4rs.data.parsers.aid.HubParser(
+            deeplake_kwargs = self.hparams.deeplake_kwargs or {}
+            dataset = ssl4rs.data.parsers.aid.DeepLakeParser(
                 self.hparams.data_dir,
-                **hub_kwargs,
+                **deeplake_kwargs,
             )
             train_sample_count = int(round(self.hparams.train_val_test_split[0] * len(dataset)))
             valid_sample_count = int(round(self.hparams.train_val_test_split[1] * len(dataset)))
@@ -103,7 +103,7 @@ def _local_main(data_root_dir: pathlib.Path) -> None:
     import ssl4rs.utils.config
     config = ssl4rs.utils.config.init_hydra_and_compose_config()
     datamodule = DataModule(
-        data_dir=data_root_dir / "aid/aid.hub",
+        data_dir=data_root_dir / "aid/aid.deeplake",
         dataloader_fn_map=config.data.dataloader_fn_map,
     )
     datamodule.setup()

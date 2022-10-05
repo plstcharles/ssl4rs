@@ -30,7 +30,7 @@ dependencies:
   - pytest  # testing
   - python~=3.9
   - python-dotenv  # loads env variables from .env
-  - pytorch-lightning>=1.5.10  # training helper
+  - pytorch-lightning>=1.7  # training helper
   - pytorch  # training backbone
   - pyyaml  # configuration/logging
   - rich  # better text formatting
@@ -41,7 +41,7 @@ dependencies:
   - tqdm  # logging
   - pip:
       - deepdiff  # generic utility
-      - hub  # i/o library for activeloop hub data
+      - deeplake  # i/o library for activeloop datasets
       - hydra-core  # configuration/logging
       - hydra-colorlog  # configuration/logging
       - imagesize  # generic imgproc utility

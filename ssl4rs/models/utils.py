@@ -17,7 +17,7 @@ import ssl4rs
 
 logger = ssl4rs.utils.logging.get_logger(__name__)
 
-PLCallback = pytorch_lightning.callbacks.base.Callback
+PLCallback = pytorch_lightning.callbacks.callback.Callback
 
 
 class BaseModel(pl.LightningModule):
