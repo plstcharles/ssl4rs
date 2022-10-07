@@ -1,7 +1,6 @@
 import numpy as np
-import pytest
 import ssl4rs.utils.imgproc as imgproc
-import ssl4rs.utils.patches as patches
+import ssl4rs.utils.patch_coord as patches
 
 
 def test_flex_crop_regular_tensor():

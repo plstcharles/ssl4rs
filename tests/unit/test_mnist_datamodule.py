@@ -3,7 +3,7 @@ import os
 import pytest
 import torch
 
-from ssl4rs.data.mnist_datamodule import MNISTDataModule
+from ssl4rs.data.datamodules.mnist import DataModule as MNISTDataModule
 
 
 @pytest.mark.parametrize("batch_size", [32, 128])
