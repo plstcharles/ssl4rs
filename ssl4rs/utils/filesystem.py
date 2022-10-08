@@ -162,6 +162,31 @@ def get_slurm_tmpdir() -> typing.Optional[pathlib.Path]:
     return slurm_tmpdir
 
 
+def get_package_root_dir() -> pathlib.Path:
+    """Returns the path to this package's root directory (i.e. where its modules are located)."""
+    # note: this should be updated if the utils submodule hierarchy is changed!
+    return pathlib.Path(__file__).parent.parent
+
+
+def get_framework_root_dir() -> typing.Optional[pathlib.Path]:
+    """Returns the path to this framework's root directory (i.e. where the source code is located).
+
+    If the package was NOT installed from source, this function will return `None`.
+    """
+    pkg_root_dir = get_package_root_dir()
+    assert pkg_root_dir.is_dir(), f"unexpected package root directory: {pkg_root_dir}"
+    expected_fw_root_dir = pkg_root_dir.parent
+    expected_fw_file_paths = [  # note: this might need to be updated if we rename these files!
+        expected_fw_root_dir / "setup.cfg",
+        expected_fw_root_dir / "setup.py",
+        expected_fw_root_dir / "test.py",
+        expected_fw_root_dir / "train.py",
+    ]
+    if any([not p.is_file() for p in expected_fw_file_paths]):
+        return None
+    return expected_fw_root_dir
+
+
 def rsync_folder(
     source: typing.Union[typing.AnyStr, pathlib.Path],
     target: typing.Union[typing.AnyStr, pathlib.Path],
@@ -192,3 +217,20 @@ def slugify(
         value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
     value = re.sub(r"[^\w\s-]", "", value.lower())
     return re.sub(r"[-\s]+", "-", value).strip("-_")
+
+
+class WorkDirectoryContextManager:
+    """Context manager class used to change and revert the current working directory."""
+
+    def __init__(self, new_work_dir: typing.Union[typing.AnyStr, pathlib.Path]):
+        """Saves the new working directory we'll be landing in once initialization is complete."""
+        self.new_work_dir = str(new_work_dir)
+
+    def __enter__(self):
+        """Changes the working directory to the specified one, saving the previous one for later."""
+        self.old_work_dir = os.getcwd()
+        os.chdir(self.new_work_dir)
+
+    def __exit__(self, etype, value, traceback):
+        """Restores the original working directory."""
+        os.chdir(self.old_work_dir)

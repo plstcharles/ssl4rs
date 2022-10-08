@@ -78,21 +78,19 @@ def seed_everything(config: omegaconf.DictConfig) -> int:
     return set_seed
 
 
-def get_framework_dir() -> typing.Optional[pathlib.Path]:
-    """Returns the root directory of the framework (i.e. the parent of the package directory).
+def get_package_root_dir() -> pathlib.Path:
+    """Returns the path to this package's root directory (i.e. where its modules are located)."""
+    import ssl4rs.utils.filesystem  # used here to avoid circular dependencies
+    return ssl4rs.utils.filesystem.get_package_root_dir()
 
-    If the framework root does not exist (i.e. if the package was installed directly via pip),
-    this function will return None.
+
+def get_framework_root_dir() -> typing.Optional[pathlib.Path]:
+    """Returns the path to this framework's root directory (i.e. where the source code is located).
+
+    If the package was NOT installed from source, this function will return `None`.
     """
-    import ssl4rs  # used here to avoid circular dependencies
-    package_root_dir = pathlib.Path(ssl4rs.__file__).parent  # there's no way this one does not exist
-    framework_dir = package_root_dir.parent.absolute()  # this is a candidate that might be wrong
-    # we'll validate that we landed in the right place by checking for some files we expect to see...
-    expected_framework_files = ["setup.py", "environment.yaml", ".gitignore", "train.py"]
-    found_all_files = all([(framework_dir / f).is_file() for f in expected_framework_files])
-    if not found_all_files:
-        return None  # we did not manage to guess the framework dir location...
-    return framework_dir
+    import ssl4rs.utils.filesystem  # used here to avoid circular dependencies
+    return ssl4rs.utils.filesystem.get_framework_root_dir()
 
 
 def get_platform_name() -> str:
@@ -125,10 +123,12 @@ def get_git_revision_hash() -> str:
 def get_runtime_tags() -> typing.Mapping[str, typing.Any]:
     """Returns a map (dictionary) of tags related to the current runtime."""
     import ssl4rs  # used here to avoid circular dependencies
+    import ssl4rs.utils.filesystem
     tags = {
         "framework_name": "ssl4rs",
         "framework_version": ssl4rs.__version__,
-        "framework_dir": get_framework_dir(),
+        "framework_dir": str(ssl4rs.utils.filesystem.get_framework_root_dir()),
+        "package_dir": str(ssl4rs.utils.filesystem.get_package_root_dir()),
         "platform_name": get_platform_name(),
         "git_hash": get_git_revision_hash(),
         "timestamp": time.strftime("%Y-%m-%d_%H-%M-%S"),
@@ -183,7 +183,7 @@ def get_framework_dotenv_path(
         The path to the dotenv file, if it exists.
     """
     if framework_dir is None:
-        framework_dir = get_framework_dir()
+        framework_dir = get_framework_root_dir()
     assert framework_dir is not None, "cannot auto-locate framework directory!"
     framework_dir = pathlib.Path(framework_dir)
     assert framework_dir.is_dir(), f"invalid framework directory: {framework_dir}"
@@ -218,7 +218,7 @@ def get_data_root_dir() -> pathlib.Path:
         assert data_root_dir.is_dir(), f"invalid dir: {data_root_dir}"
         return data_root_dir
     # check the framework directory for a local env file and load it manually
-    framework_dir = get_framework_dir()
+    framework_dir = get_framework_root_dir()
     assert framework_dir is not None and framework_dir.is_dir(), "could not locate framework dir!"
     framework_dotenv_path = get_framework_dotenv_path(framework_dir)
     assert framework_dotenv_path is not None, f"no dotenv config file found at: {framework_dir}"
@@ -254,7 +254,7 @@ def init_hydra_and_compose_config(
         The result of the config composition.
     """
     if configs_dir is None:
-        framework_dir = get_framework_dir()
+        framework_dir = get_framework_root_dir()
         assert framework_dir is not None, "cannot auto-locate framework directory!"
         configs_dir = framework_dir / "configs"
         configs_dir = pathlib.Path(os.path.relpath(str(configs_dir), str(pathlib.Path.cwd())))

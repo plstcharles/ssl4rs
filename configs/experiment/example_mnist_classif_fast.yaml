@@ -1,7 +1,8 @@
 # @package _global_
 
 # To execute this experiment, run one of the entrypoints while specifying this config, e.g.:
-#     python train.py experiment=example_mnist_classif
+#     python train.py experiment=example_mnist_classif_fast
+# This particular config is made to run fast on CPU for testing purposes!
 
 defaults:
   - default.yaml
@@ -10,21 +11,20 @@ defaults:
   - override /callbacks: classification.yaml  # adds a few useful callbacks for classification tasks
   - _self_
 
-experiment_name: mnist_with_simple_cnn  # experiment name used in output paths
+experiment_name: mnist_with_micro_mlp  # experiment name used in output paths
 
 model:  # specified which LightningModule-derived implementation provides the training/inference logic
   _recursive_: False
   _target_: ssl4rs.models.mnist.MNISTClassifier
   encoder_config:
-    _target_: ssl4rs.models.components.simple_cnn.SimpleConvNet
-    in_channels: 1
-    hidden_channels: [32, 64, 128]
-    kernel_sizes: [ [5,5], [5,5], [3,3] ]
-    paddings: [ [2,2], [1,1], [0,0] ]
+    _target_: ssl4rs.models.components.simple_mlp.SimpleMLP
+    in_channels: 784  # = the pixel count in 28x28 MNIST images
+    hidden_channels: [10]
+    out_channels: 10
   head_config:
     _target_: ssl4rs.models.components.simple_mlp.SimpleMLP
-    in_channels: 512  # = the element count after flattening a 128 x 2 x 2 feature map
-    hidden_channels: [256]
+    in_channels: 10
+    hidden_channels: [10]
     out_channels: 10
   loss_config:  # in this case, we'll instantiate the cross-entropy loss module directly
     _target_: torch.nn.CrossEntropyLoss
@@ -33,11 +33,11 @@ data:
   datamodule:
     dataloader_fn_map:
       _default_: # this group provides shared (but overridable) settings for all data loader types
-        batch_size: 256  # bump up the batch size from the default
+        batch_size: 32
 
 trainer:
-  precision: 16  # we'll run with PyTorch-Lightning's AMP mode enabled by default
-  max_epochs: 15
+  precision: 32
+  max_epochs: 3
 
 target_metric: valid/accuracy  # name of the metric we will be targeting for hparam optimization
 target_metric_mode: max  # optimization mode of the target metric defined above

@@ -48,5 +48,4 @@ dependencies:
       - lightning-bolts  # for extra lightning goodies
       - lz4  # data compression
       - opencv-python  # generic imgproc utility
-      - sh  # script launching utility used for utests
       - wandb  # visualization/logging

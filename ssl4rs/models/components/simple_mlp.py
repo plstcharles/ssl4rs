@@ -40,7 +40,9 @@ class SimpleMLP(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Ingest a 1D input tensor (B x C) and returns the result."""
-        assert x.ndim == 2
+        assert x.ndim >= 2
+        if x.ndim > 2:
+            x = torch.flatten(x, start_dim=1)
         y = self.model(x)
         return y
 
