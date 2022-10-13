@@ -2,9 +2,10 @@
 
 defaults:
   - default.yaml
+  - _self_
 
 trainer:
-  max_epochs: 3
-  limit_train_batches: 0.01  # will train using only 1% of the training data
-  limit_val_batches: 0.05  # ...and validate using only 5% of the validation data
-  limit_test_batches: 0.05  # ...and test using only 5% of the testing data
+  max_epochs: 2  # will run through the washer for two cycles only
+  limit_train_batches: 3  # ... and using three batches in each stage
+  limit_val_batches: 3
+  limit_test_batches: 3

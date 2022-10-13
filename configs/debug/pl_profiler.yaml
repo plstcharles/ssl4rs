@@ -2,9 +2,13 @@
 
 defaults:
   - default.yaml
+  - _self_
 
 trainer:
-  max_epochs: 1
+  max_epochs: 2
+  limit_train_batches: 32
+  limit_val_batches: 32
+  limit_test_batches: 32
   # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.profiler.SimpleProfiler.htm
   profiler: simple
   # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.profiler.AdvancedProfiler.html

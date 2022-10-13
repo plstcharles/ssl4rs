@@ -1,6 +1,7 @@
 defaults:
   - default.yaml
   - training.yaml
+  - _self_
 
 model_checkpoint:
   _target_: pytorch_lightning.callbacks.ModelCheckpoint

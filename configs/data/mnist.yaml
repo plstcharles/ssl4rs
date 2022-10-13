@@ -1,5 +1,6 @@
 defaults:
   - default.yaml  # reloads all the default data settings and overrides with those below
+  - _self_
 
 datamodule:  # the mnist dataset comes with its own custom data module for classification tasks
   _target_: ssl4rs.data.datamodules.mnist.DataModule

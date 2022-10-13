@@ -1,7 +1,0 @@
-defaults:
-  - default.yaml
-  - training.yaml
-
-gradient_check:
-  _target_: pl_bolts.callbacks.BatchGradientVerificationCallback
-  # https://pytorch-lightning-bolts.readthedocs.io/en/latest/info_callbacks.html

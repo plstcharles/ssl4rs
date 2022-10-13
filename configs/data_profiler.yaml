@@ -16,10 +16,10 @@ defaults:
   - callbacks: null  # we should not actually need trainer callbacks for the data profiler
   - logger: null  # we should not actually need trainer loggers for the data profiler
   - trainer: null  # we should not actually need a trainer config for the data profiler
-  - debug: null  # debugging configs allow for extra logging and deactivation of optimization stuff
   - _self_  # moved here so that the experiment config can override the profiler settings, if needed
   - experiment: null  # experiment configs allow for overrides and version control of all settings
   - optional local: default.yaml  # optional overriding config for machine/user specific settings
+  - debug: null  # debugging configs allow for extra logging and deactivation of optimization stuff
 
 run_type: profiler
 

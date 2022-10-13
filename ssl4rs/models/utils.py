@@ -658,7 +658,7 @@ class BaseModel(pl.LightningModule):
         key: str,  # should be a filesystem-compatible string if using mlflow artifacts
     ) -> None:
         """Logs an already-rendered image in OpenCV BGR format to TBX/MLFlow/Wandb."""
-        logger.debug(f"Logging rendered image with key '{key}'")
+        logger.debug(f"Will try to log rendered image with key '{key}'")
         assert image.ndim == 3 and image.shape[-1] == 3 and image.dtype == np.uint8
         image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
         assert len(key) > 0

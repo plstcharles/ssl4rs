@@ -1,6 +1,3 @@
-"""
-A couple of sanity checks to make sure the model doesn't crash with different running options.
-"""
 import os
 
 import pytest
@@ -100,7 +97,7 @@ def test_debug_gpu(tmpdir):
 @RunIf(min_gpus=1)
 @pytest.mark.slow
 def test_debug_gpu_halfprec(tmpdir):
-    """Test running 1 epoch on GPU."""
+    """Test running 1 epoch on GPU with half (16-bit) float precision."""
     command = [
         "train.py",
         "trainer=debug",

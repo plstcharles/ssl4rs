@@ -3,16 +3,52 @@
 # (we'll run single-epoch training sessions with deterministic behavior and verbose settings)
 
 defaults:
-  - override /output: debug.yaml
-  - override /data: debug.yaml
-  - override /callbacks: debug.yaml
-  - override /logger: debug.yaml
-  - override /trainer: debug.yaml
+  - override /logger: csv.yaml
+
+callbacks:
+  gradient_check:
+    # https://pytorch-lightning-bolts.readthedocs.io/en/latest/info_callbacks.html
+    _target_: pl_bolts.callbacks.BatchGradientVerificationCallback
+
+data:
+  datamodule:
+    dataloader_fn_map:
+      _default_: # this group provides shared (but overridable) settings for all data loader types
+        num_workers: 0  # debuggers don't like multiprocessing, let's run everything on the main thread
+        pin_memory: False  # disable gpu memory pin (no pre-allocation on the GPU at all might help)
+        shuffle: False
+      train:
+        num_workers: 0
+        pin_memory: False
+        shuffle: False
+      valid:
+        num_workers: 0
+        pin_memory: False
+        shuffle: False
+      test:
+        num_workers: 0
+        pin_memory: False
+        shuffle: False
 
 hydra:
   verbose: True  # this will set the level of all command line loggers to 'DEBUG' for max verbosity
 
+trainer:
+  accelerator: cpu  # run on CPU only (might be really slow, but change it if necessary)
+  benchmark: False  # turn benchmark mode off, we don't need crazy performance here
+  deterministic: True  # ... and of course, we'd like each session to behave the same as the last
+  max_epochs: 2  # run a single epoch by default (other debug configs might try overfit instead)
+  limit_train_batches: 5  # run at most 5 batches per training epoch
+  limit_val_batches: 5  # run at most 5 batches per validation epoch
+  limit_test_batches: 5  # run at most 5 batches per testing epoch
+  num_sanity_val_steps: 1  # run through a single validation batch before training
+  devices: 1  # debuggers don't like multi-device setups, let's not use anything fancy here
+  detect_anomaly: True  # raise an exception if NaN or +/-inf is detected in any tensor
+  track_grad_norm: 2  # track gradient norm with loggers
+  precision: 32
+
 utils:
+  output_dir_prefix: ${utils.output_root_dir}/debug
   print_config: True  # toggles whether to pretty-print the config at the start of the run
   ignore_warnings: False  # let's always enable all warnings by default in the debug configs
   log_installed_pkgs: True  # always log all installed packages in the python env to the output dir

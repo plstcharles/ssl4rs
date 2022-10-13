@@ -45,8 +45,8 @@ class MNISTClassifier(ssl4rs.models.BaseModel):
         # this line allows us to access hparams with `self.hparams` + auto-stores them in checkpoints
         self.save_hyperparameters(logger=False)  # logger=False since we don't need duplicated logs
         self._create_example_input_array(  # for easier tracing/profiling; fake tensors for 'forward'
-            data=torch.randn(1, 1, 28, 28),
-            batch_size=1,
+            data=torch.randn(4, 1, 28, 28),
+            batch_size=4,
         )
         self.encoder = hydra.utils.instantiate(encoder_config)
         self.head = hydra.utils.instantiate(head_config)
