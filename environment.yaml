@@ -28,24 +28,25 @@ dependencies:
   - pip
   - pre-commit # core formatting
   - pytest  # testing
-  - python~=3.9
+  - python~=3.10
   - python-dotenv  # loads env variables from .env
-  - pytorch-lightning>=1.7  # training helper
-  - pytorch  # training backbone
+  - pytorch>=1.10.0  # training backbone
   - pyyaml  # configuration/logging
   - rich  # better text formatting
   - segmentation-models-pytorch  # model architectures
   - setuptools  # install tool
-  - torchvision  # model architectures + data utilities
-  - torchmetrics  # model evaluation
+  - torchvision>=0.11.0  # model architectures + data utilities
+  - torchmetrics>=0.11.0  # model evaluation
   - tqdm  # logging
   - pip:
       - deepdiff  # generic utility
       - deeplake  # i/o library for activeloop datasets
-      - hydra-core  # configuration/logging
-      - hydra-colorlog  # configuration/logging
+      - hydra-core==1.3.0  # configuration/logging
+      - hydra-colorlog==1.2.0  # configuration/logging
       - imagesize  # generic imgproc utility
       - lightning-bolts  # for extra lightning goodies
       - lz4  # data compression
       - opencv-python  # generic imgproc utility
+      - pyrootutils # tooling for python proj
+      - pytorch-lightning==1.8.3  # training helper
       - wandb  # visualization/logging

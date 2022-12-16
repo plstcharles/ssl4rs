@@ -15,8 +15,6 @@ setuptools.setup(
     author="plstcharles",
     author_email="pierreluc.stcharles@gmail.com",
     url="TODO",
-    install_requires=[
-        "TODO",
-    ],
+    install_requires=["pytorch-lightning", "hydra-core"],
     packages=setuptools.find_packages(),
 )
