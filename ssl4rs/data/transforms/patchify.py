@@ -199,7 +199,7 @@ class Patchify:
         self,
         image: typing.Union[PIL.Image.Image, np.ndarray, torch.Tensor],
         mask: typing.Optional[typing.Union[PIL.Image.Image, np.ndarray, torch.Tensor]] = None,
-    ) -> typing.Union[typing.Union[np.ndarray, torch.Tensor], typing.List[typing.Union[np.ndarray, torch.Tensor]],]:
+    ) -> typing.Union[typing.Union[np.ndarray, torch.Tensor], typing.List[typing.Union[np.ndarray, torch.Tensor]]]:
         """Extracts and returns an array of patches taken from the given image.
 
         If `make_contiguous` is true and no mask is used, the output will be a contiguous array

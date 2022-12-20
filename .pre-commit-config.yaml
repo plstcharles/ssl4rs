@@ -11,7 +11,6 @@ repos:
       # list of supported hooks: https://pre-commit.com/hooks.html
       - id: trailing-whitespace
       - id: end-of-file-fixer
-      - id: check-docstring-first
       - id: check-yaml
       - id: debug-statements
       - id: detect-private-key
@@ -60,13 +59,6 @@ repos:
             "--exclude",
             "logs/*,data/*",
           ]
-
-  # python security linter
-  - repo: https://github.com/PyCQA/bandit
-    rev: "1.7.1"
-    hooks:
-      - id: bandit
-        args: ["-s", "B101"]
 
   # yaml formatting
   - repo: https://github.com/pre-commit/mirrors-prettier

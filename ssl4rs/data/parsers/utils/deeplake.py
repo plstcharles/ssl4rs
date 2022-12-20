@@ -110,11 +110,11 @@ def get_deeplake_parser_subset(
     assert isinstance(parser, DeepLakeParser), "need to derive from DeepLakeParser!"
     assert hasattr(parser, "dataset") and isinstance(parser.dataset, deeplake.Dataset)
     assert all([idx < len(parser) for idx in indices]), "some indices are out-of-range!"
-    TODO  # @@@@@@@@@@ TODO IMPL ME! (might be much faster than regular)
+    TODO  # @@@@@@@@@@ TODO IMPL ME! (might be much faster than regular) # noqa: F821
 
     # @deeplake.compute
     def filter_indices(sample_in) -> bool:
-        return todo
+        return todo  # noqa: F821
 
     subset_parser = parser.dataset.filter(filter_indices)
     return type(parser)(subset_parser)

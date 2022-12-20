@@ -12,7 +12,7 @@ import tqdm
 import ssl4rs
 
 # TODO @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-# need parsers for DOTA, BigEarthNet, NWPU-VHR-10, NWPU-RESISC45, xview, MLRSN, agrivis, spacenet?
+# need parsers for DOTA_, BigEarthNet, NWPU-VHR-10, NWPU-RESISC45, xview, MLRSN, agrivis, spacenet?
 # TODO @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
 

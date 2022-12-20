@@ -66,14 +66,14 @@ def print_config(
     """
     style = "dim"
     tree = rich.tree.Tree("CONFIG", style=style, guide_style=style)
-    quee = []
+    queue = []
     for config_name in print_configs:
         if config_name in config:
-            quee.append(config_name)
+            queue.append(config_name)
     for field in config:
-        if field not in quee:
-            quee.append(field)
-    for field in quee:
+        if field not in queue:
+            queue.append(field)
+    for field in queue:
         branch = tree.add(field, style=style, guide_style=style)
         config_group = config[field]
         if isinstance(config_group, omegaconf.DictConfig):
