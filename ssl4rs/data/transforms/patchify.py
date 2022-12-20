@@ -89,29 +89,31 @@ class Patchify:
                 value below 1. Subcrops will be generated using this shape and padded back to the
                 original patch size.
         """
-        assert isinstance(patch_shape, (tuple, list)), \
-            "unexpected patch size type (need tuple or list of int/float values)"
+        assert isinstance(
+            patch_shape, (tuple, list)
+        ), "unexpected patch size type (need tuple or list of int/float values)"
         assert len(patch_shape) > 0, "patch size cannot be a 0-dim vector"
-        assert (
-            all([isinstance(s, int) and s > 0 for s in patch_shape])
-            or all([isinstance(s, float) and 0 < s <= 1 for s in patch_shape])
+        assert all([isinstance(s, int) and s > 0 for s in patch_shape]) or all(
+            [isinstance(s, float) and 0 < s <= 1 for s in patch_shape]
         ), "expected patch size elements to be the same type (int or float) and strictly positive"
         self.patch_shape = tuple(patch_shape)
-        assert isinstance(patch_overlap, (int, float)) and 0 <= patch_overlap < 1, \
-            "invalid patch overlap, should be float in [0,1["
+        assert (
+            isinstance(patch_overlap, (int, float)) and 0 <= patch_overlap < 1
+        ), "invalid patch overlap, should be float in [0,1["
         self.patch_overlap = float(patch_overlap)
-        assert isinstance(min_mask_iou, (int, float)) and 0 <= min_mask_iou <= 1, \
-            "invalid minimum mask IoU score, should be float in [0,1]"
+        assert (
+            isinstance(min_mask_iou, (int, float)) and 0 <= min_mask_iou <= 1
+        ), "invalid minimum mask IoU score, should be float in [0,1]"
         self.min_mask_iou = float(min_mask_iou)
         self.offset_overlap = offset_overlap
         self.padding_val = padding_val
         self.make_contiguous = make_contiguous
         if jittered_subcrop_shape is not None:
-            assert len(jittered_subcrop_shape) == len(patch_shape), \
-                "jittered subcrop patch shape tuple must be same dim count as original patch shape"
-            assert (
-                all([isinstance(s, int) and s > 0 for s in jittered_subcrop_shape])
-                or all([isinstance(s, float) and 0 < s < 1 for s in jittered_subcrop_shape])
+            assert len(jittered_subcrop_shape) == len(
+                patch_shape
+            ), "jittered subcrop patch shape tuple must be same dim count as original patch shape"
+            assert all([isinstance(s, int) and s > 0 for s in jittered_subcrop_shape]) or all(
+                [isinstance(s, float) and 0 < s < 1 for s in jittered_subcrop_shape]
             ), "invalid subcrop shape values (need int/float and smaller than patch shape values)"
             jittered_subcrop_shape = tuple(jittered_subcrop_shape)
         self.jittered_subcrop_shape = jittered_subcrop_shape
@@ -125,26 +127,26 @@ class Patchify:
         # note: this returns the patch shape before any jittered-crop operation is potentially applied!
         if isinstance(self.patch_shape[0], float):  # if we're using relative coordinates...
             assert len(image_shape) >= len(self.patch_shape), "image dim count too low for patch dim count"
-            image_spatial_shape = image_shape[-len(self.patch_shape):]
-            return tuple([
-                max(int(round(image_spatial_shape[d] * self.patch_shape[d])), 1)
-                for d in range(len(self.patch_shape))
-            ])
+            image_spatial_shape = image_shape[-len(self.patch_shape) :]
+            return tuple(
+                max(int(round(image_spatial_shape[d] * self.patch_shape[d])), 1) for d in range(len(self.patch_shape))
+            )
         return self.patch_shape  # otherwise, return the absolute shape as-is
 
     def _get_abs_subcrop_shape_from_patch_shape(
         self,
         patch_shape: typing.Tuple[int, ...],  # note: NO FLOATS HERE!
     ) -> typing.Tuple[int, ...]:
-        """Returns the (absolute) subcrop patch shape to use based on the given patch shape (if needed)."""
+        """Returns the (absolute) subcrop patch shape to use based on the given patch shape (if
+        needed)."""
         if self.jittered_subcrop_shape is None:
             return patch_shape  # no cropping to be done, keep the same shape!
         assert len(patch_shape) == len(self.jittered_subcrop_shape), "unexpected patch shape dim count"
         if isinstance(self.jittered_subcrop_shape[0], float):  # if we're using a relative size...
-            return tuple([
+            return tuple(
                 max(int(round(patch_shape[d] * self.jittered_subcrop_shape[d])), 1)
                 for d in range(len(self.patch_shape))
-            ])
+            )
         return self.jittered_subcrop_shape  # otherwise, return the absolute shape as-is
 
     def _get_offset_steps_from_abs_patch_shape(
@@ -153,24 +155,20 @@ class Patchify:
     ) -> typing.Tuple[int, ...]:
         """Returns the (absolute) offset steps to use based on the given patch shape + overlap."""
         assert len(patch_shape) > 0 and all([s > 0 for s in patch_shape]), "bad input patch shape"
-        return tuple([
-            max(patch_shape[d] - int(round(patch_shape[d] * self.patch_overlap)), 1)
-            for d in range(len(patch_shape))
-        ])
+        return tuple(
+            max(patch_shape[d] - int(round(patch_shape[d] * self.patch_overlap)), 1) for d in range(len(patch_shape))
+        )
 
     def _prepare_inputs(
         self,
         image: typing.Union[PIL.Image.Image, np.ndarray, torch.Tensor],
         mask: typing.Optional[typing.Union[PIL.Image.Image, np.ndarray, torch.Tensor]] = None,
-    ) -> typing.Tuple[
-        typing.Union[np.ndarray, torch.Tensor],
-        typing.Union[np.ndarray, torch.Tensor]
-    ]:
+    ) -> typing.Tuple[typing.Union[np.ndarray, torch.Tensor], typing.Union[np.ndarray, torch.Tensor]]:
         """Returns a (possibly) converted version of the input image to process.
 
-        If the input is an OpenCV-like array, its channel ordering will first be flipped around
-        to the torch-like ordering (i.e. `H x W x C` will become `C x H x W`). If a mask is
-        provided, it must only have the spatial dimensions of the input image (and no channels!).
+        If the input is an OpenCV-like array, its channel ordering will first be flipped around to
+        the torch-like ordering (i.e. `H x W x C` will become `C x H x W`). If a mask is provided,
+        it must only have the spatial dimensions of the input image (and no channels!).
         """
         assert isinstance(image, (PIL.Image.Image, np.ndarray, torch.Tensor))
         if isinstance(image, PIL.Image.Image):
@@ -194,17 +192,14 @@ class Patchify:
             elif isinstance(mask, np.ndarray) and mask.ndim == 3:
                 assert mask.shape[2] == 1
                 mask = np.squeeze(mask, axis=2)
-            assert image.shape[-len(self.patch_shape):] == mask.shape
+            assert image.shape[-len(self.patch_shape) :] == mask.shape
         return image, mask
 
     def __call__(
         self,
         image: typing.Union[PIL.Image.Image, np.ndarray, torch.Tensor],
         mask: typing.Optional[typing.Union[PIL.Image.Image, np.ndarray, torch.Tensor]] = None,
-    ) -> typing.Union[
-        typing.Union[np.ndarray, torch.Tensor],
-        typing.List[typing.Union[np.ndarray, torch.Tensor]],
-    ]:
+    ) -> typing.Union[typing.Union[np.ndarray, torch.Tensor], typing.List[typing.Union[np.ndarray, torch.Tensor]],]:
         """Extracts and returns an array of patches taken from the given image.
 
         If `make_contiguous` is true and no mask is used, the output will be a contiguous array
@@ -246,8 +241,8 @@ class Patchify:
         assert all([p.shape == patch_shape for p in patch_coords_map.values()])
         subcrop_patch_shape = self._get_abs_subcrop_shape_from_patch_shape(patch_shape)
         assert all([c <= p for c, p in zip(subcrop_patch_shape, patch_shape)])
-        subcrop_shape_diffs = tuple([p - c for c, p in zip(subcrop_patch_shape, patch_shape)])
-        subcrop_offsets = tuple([list(range(s + 1)) for s in subcrop_shape_diffs])
+        subcrop_shape_diffs = tuple(p - c for c, p in zip(subcrop_patch_shape, patch_shape))
+        subcrop_offsets = tuple(list(range(s + 1)) for s in subcrop_shape_diffs)
 
         # assemble the list of patches right away (these should be views in the orig data)
         output = []
@@ -299,25 +294,24 @@ class Patchify:
         offset_steps = self._get_offset_steps_from_abs_patch_shape(patch_shape)
         patch_idx_arrays = list(zip(*patch_coords_map.keys()))
         init_coords = next(iter(patch_coords_map.keys())) if patch_coords_map else tuple()
-        assert all([
-            all([
-                (idx - init_coords[d]) % offset_steps[d] == 0
-                for idx in patch_idx_arrays[d]
-            ]) for d in range(len(patch_shape))
-        ])
-        grid_shape = tuple([
-            len(np.unique(patch_idx_arrays[d])) for d in range(len(patch_shape))
-        ])
-        output_shape = grid_shape + image.shape[:-len(patch_shape)] + patch_shape
+        assert all(
+            [
+                all([(idx - init_coords[d]) % offset_steps[d] == 0 for idx in patch_idx_arrays[d]])
+                for d in range(len(patch_shape))
+            ]
+        )
+        grid_shape = tuple(len(np.unique(patch_idx_arrays[d])) for d in range(len(patch_shape)))
+        output_shape = grid_shape + image.shape[: -len(patch_shape)] + patch_shape
         if isinstance(image, torch.Tensor):
             output_grid = torch.empty(output_shape, dtype=image.dtype, device=image.device)
         else:
             output_grid = np.empty(output_shape, dtype=image.dtype)
         for idxs, patch in zip(patch_coords_map.keys(), output):
-            grid_loc = tuple([  # note: this is where we deduce the patch coords inside the grid
+            grid_loc = tuple(
+                # note: this is where we deduce the patch coords inside the grid
                 (idxs[d] - init_coords[d]) // offset_steps[d]
                 for d in range(len(patch_shape))
-            ])
+            )
             output_grid[grid_loc] = patch
         return output_grid
 
@@ -326,7 +320,8 @@ class Patchify:
         mask: typing.Union[np.ndarray, torch.Tensor],
         patch_coord: ssl4rs.utils.patch_coord.PatchCoord,
     ) -> bool:
-        """Returns whether the mask crop at the specified location passes the IoU threshold or not."""
+        """Returns whether the mask crop at the specified location passes the IoU threshold or
+        not."""
         mask_crop = ssl4rs.utils.imgproc.flex_crop(mask, patch_coord, force_copy=False)
         if isinstance(mask, np.ndarray):
             mask_area = np.count_nonzero(mask_crop)
@@ -344,19 +339,15 @@ class Patchify:
     ) -> typing.Optional[typing.Tuple[int, ...]]:
         """Returns the initial coordinates from where to start extracting patches."""
         assert len(patch_shape) == len(offset_steps)
-        init_idxs = tuple([
-            -(patch_shape[d] - offset_steps[d]) if self.offset_overlap else 0
-            for d in range(len(patch_shape))
-        ])
+        init_idxs = tuple(
+            -(patch_shape[d] - offset_steps[d]) if self.offset_overlap else 0 for d in range(len(patch_shape))
+        )
         if mask is None:
             return init_idxs
-        assert isinstance(mask, (np.ndarray, torch.Tensor)), \
-            "mask type should be np.ndarray or torch.Tensor"
+        assert isinstance(mask, (np.ndarray, torch.Tensor)), "mask type should be np.ndarray or torch.Tensor"
         assert mask.ndim == len(patch_shape), "mask ndim should be equal to spatial ndim only!"
         assert mask.ndim == len(patch_shape)
-        spatial_dim_ranges = tuple([
-            range(init_idxs[d], mask.shape[d]) for d in range(len(patch_shape))
-        ])
+        spatial_dim_ranges = tuple(range(init_idxs[d], mask.shape[d]) for d in range(len(patch_shape)))
         found_idxs = None  # will remain none if mask never provides a good first hit
         for idxs in itertools.product(*spatial_dim_ranges):
             curr_patch = ssl4rs.utils.patch_coord.PatchCoord(idxs, shape=patch_shape)
@@ -383,15 +374,13 @@ class Patchify:
         patch_shape = self._get_abs_patch_shape_from_image_shape(image_shape)
         offset_steps = self._get_offset_steps_from_abs_patch_shape(patch_shape)
         spatial_start_idxs = self._find_init_patch_coord(patch_shape, offset_steps)
-        spatial_end_idxs = tuple([
-            (image_shape[d] - offset_steps[d] + 1)
-            if self.offset_overlap else (image_shape[d] - patch_shape[d] + 1)
+        spatial_end_idxs = tuple(
+            (image_shape[d] - offset_steps[d] + 1) if self.offset_overlap else (image_shape[d] - patch_shape[d] + 1)
             for d in range(len(patch_shape))
-        ])
-        return tuple([
-            range(spatial_start_idxs[d], spatial_end_idxs[d], offset_steps[d])
-            for d in range(len(patch_shape))
-        ])
+        )
+        return tuple(
+            range(spatial_start_idxs[d], spatial_end_idxs[d], offset_steps[d]) for d in range(len(patch_shape))
+        )
 
     def get_patch_coords(
         self,
@@ -415,24 +404,21 @@ class Patchify:
         Returns:
             A map indexing patch locations (top-left coordinates) to patch coordinates objects.
         """
-        assert isinstance(image, (np.ndarray, torch.Tensor)), \
-            "image type should be np.ndarray or torch.Tensor"
+        assert isinstance(image, (np.ndarray, torch.Tensor)), "image type should be np.ndarray or torch.Tensor"
         patch_shape = self._get_abs_patch_shape_from_image_shape(image.shape)
         offset_steps = self._get_offset_steps_from_abs_patch_shape(patch_shape)
         spatial_start_idxs = self._find_init_patch_coord(patch_shape, offset_steps, mask)
-        im_shape = tuple(image.shape[-len(patch_shape):])
+        im_shape = tuple(image.shape[-len(patch_shape) :])
         cache_key = (patch_shape, offset_steps, spatial_start_idxs, im_shape)
         if mask is None and cache_key in self._patch_coords_cache:
             return self._patch_coords_cache[cache_key]  # shortcut for when we have no mask to check!
-        spatial_end_idxs = tuple([
-            (im_shape[d] - offset_steps[d] + 1)
-            if self.offset_overlap else (im_shape[d] - patch_shape[d] + 1)
+        spatial_end_idxs = tuple(
+            (im_shape[d] - offset_steps[d] + 1) if self.offset_overlap else (im_shape[d] - patch_shape[d] + 1)
             for d in range(len(patch_shape))
-        ])
-        spatial_dim_ranges = tuple([
-            range(spatial_start_idxs[d], spatial_end_idxs[d], offset_steps[d])
-            for d in range(len(patch_shape))
-        ])
+        )
+        spatial_dim_ranges = tuple(
+            range(spatial_start_idxs[d], spatial_end_idxs[d], offset_steps[d]) for d in range(len(patch_shape))
+        )
         output = {}
         for idxs in itertools.product(*spatial_dim_ranges):
             idxs = tuple(idxs)

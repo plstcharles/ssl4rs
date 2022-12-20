@@ -3,9 +3,9 @@
 import abc
 import typing
 
+import deepdiff
 import deeplake
 import deeplake.util.exceptions
-import deepdiff
 import numpy as np
 import tqdm
 
@@ -19,8 +19,8 @@ import ssl4rs
 class DeepLakeRepackager:
     """Base interface used to provide common definitions for all deeplake exporters/repackagers.
 
-    The abstract properties defined below should be overridden in the derived classes based on
-    the dataset info, either statically or at runtime.
+    The abstract properties defined below should be overridden in the derived classes based on the
+    dataset info, either statically or at runtime.
     """
 
     @property
@@ -69,15 +69,16 @@ class DeepLakeRepackager:
     def __getitem__(self, item: int) -> typing.Dict[str, typing.Any]:
         """Returns a single data sample that should be exported in the dataset.
 
-        The data sample is provided as a dictionary where the `tensor_names` property defined
-        above should each be the key to a tensor. Other tensors may also be present.
+        The data sample is provided as a dictionary where the `tensor_names` property defined above
+        should each be the key to a tensor. Other tensors may also be present.
         """
         raise NotImplementedError
 
     @staticmethod
     @deeplake.compute
     def _data_sample_exporter(sample_index, sample_out, exporter):
-        """Fetches a data sample from a derived class getitem implementation for hub exportation."""
+        """Fetches a data sample from a derived class getitem implementation for hub
+        exportation."""
         sample_data = exporter[sample_index]  # this is where the __getitem__ is called...
         assert isinstance(sample_data, dict) and all([tn in sample_data for tn in exporter.tensor_names])
         sample_out.append(sample_data)  # this should add all the tensors at once...
@@ -107,14 +108,15 @@ class DeepLakeRepackager:
         if not overwrite:
             existing_dataset = None
             try:
-                existing_dataset = \
-                    deeplake.load(output_path, read_only=True, verbose=verbose, **extra_deeplake_kwargs)
+                existing_dataset = deeplake.load(output_path, read_only=True, verbose=verbose, **extra_deeplake_kwargs)
             except deeplake.util.exceptions.DatasetHandlerError:
                 pass  # dataset does not exist, we won't be overwriting anything, perfect
             if existing_dataset is not None:
                 # if we get here, we need to verify dataset overlap...
                 ssl4rs.data.repackagers.utils.check_info_overlap(
-                    existing_dataset, self.dataset_info, self.tensor_info,
+                    existing_dataset,
+                    self.dataset_info,
+                    self.tensor_info,
                 )
                 # if the above check passed, we can return right away, as the dataset is all good!
                 return

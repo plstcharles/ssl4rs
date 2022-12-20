@@ -18,9 +18,9 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     """Implementation derived from the standard LightningDataModule for the AID dataset.
 
     This dataset contains large-scale aerial images that can be used for classification. There are
-    10,000 images (600x600, RGB) in this dataset, and these are given one of 30 class labels.
-    See https://captain-whu.github.io/AID/ for more information and download links. This dataset
-    CANNOT be downloaded on the spot by this data module, meaning we assume it is on disk at runtime.
+    10,000 images (600x600, RGB) in this dataset, and these are given one of 30 class labels. See
+    https://captain-whu.github.io/AID/ for more information and download links. This dataset CANNOT
+    be downloaded on the spot by this data module, meaning we assume it is on disk at runtime.
     """
 
     class_distrib = ssl4rs.data.repackagers.aid.AIDRepackager.class_distrib
@@ -62,9 +62,9 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     def setup(self, stage: typing.Optional[str] = None) -> None:
         """Loads the AID data under the train/valid/test parsers.
 
-        This method is called by lightning when doing `trainer.fit()` and `trainer.test()`,
-        so be careful not to execute the random split twice! The `stage` can be used to
-        differentiate whether it's called before `trainer.fit()` or `trainer.test()`.
+        This method is called by lightning when doing `trainer.fit()` and `trainer.test()`, so be
+        careful not to execute the random split twice! The `stage` can be used to differentiate
+        whether it's called before `trainer.fit()` or `trainer.test()`.
         """
         # load datasets only if they're not loaded already (no matter the requested stage)
         if not self.data_train and not self.data_valid and not self.data_test:
@@ -100,6 +100,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
 
 def _local_main(data_root_dir: pathlib.Path) -> None:
     import ssl4rs.utils.config
+
     config = ssl4rs.utils.config.init_hydra_and_compose_config()
     datamodule = DataModule(
         data_dir=data_root_dir / "aid/aid.deeplake",

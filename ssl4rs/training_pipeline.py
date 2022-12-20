@@ -24,8 +24,7 @@ def train(config: omegaconf.DictConfig) -> typing.Optional[float]:
     Returns:
         Optional[float]: Value obtained for the targeted metric (for hyperparam optimization).
     """
-    exp_name, run_name, run_type, job_name = \
-        config.experiment_name, config.run_name, config.run_type, config.job_name
+    exp_name, run_name, run_type, job_name = config.experiment_name, config.run_name, config.run_type, config.job_name
     logger.info(f"Launching ({exp_name}: {run_name}, '{run_type}', job={job_name})")
 
     output_dir = pathlib.Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
@@ -77,9 +76,10 @@ def train(config: omegaconf.DictConfig) -> typing.Optional[float]:
     if not trainer.interrupted:
         target_metric_name = config.get("target_metric")
         if target_metric_name is not None:
-            assert target_metric_name in trainer.callback_metrics, \
-                f"target metric {target_metric_name} for hyperparameter optimization not found! " \
+            assert target_metric_name in trainer.callback_metrics, (
+                f"target metric {target_metric_name} for hyperparameter optimization not found! "
                 "make sure the `target_metric` field in the config is correct!"
+            )
             target_metric_val = trainer.callback_metrics.get(target_metric_name)
         if "test" in run_type:
             ckpt_path = "best"

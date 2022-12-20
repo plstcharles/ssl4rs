@@ -5,16 +5,16 @@
 
 wandb:
   _target_: pytorch_lightning.loggers.wandb.WandbLogger
-  name: ${experiment_name}  # the display name for the run; in wandb-speak, run = experiment
-  save_dir: ${utils.output_dir_prefix}/wandb/  # root where all wandb data will be logged
-  offline: False  # toggles whether to run offline and upload data later if needed
-  version: ${utils.run_and_job_name}  # can be used to set the ID of a previous exec to resume it
-  anonymous: True  # enables or explicitly disables anonymous logging
-  project: ${utils.project_name}  # name of the project to which this run will belong
-  log_model: False  # toggles whether to log checkpoints created by callbacks as artifacts
-  prefix: ""  # the string to prefix to all metric keys that will be logged
+  name: ${experiment_name} # the display name for the run; in wandb-speak, run = experiment
+  save_dir: ${utils.output_dir_prefix}/wandb/ # root where all wandb data will be logged
+  offline: False # toggles whether to run offline and upload data later if needed
+  version: ${utils.run_and_job_name} # can be used to set the ID of a previous exec to resume it
+  anonymous: True # enables or explicitly disables anonymous logging
+  project: ${utils.project_name} # name of the project to which this run will belong
+  log_model: False # toggles whether to log checkpoints created by callbacks as artifacts
+  prefix: "" # the string to prefix to all metric keys that will be logged
   # note: we also add more args to pass more arguments directly to wandb.init
   # entity: null  # username or team where we'll be sending all our runs
-  group: ${run_name}  # group name under which we'll be adding this run
-  job_type: ${run_type}  # type of run we'll be doing (used to facilitate filtering in the UI)
-  tags: []  # a list of tags to use for this run (used to facilitate filtering in the UI)
+  group: ${run_name} # group name under which we'll be adding this run
+  job_type: ${run_type} # type of run we'll be doing (used to facilitate filtering in the UI)
+  tags: [] # a list of tags to use for this run (used to facilitate filtering in the UI)

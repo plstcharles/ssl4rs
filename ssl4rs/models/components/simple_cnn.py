@@ -4,7 +4,6 @@ import typing
 
 import torch.nn
 
-
 default_kernel_size = (3, 3)
 default_stride = (1, 1)
 default_padding = (1, 1)
@@ -53,7 +52,9 @@ class SimpleConvNet(torch.nn.Module):
                 in_channels=hidden_channels[-1],
                 out_channels=head_channels,
                 kernel_size=(1, 1),
-            ) if head_channels is not None else torch.nn.Identity(),
+            )
+            if head_channels is not None
+            else torch.nn.Identity(),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:

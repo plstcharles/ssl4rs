@@ -22,8 +22,7 @@ def _common_init(
     ssl4rs.data.DataModule,
 ]:  # returns ((exp_name, run_name, run_type, job_name), datamodule)
     """Runs the common (for-all-profiling-types) initialization stuff."""
-    exp_name, run_name, run_type, job_name = \
-        config.experiment_name, config.run_name, config.run_type, config.job_name
+    exp_name, run_name, run_type, job_name = config.experiment_name, config.run_name, config.run_type, config.job_name
     logger.info(f"Launching ({exp_name}: {run_name}, '{run_type}', job={job_name})")
 
     output_dir = pathlib.Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
@@ -32,8 +31,9 @@ def _common_init(
 
     logger.info(f"Instantiating datamodule: {config.data.datamodule._target_}")
     datamodule: pl.LightningDataModule = hydra.utils.instantiate(config.data.datamodule)
-    assert isinstance(datamodule, ssl4rs.data.DataModule), \
-        "invalid datamodule base class (need `ssl4rs.data.DataModule` for getters below!)"
+    assert isinstance(
+        datamodule, ssl4rs.data.DataModule
+    ), "invalid datamodule base class (need `ssl4rs.data.DataModule` for getters below!)"
 
     return (exp_name, run_name, run_type, job_name), datamodule
 
@@ -53,20 +53,22 @@ def _get_dataloader(
     """
     assert "profiler" in config, "missing mandatory 'profiler' (sub)config!"
     target_dataloader_type = config.profiler.get("dataloader_type", "train")
-    assert target_dataloader_type in datamodule.dataloader_types, \
-        f"invalid target dataloader type: {target_dataloader_type}" \
-        f" (should be in {datamodule.dataloader_types})"
+    assert target_dataloader_type in datamodule.dataloader_types, (
+        f"invalid target dataloader type: {target_dataloader_type}" f" (should be in {datamodule.dataloader_types})"
+    )
 
     dataloader = datamodule.get_dataloader(target_dataloader_type)
-    assert isinstance(dataloader, torch.utils.data.DataLoader), \
-        f"current data profiler impl does not support this loader type: {type(dataloader)}"
+    assert isinstance(
+        dataloader, torch.utils.data.DataLoader
+    ), f"current data profiler impl does not support this loader type: {type(dataloader)}"
 
     if not config.profiler.get("use_parser", False):
         return dataloader
 
     dataparser = dataloader.dataset
-    assert isinstance(dataparser, ssl4rs.data.DataParser), \
-        f"current data profiler impl does not support this parser type: {type(dataparser)}"
+    assert isinstance(
+        dataparser, ssl4rs.data.DataParser
+    ), f"current data profiler impl does not support this parser type: {type(dataparser)}"
 
     return dataparser
 
@@ -107,9 +109,7 @@ def data_profiler(config: omegaconf.DictConfig) -> None:
                 batch_stopwatch.start()
                 for batch_idx, batch in enumerate(dataloader):
                     curr_elapsed_time = batch_stopwatch.stop()
-                    logger.debug(
-                        f"batch{batch_idx:04d} elapsed time: {curr_elapsed_time:0.4f} seconds"
-                    )
+                    logger.debug(f"batch{batch_idx:04d} elapsed time: {curr_elapsed_time:0.4f} seconds")
                     tot_batch_count += ssl4rs.data.get_batch_size(batch)
                     if max_batch_count != -1 and batch_idx + 1 == max_batch_count:
                         break
@@ -125,5 +125,6 @@ def data_profiler(config: omegaconf.DictConfig) -> None:
     with stopwatch_creator(name="datamodule.teardown()"):
         datamodule.teardown()
     logger.info(f"Done ({exp_name}: {run_name}, '{run_type}', job={job_name})")
+
 
 # todo: add model inference profiler?

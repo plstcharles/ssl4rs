@@ -1,4 +1,5 @@
 import numpy as np
+
 import ssl4rs.utils.imgproc as imgproc
 import ssl4rs.utils.patch_coord as patches
 

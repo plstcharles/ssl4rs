@@ -101,9 +101,9 @@ def log_hyperparameters(
 ) -> None:
     """Forwards all notable/interesting/important hyperparameters to the model logger.
 
-    If the model does not have a logger that implements the `log_hyperparams`, this function
-    does nothing. Note that hyperparameters (at least, those defined via config files) will
-    always be automatically logged in `${hydra:runtime.output_dir}`.
+    If the model does not have a logger that implements the `log_hyperparams`, this function does
+    nothing. Note that hyperparameters (at least, those defined via config files) will always be
+    automatically logged in `${hydra:runtime.output_dir}`.
     """
     if not trainer.logger:
         return  # no logger to use, nothing to do...
@@ -111,12 +111,8 @@ def log_hyperparameters(
     hparams = dict()  # we'll fill this dict with all the hyperparams we want to log
     hparams["model"] = config["model"]  # all model-related stuff is going in for sure
     hparams["model/params/total"] = sum(p.numel() for p in model.parameters())
-    hparams["model/params/trainable"] = sum(
-        p.numel() for p in model.parameters() if p.requires_grad
-    )
-    hparams["model/params/non_trainable"] = sum(
-        p.numel() for p in model.parameters() if not p.requires_grad
-    )
+    hparams["model/params/trainable"] = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    hparams["model/params/non_trainable"] = sum(p.numel() for p in model.parameters() if not p.requires_grad)
     model_size_in_MB = pytorch_lightning.utilities.memory.get_model_size_mb(model)
     hparams["model/size_in_MB"] = model_size_in_MB
     # data and training configs should also go in for sure (they should also always exist)
@@ -186,4 +182,5 @@ def finalize_logs(
         if isinstance(lg, pytorch_lightning.loggers.wandb.WandbLogger):
             # without this sweeps with wandb logger might crash!
             import wandb
+
             wandb.finish()

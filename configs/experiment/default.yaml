@@ -1,8 +1,8 @@
 # @package _global_
 
-experiment_name: ???  # defines the experiment name used in various output/logging paths
-run_type: ???  # type of run that we'll be doing (e.g. 'train', 'test', 'profiler', ...)
-run_name: ${utils.curr_timestamp}  # defines the run name used in various output/logging paths
-job_name: ${oc.select:hydra.job.num,0}  # defines the job name used in various output/logging paths
-seed: null  # seed for random number generators (null = auto-seed based e.g. on datetime)
-seed_workers: True  # toggles whether to initialize workers with the above seed as well
+experiment_name: ??? # defines the experiment name used in various output/logging paths
+run_type: ??? # type of run that we'll be doing (e.g. 'train', 'test', 'profiler', ...)
+run_name: ${utils.curr_timestamp} # defines the run name used in various output/logging paths
+job_name: ${oc.select:hydra.job.num,0} # defines the job name used in various output/logging paths
+seed: null # seed for random number generators (null = auto-seed based e.g. on datetime)
+seed_workers: True # toggles whether to initialize workers with the above seed as well

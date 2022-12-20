@@ -16,8 +16,8 @@ class DeepLakeParser(torch.utils.data.dataset.Dataset):
     """Base interface used to provide common definitions for all deeplake parsers.
 
     For very simple datasets (e.g. those used for image classification), this wrapper should be
-    sufficient to load the data directly. Other datasets that need to preprocess/unpack sample
-    data in a specific fashion before it can be used should rely on their own derived class.
+    sufficient to load the data directly. Other datasets that need to preprocess/unpack sample data
+    in a specific fashion before it can be used should rely on their own derived class.
     """
 
     def __init__(
@@ -49,16 +49,13 @@ class DeepLakeParser(torch.utils.data.dataset.Dataset):
     def __getitem__(self, item: int) -> typing.Dict[str, typing.Any]:
         """Returns a single data sample loaded from the dataset.
 
-        The data sample is provided as a dictionary where the `tensor_names` property defined
-        above should each be the keys to tensors. Additional tensors may also be returned.
+        The data sample is provided as a dictionary where the `tensor_names` property defined above
+        should each be the keys to tensors. Additional tensors may also be returned.
         """
         if np.issubdtype(type(item), np.integer):
             item = int(item)  # in case we're using numpy ints, as deeplake is not familiar w/ those
         data = self.dataset[item]
-        batch = {
-            tensor_name: data[tensor_name].numpy()
-            for tensor_name in self.tensor_names
-        }
+        batch = {tensor_name: data[tensor_name].numpy() for tensor_name in self.tensor_names}
         if self.batch_transforms:
             batch = self.batch_transforms(batch)
         if "batch_id" not in batch:
@@ -68,7 +65,8 @@ class DeepLakeParser(torch.utils.data.dataset.Dataset):
 
     @property
     def tensor_info(self) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
-        """Returns the dictionary of tensor info objects (deeplake-defined) parsed from the dataset.
+        """Returns the dictionary of tensor info objects (deeplake-defined) parsed from the
+        dataset.
 
         The returned objects can help downstream processing stages figure out what kind of data
         they will be receiving from this parser.
@@ -114,7 +112,7 @@ def get_deeplake_parser_subset(
     assert all([idx < len(parser) for idx in indices]), "some indices are out-of-range!"
     TODO  # @@@@@@@@@@ TODO IMPL ME! (might be much faster than regular)
 
-    #@deeplake.compute
+    # @deeplake.compute
     def filter_indices(sample_in) -> bool:
         return todo
 

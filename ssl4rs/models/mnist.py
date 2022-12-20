@@ -56,12 +56,15 @@ class MNISTClassifier(ssl4rs.models.BaseModel):
 
     def configure_metrics(self) -> torchmetrics.MetricCollection:
         """Configures and returns the metric objects to update when given predictions + labels."""
-        return torchmetrics.MetricCollection(dict(
-            accuracy=torchmetrics.classification.accuracy.Accuracy(num_classes=10),
-        ))
+        return torchmetrics.MetricCollection(
+            dict(
+                accuracy=torchmetrics.classification.accuracy.Accuracy(num_classes=10),
+            )
+        )
 
     def configure_optimizers(self) -> typing.Dict[typing.AnyStr, typing.Any]:
-        """Configures and returns model-specific optimizers and schedulers to use during training."""
+        """Configures and returns model-specific optimizers and schedulers to use during
+        training."""
         logger.debug("Configuring MNIST module optimizer and scheduler...")
         assert self.optim_config is not None, "we're about to train, we need an optimization cfg!"
         optim_config = copy.deepcopy(self.optim_config)  # we'll fully resolve + convert it below
@@ -119,8 +122,8 @@ class MNISTClassifier(ssl4rs.models.BaseModel):
 
         In comparison with the regular `forward()` function, this function will compute the loss
         and return multiple outputs used to update the metrics based on the assumption that the
-        batch dictionary also contains info about the target labels. This means that it should never
-        be used in production, as we would then try to access labels that do not exist.
+        batch dictionary also contains info about the target labels. This means that it should
+        never be used in production, as we would then try to access labels that do not exist.
         """
         preds = self(batch)  # this will call the 'forward' implementation above and return preds
         assert "target" in batch, "missing mandatory 'target' field with target labels data!"
@@ -144,10 +147,12 @@ class MNISTClassifier(ssl4rs.models.BaseModel):
         """Returns a unique 'identifier' for a particular data sample in a specific batch."""
         # if the batch data is available, we'll return the original ID from the parser...
         if batch is not None:
-            assert "batch_id" in batch, \
-                "missing mandatory 'batch_id' field required to generate persistent data sample IDs!"
-            assert "batch_size" in batch, \
-                "missing mandatory 'batch_size' field required to validate persistent data sample IDs!"
+            assert (
+                "batch_id" in batch
+            ), "missing mandatory 'batch_id' field required to generate persistent data sample IDs!"
+            assert (
+                "batch_size" in batch
+            ), "missing mandatory 'batch_size' field required to validate persistent data sample IDs!"
             batch_size, batch_ids = ssl4rs.data.get_batch_size(batch), batch["batch_id"]
             assert len(batch_ids) == batch_size, "unexpected batch id/size mismatch?"
             assert 0 <= sample_idx < batch_size, "out-of-scope sample idx wrt batch size!"
@@ -173,7 +178,8 @@ class MNISTClassifier(ssl4rs.models.BaseModel):
         outputs: typing.Dict[typing.AnyStr, typing.Any],
         dataloader_idx: int = 0,
     ) -> typing.Any:
-        """Renders and logs a specific data samples from the current batch using available loggers."""
+        """Renders and logs a specific data samples from the current batch using available
+        loggers."""
         assert len(sample_idxs) == len(sample_ids) and len(sample_idxs) > 0
         # we'll render the input tensors with their IDs, predicted, and target labels underneath
         pred_idxs, target_idxs = torch.argmax(outputs["preds"], dim=1), outputs["target"]
@@ -183,10 +189,7 @@ class MNISTClassifier(ssl4rs.models.BaseModel):
             image = ssl4rs.utils.drawing.get_displayable_image(input_tensor)
             image = ssl4rs.utils.drawing.resize_nn(image, zoom_factor=10)
             image = ssl4rs.utils.drawing.add_subtitle_to_image(
-                image=image,
-                subtitle=str(sample_id),
-                extra_border_size=10,
-                scale=1.35
+                image=image, subtitle=str(sample_id), extra_border_size=10, scale=1.35
             )
             sstr = f"Predicted: {pred_idxs[sample_idx]}, Target: {target_idxs[sample_idx]}"
             image = ssl4rs.utils.drawing.add_subtitle_to_image(

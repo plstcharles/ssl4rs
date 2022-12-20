@@ -82,15 +82,14 @@ class BaseModel(pl.LightningModule):
         """Configures and returns a collection of metrics where the top-level key is the loop type.
 
         By default, this function will refer to the `configure_metrics` function in order to
-        instantiate the actual metric objects, and it will clone those objects for each of the
-        loop types that require metrics to be computed independently.
+        instantiate the actual metric objects, and it will clone those objects for each of the loop
+        types that require metrics to be computed independently.
         """
         logger.debug("Instantiating generic metric collections...")
         default_loop_types_with_metrics = ["train", "valid", "test"]
         metrics = self.configure_metrics()
         default_loop_metrics = {
-            loop_type: metrics.clone(prefix=(loop_type + "/"))
-            for loop_type in default_loop_types_with_metrics
+            loop_type: metrics.clone(prefix=(loop_type + "/")) for loop_type in default_loop_types_with_metrics
         }
         return default_loop_metrics
 
@@ -123,7 +122,8 @@ class BaseModel(pl.LightningModule):
         raise NotImplementedError
 
     def _create_example_input_array(self, **kwargs) -> typing.Dict[typing.AnyStr, typing.Any]:
-        """Wraps the given kwargs inside a fake 'batch' dictionary to be used as the example input."""
+        """Wraps the given kwargs inside a fake 'batch' dictionary to be used as the example
+        input."""
         batch_data = dict(**kwargs)
         self.example_input_array = dict(batch=batch_data)
         return self.example_input_array
@@ -208,8 +208,7 @@ class BaseModel(pl.LightningModule):
             and nodes, and that might be further used in the `training_step_end` function.
         """
         outputs = self._generic_step(batch, batch_idx)
-        assert "loss" in outputs, \
-            "loss tensor is NOT optional in training step implementation (needed for backprop!)"
+        assert "loss" in outputs, "loss tensor is NOT optional in training step implementation (needed for backprop!)"
         self._check_and_render_batch(
             loop_type="train",
             batch=batch,
@@ -230,8 +229,9 @@ class BaseModel(pl.LightningModule):
             The loss tensor used for backpropagation (when `log_train_metrics_each_step=True`),
             or the full outputs dictionary (when `log_train_metrics_each_step=False`).
         """
-        assert "loss" in step_output, \
-            "loss tensor is NOT optional in training step end implementation (needed for backprop!)"
+        assert (
+            "loss" in step_output
+        ), "loss tensor is NOT optional in training step end implementation (needed for backprop!)"
         loss = step_output["loss"]
         batch_size = step_output.get("batch_size", None)
         # todo: figure out if we need to add sync_dist arg to self.log calls below?
@@ -440,7 +440,8 @@ class BaseModel(pl.LightningModule):
         batch_idx: int,  # index of the batch itself inside the dataloader loop
         dataloader_idx: int = 0,  # index of the dataloader that the batch was loaded from
     ) -> typing.List[typing.Hashable]:
-        """Returns a list of 'identifiers' used to uniquely tag all data sample in a given batch."""
+        """Returns a list of 'identifiers' used to uniquely tag all data sample in a given
+        batch."""
         assert loop_type in ["train", "valid", "test"]
         if batch is not None and "batch_size" in batch:
             batch_size = ssl4rs.data.get_batch_size(batch)
@@ -466,7 +467,8 @@ class BaseModel(pl.LightningModule):
                     batch_idx=batch_idx,
                     sample_idx=sample_idx,
                     dataloader_idx=dataloader_idx,
-                ) for sample_idx in range(batch_size)
+                )
+                for sample_idx in range(batch_size)
             ]
         elif loop_type in ["valid", "test"]:
             if loop_type == "valid":
@@ -482,7 +484,8 @@ class BaseModel(pl.LightningModule):
                     batch_idx=batch_idx,
                     sample_idx=sample_idx,
                     dataloader_idx=dataloader_idx,
-                ) for sample_idx in range(batch_size)
+                )
+                for sample_idx in range(batch_size)
             ]
         else:
             raise NotImplementedError
@@ -518,13 +521,15 @@ class BaseModel(pl.LightningModule):
                 replace=False,
             )
             for batch_idx in selected_batch_idxs:
-                picked_ids.append(self._get_data_id(
-                    loop_type=loop_type,
-                    batch=None,  # we do not have the actual batch data yet!
-                    batch_idx=batch_idx,
-                    sample_idx=rng.choice(batch_size),
-                    dataloader_idx=0,
-                ))
+                picked_ids.append(
+                    self._get_data_id(
+                        loop_type=loop_type,
+                        batch=None,  # we do not have the actual batch data yet!
+                        batch_idx=batch_idx,
+                        sample_idx=rng.choice(batch_size),
+                        dataloader_idx=0,
+                    )
+                )
         elif loop_type in ["valid", "test"]:
             if loop_type == "valid":
                 num_batches = self.trainer.num_val_batches
@@ -546,13 +551,15 @@ class BaseModel(pl.LightningModule):
                         replace=False,
                     )
                     for batch_idx in selected_batch_idxs:
-                        picked_ids.append(self._get_data_id(
-                            loop_type=loop_type,
-                            batch=None,  # we do not have the actual batch data yet!
-                            batch_idx=batch_idx,
-                            sample_idx=rng.choice(batch_size),
-                            dataloader_idx=dataloader_idx,
-                        ))
+                        picked_ids.append(
+                            self._get_data_id(
+                                loop_type=loop_type,
+                                batch=None,  # we do not have the actual batch data yet!
+                                batch_idx=batch_idx,
+                                sample_idx=rng.choice(batch_size),
+                                dataloader_idx=dataloader_idx,
+                            )
+                        )
             else:
                 batch_size = self._get_batch_size_from_data_loader(dataloaders[0])
                 selected_batch_idxs = rng.choice(
@@ -561,13 +568,15 @@ class BaseModel(pl.LightningModule):
                     replace=False,
                 )
                 for batch_idx in selected_batch_idxs:
-                    picked_ids.append(self._get_data_id(
-                        loop_type=loop_type,
-                        batch=None,  # we do not have the actual batch data yet!
-                        batch_idx=batch_idx,
-                        sample_idx=rng.choice(batch_size),
-                        dataloader_idx=0,
-                    ))
+                    picked_ids.append(
+                        self._get_data_id(
+                            loop_type=loop_type,
+                            batch=None,  # we do not have the actual batch data yet!
+                            batch_idx=batch_idx,
+                            sample_idx=rng.choice(batch_size),
+                            dataloader_idx=0,
+                        )
+                    )
         else:
             raise NotImplementedError
         return picked_ids
@@ -584,15 +593,15 @@ class BaseModel(pl.LightningModule):
 
         This function relies on the picked data sample IDs that are generated at the beginning of
         the 1st epoch of training/validation/testing. If a match is found for any picked id in the
-        current batch, we will render the corresponding data, log it (if possible), and return
-        the rendering result.
+        current batch, we will render the corresponding data, log it (if possible), and return the
+        rendering result.
         """
         if loop_type not in self._ids_to_render or not self._ids_to_render[loop_type]:
             return  # quick exit if we don't actually want to render/log any predictions\
         assert batch is not None, "it's render time, we need the batch data now for sure!"
         # first step is to check what sample IDs we have in front of us with the current batch
         # (we'll extract IDs with + without batch data, in case some need to be made persistent)
-        persistent_ids, temporary_ids = [
+        persistent_ids, temporary_ids = (
             self._get_data_ids_for_batch(
                 loop_type=loop_type,
                 batch=_batch,
@@ -600,9 +609,10 @@ class BaseModel(pl.LightningModule):
                 dataloader_idx=dataloader_idx,
             )
             for _batch in [batch, None]
-        ]
-        assert len(persistent_ids) <= len(temporary_ids), \
-            "it makes no sense to have more persistent than temporary IDs, ever?"
+        )
+        assert len(persistent_ids) <= len(
+            temporary_ids
+        ), "it makes no sense to have more persistent than temporary IDs, ever?"
         batch_ids = persistent_ids + temporary_ids
         ids_to_render = self._ids_to_render[loop_type]
         assert isinstance(ids_to_render, list)
@@ -673,6 +683,7 @@ class BaseModel(pl.LightningModule):
             elif isinstance(loggr, pytorch_lightning.loggers.MLFlowLogger):
                 assert loggr.run_id is not None
                 import mlflow
+
                 mlflow.log_image(
                     image=image_rgb,
                     artifact_file=f"renders/{key}.png",
@@ -697,8 +708,9 @@ class BaseModel(pl.LightningModule):
             metrics = self.metrics[metric_group]
             target = outputs.get("target", None)
             preds = outputs.get("preds", None)
-            assert target is not None and preds is not None, \
-                "missing `target` and/or `preds` field in batch outputs to auto-update metrics!"
+            assert (
+                target is not None and preds is not None
+            ), "missing `target` and/or `preds` field in batch outputs to auto-update metrics!"
             if return_vals:
                 metric_vals = metrics(preds, target)  # is a bit slower due to output
             else:

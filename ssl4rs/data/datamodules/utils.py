@@ -39,20 +39,20 @@ class DataModule(pytorch_lightning.LightningDataModule):
     ):
         """Initializes the base class interface using the map of loader-type-to-function pairs.
 
-        If any of the functions for the specified/supported loader types is null or missing, it will
-        be set as a basic default.
+        If any of the functions for the specified/supported loader types is null or missing, it
+        will be set as a basic default.
         """
         super().__init__()
         logger.debug("Instantiating LightningDataModule base class...")
-        assert all([isinstance(k, str) for k in dataloader_fn_map.keys()]), \
-            "dataloader function map should have string keys that correspond to loader/loop types"
-        assert all([isinstance(v, (dict, omegaconf.DictConfig)) for v in dataloader_fn_map.values()]), \
-            "dataloader function map values should be subconfigs (no partial functions or objs yet!)"
+        assert all(
+            [isinstance(k, str) for k in dataloader_fn_map.keys()]
+        ), "dataloader function map should have string keys that correspond to loader/loop types"
+        assert all(
+            [isinstance(v, (dict, omegaconf.DictConfig)) for v in dataloader_fn_map.values()]
+        ), "dataloader function map values should be subconfigs (no partial functions or objs yet!)"
         self.dataloader_fn_map = {
             loader_type: dataloader_fn_map.get(loader_type, None)
-            for loader_type in set(
-                list(dataloader_fn_map.keys()) + list(self.default_dataloader_types)
-            )
+            for loader_type in set(list(dataloader_fn_map.keys()) + list(self.default_dataloader_types))
         }
 
     def prepare_data(self) -> None:
@@ -68,7 +68,8 @@ class DataModule(pytorch_lightning.LightningDataModule):
         pass
 
     def setup(self, stage: typing.Optional[str] = None) -> None:
-        """Called at the beginning of `fit` (training + validation), `validate`, `test`, or `predict`.
+        """Called at the beginning of `fit` (training + validation), `validate`, `test`, or
+        `predict`.
 
         This is where the metadata, size, and other high-level info of the already-downloaded/prepared
         dataset should be parsed. The outcome of this parsing should be a "state" inside the data
@@ -185,10 +186,13 @@ class DataModule(pytorch_lightning.LightningDataModule):
         getter = getattr(self, expected_getter_name)
         assert callable(getter), f"invalid getter type: {type(getter)}"
         dataloader = getter()
-        assert isinstance(dataloader, typing.Union[
-            pytorch_lightning.utilities.types.TRAIN_DATALOADERS,
-            pytorch_lightning.utilities.types.EVAL_DATALOADERS,
-        ]), f"invalid dataloader type: {type(dataloader)}"
+        assert isinstance(
+            dataloader,
+            typing.Union[
+                pytorch_lightning.utilities.types.TRAIN_DATALOADERS,
+                pytorch_lightning.utilities.types.EVAL_DATALOADERS,
+            ],
+        ), f"invalid dataloader type: {type(dataloader)}"
         return dataloader
 
     def _create_dataloader(
@@ -216,13 +220,16 @@ class DataModule(pytorch_lightning.LightningDataModule):
                     "(cannot use the lightning seed function here, make sure you use/call it yourself!)"
                 )
             else:
-                combined_settings["worker_init_fn"] = omegaconf.OmegaConf.create({
-                    "_partial_": True,
-                    "_target_": "pytorch_lightning.utilities.seed.pl_worker_init_function",
-                })
+                combined_settings["worker_init_fn"] = omegaconf.OmegaConf.create(
+                    {
+                        "_partial_": True,
+                        "_target_": "pytorch_lightning.utilities.seed.pl_worker_init_function",
+                    }
+                )
         assert "_target_" in combined_settings, f"bad dataloader config for type: {loader_type}"
-        assert not combined_settings.get("_partial_", False), \
-            "this function should not return a partial function, it's time to create the loader!"
+        assert not combined_settings.get(
+            "_partial_", False
+        ), "this function should not return a partial function, it's time to create the loader!"
         dataloader = hydra.utils.instantiate(combined_settings, parser)
         assert isinstance(dataloader, torch.utils.data.DataLoader), "invalid dataloader type!"
         return dataloader
@@ -233,12 +240,12 @@ def default_collate(
     keys_to_batch_manually: typing.Sequence[typing.AnyStr] = (),
 ) -> "ssl4rs.data.transforms.BatchDictType":
     """Performs the default collate function while manually handling some given special cases."""
-    assert isinstance(batches, (list, tuple)) and all([isinstance(b, dict) for b in batches]), \
-        f"unexpected type for batch array provided to collate: {type(batches)}"
-    assert all([
-        len(np.setxor1d(list(batches[idx].keys()), list(batches[0].keys()))) == 0
-        for idx in range(1, len(batches))
-    ]), "not all batches have the same sets of keys! (implement your own custom collate fn!)"
+    assert isinstance(batches, (list, tuple)) and all(
+        [isinstance(b, dict) for b in batches]
+    ), f"unexpected type for batch array provided to collate: {type(batches)}"
+    assert all(
+        [len(np.setxor1d(list(batches[idx].keys()), list(batches[0].keys()))) == 0 for idx in range(1, len(batches))]
+    ), "not all batches have the same sets of keys! (implement your own custom collate fn!)"
     avail_batch_keys = list(batches[0].keys())
     output = dict()
     # first step: look for the keys that we need to batch manually, and handle those
@@ -249,8 +256,9 @@ def default_collate(
     for key in keys_to_batch_manually:
         if key in avail_batch_keys:
             output[key] = [b[key] for b in batches]
-    output.update(torch.utils.data.default_collate([
-        {k: v for k, v in b.items() if k not in keys_to_batch_manually}
-        for b in batches
-    ]))
+    output.update(
+        torch.utils.data.default_collate(
+            [{k: v for k, v in b.items() if k not in keys_to_batch_manually} for b in batches]
+        )
+    )
     return output

@@ -6,7 +6,6 @@ import imagesize
 import numpy as np
 import torch
 
-
 import ssl4rs.utils.patch_coord
 
 
@@ -53,8 +52,9 @@ def flex_crop(
 
     if isinstance(image, np.ndarray) and image.ndim in [2, 3] and patch.ndim == 2:
         # special handling for OpenCV-like arrays (where the channel is the last dimension)
-        assert image.ndim == 2 or image.shape[2] in [1, 2, 3, 4], \
-            "cannot handle channel counts outside [1, 2, 3, 4] with opencv crop!"
+        assert image.ndim == 2 or image.shape[2] in range(
+            1, 5
+        ), "cannot handle channel counts outside [1, 2, 3, 4] with opencv crop!"
         image_region = ssl4rs.utils.patch_coord.PatchCoord((0, 0), shape=image.shape[:2])
         if patch not in image_region:
             # special handling for crop coordinates falling outside the image bounds...
@@ -65,29 +65,21 @@ def flex_crop(
             if inters_coord is not None:  # if the intersection contains any pixels at all, copy...
                 offset = [inters_coord.tl[0] - patch.tl[0], inters_coord.tl[1] - patch.tl[1]]
                 crop_out[
-                    offset[0]:(offset[0] + inters_coord.shape[0]),
-                    offset[1]:(offset[1] + inters_coord.shape[1]),
-                    ...
-                ] = image[
-                    inters_coord.tl[0]:inters_coord.br[0],
-                    inters_coord.tl[1]:inters_coord.br[1],
-                    ...
-                ]
+                    offset[0] : (offset[0] + inters_coord.shape[0]),
+                    offset[1] : (offset[1] + inters_coord.shape[1]),
+                    ...,
+                ] = image[inters_coord.tl[0] : inters_coord.br[0], inters_coord.tl[1] : inters_coord.br[1], ...]
             return crop_out
         # if all crop coordinates are in-bounds, we can get a view directly from the image
-        crop_view = image[patch.tl[0]:patch.br[0], patch.tl[1]:patch.br[1], ...]
+        crop_view = image[patch.tl[0] : patch.br[0], patch.tl[1] : patch.br[1], ...]
         if not force_copy:
             return crop_view
         return np.copy(crop_view)
 
     # regular handling (we crop along the spatial dimensions located at the end of the array)
-    assert patch.ndim <= image.ndim, \
-        "patch dim count should be equal to or lower than image dimension count!"
-    image_region = ssl4rs.utils.patch_coord.PatchCoord(
-        top_left=[0] * patch.ndim,
-        shape=image.shape[-patch.ndim:]
-    )
-    crop_out_shape = tuple(image.shape[:-patch.ndim]) + patch.shape
+    assert patch.ndim <= image.ndim, "patch dim count should be equal to or lower than image dimension count!"
+    image_region = ssl4rs.utils.patch_coord.PatchCoord(top_left=[0] * patch.ndim, shape=image.shape[-patch.ndim :])
+    crop_out_shape = tuple(image.shape[: -patch.ndim]) + patch.shape
 
     # first check: figure out if there is anything to crop at all
     inters_coord = patch.intersection(image_region)
@@ -102,15 +94,14 @@ def flex_crop(
     if patch not in image_region:
         # ...it's not totally in the image, so we'll have to allocate + fill
         if isinstance(image, torch.Tensor):
-            crop_out = \
-                torch.full(crop_out_shape, padding_val, dtype=image.dtype, device=image.device)
+            crop_out = torch.full(crop_out_shape, padding_val, dtype=image.dtype, device=image.device)
         else:
             crop_out = np.full(crop_out_shape, padding_val, dtype=image.dtype)
         offset = [inters_coord.tl[d] - patch.tl[d] for d in patch.dimrange]
-        crop_inner_slice = tuple([slice(None)] * (image.ndim - patch.ndim) + [
-            slice(offset[d], offset[d] + inters_coord.shape[d])
-            for d in patch.dimrange
-        ])
+        crop_inner_slice = tuple(
+            [slice(None)] * (image.ndim - patch.ndim)
+            + [slice(offset[d], offset[d] + inters_coord.shape[d]) for d in patch.dimrange]
+        )
         crop_outer_slice = tuple([slice(None)] * (image.ndim - patch.ndim)) + inters_coord.slice
         crop_out[crop_inner_slice] = image[crop_outer_slice]
         return crop_out

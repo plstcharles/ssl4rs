@@ -17,4 +17,4 @@ hydra:
         formatter: simple
         filename: ${hydra:runtime.output_dir}/console.log
   job:
-    chdir: False  # we will NOT be using hydra to auto-change the workdir to the output dir
+    chdir: False # we will NOT be using hydra to auto-change the workdir to the output dir

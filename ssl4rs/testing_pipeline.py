@@ -18,8 +18,7 @@ def test(config: omegaconf.DictConfig) -> None:
     Args:
         config (DictConfig): Configuration composed by Hydra.
     """
-    exp_name, run_name, run_type, job_name = \
-        config.experiment_name, config.run_name, config.run_type, config.job_name
+    exp_name, run_name, run_type, job_name = config.experiment_name, config.run_name, config.run_type, config.job_name
     logger.info(f"Launching ({exp_name}: {run_name}, '{run_type}', job={job_name})")
 
     output_dir = pathlib.Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)

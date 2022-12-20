@@ -43,8 +43,8 @@ class ParserWrapper(torch.utils.data.dataset.Dataset):
     def __getitem__(self, item: int) -> typing.Dict[str, typing.Any]:
         """Returns a single data sample loaded from the dataset.
 
-        The data sample is provided as a dictionary where the `tensor_names` property defined
-        above should each be the keys to tensors. Additional tensors may also be returned.
+        The data sample is provided as a dictionary where the `tensor_names` property defined above
+        should each be the keys to tensors. Additional tensors may also be returned.
         """
         if np.issubdtype(type(item), np.integer):
             item = int(item)

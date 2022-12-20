@@ -43,10 +43,11 @@ class Stopwatch:
         self.log_level = log_level
         if logger is None:
             import ssl4rs.utils.logging  # here to avoid circular imports
+
             default_logger = ssl4rs.utils.logging.get_logger(__name__)
             logger = default_logger
         self.logger = logger
-        self._total_elapsed_time: float = 0.  # in seconds
+        self._total_elapsed_time: float = 0.0  # in seconds
         self._latest_start_time: typing.Optional[float] = None
 
     def start(self) -> None:

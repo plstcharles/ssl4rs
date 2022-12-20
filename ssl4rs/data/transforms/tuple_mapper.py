@@ -24,10 +24,12 @@ class TupleMapper:
             key_map: tuple index-to-string key map used to convert the loaded tuple data.
         """
         if key_map is not None:
-            assert all([isinstance(k, int) and k >= 0 for k in key_map.keys()]), \
-                "bad input key (should be integer of the index inside the loaded batches)"
-            assert all([isinstance(v, str) and len(v) > 0 for v in key_map.values()]), \
-                "bad output key (should be string for the destination in the returned batches)"
+            assert all(
+                [isinstance(k, int) and k >= 0 for k in key_map.keys()]
+            ), "bad input key (should be integer of the index inside the loaded batches)"
+            assert all(
+                [isinstance(v, str) and len(v) > 0 for v in key_map.values()]
+            ), "bad output key (should be string for the destination in the returned batches)"
             nb_keys = len(key_map)
             assert len(np.unique(list(key_map.keys()))) == nb_keys, "input keys must be unique!"
             assert len(np.unique(list(key_map.values()))) == nb_keys, "output keys must be unique!"
@@ -48,13 +50,8 @@ class TupleMapper:
         """
         assert isinstance(batch, typing.Sequence), f"unexpected input batch type: {type(batch)}"
         if not self.key_map:
-            return {
-                str(idx): batch[idx]
-                for idx in range(len(batch))
-            }
-        assert all([idx in self.key_map for idx in range(len(batch))]), \
-            f"batch contains unexpected input keys! (got {len(batch)} total elements)"
-        return {
-            self.key_map[idx]: batch[idx]
-            for idx in range(len(batch))
-        }
+            return {str(idx): batch[idx] for idx in range(len(batch))}
+        assert all(
+            [idx in self.key_map for idx in range(len(batch))]
+        ), f"batch contains unexpected input keys! (got {len(batch)} total elements)"
+        return {self.key_map[idx]: batch[idx] for idx in range(len(batch))}

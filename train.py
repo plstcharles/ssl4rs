@@ -8,6 +8,7 @@ dotenv.load_dotenv(override=True)
 def main(config):
     """Main entrypoint for the training pipeline."""
     import ssl4rs  # importing here to avoid delay w/ hydra tab completion
+
     return ssl4rs.train(config)
 
 

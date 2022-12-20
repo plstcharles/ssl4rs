@@ -35,11 +35,13 @@ def test_debug_limit_batches(tmpdir):
 @pytest.mark.slow
 def test_debug_overfit(tmpdir):
     command = _get_base_command(tmpdir, "overfit")
-    command.extend([
-        "debug=overfit",
-        "trainer.limit_val_batches=1",
-        "trainer.limit_test_batches=1",
-    ])
+    command.extend(
+        [
+            "debug=overfit",
+            "trainer.limit_val_batches=1",
+            "trainer.limit_test_batches=1",
+        ]
+    )
     output = module_runner.run(command)
     if output.returncode != 0:
         pytest.fail(output.stderr)
@@ -48,12 +50,14 @@ def test_debug_overfit(tmpdir):
 @pytest.mark.slow
 def test_debug_pl_profiler(tmpdir):
     command = _get_base_command(tmpdir, "pl_profiler")
-    command.extend([
-        "debug=pl_profiler",
-        "trainer.limit_train_batches=3",
-        "trainer.limit_val_batches=1",
-        "trainer.limit_test_batches=1",
-    ])
+    command.extend(
+        [
+            "debug=pl_profiler",
+            "trainer.limit_train_batches=3",
+            "trainer.limit_val_batches=1",
+            "trainer.limit_test_batches=1",
+        ]
+    )
     output = module_runner.run(command)
     if output.returncode != 0:
         pytest.fail(output.stderr)

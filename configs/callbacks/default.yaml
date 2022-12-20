@@ -4,12 +4,12 @@
 model_summary:
   _target_: pytorch_lightning.callbacks.RichModelSummary
   # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.RichModelSummary.html
-  max_depth: -1  # maximum depth of layer nesting that the summary will include
+  max_depth: -1 # maximum depth of layer nesting that the summary will include
 
 rich_progress_bar:
   _target_: pytorch_lightning.callbacks.RichProgressBar
   # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.RichProgressBar.html
-  refresh_rate: 1  # frequency (in batches) at which the progress bar gets updated
+  refresh_rate: 1 # frequency (in batches) at which the progress bar gets updated
 
 device_monitor:
   _target_: pytorch_lightning.callbacks.DeviceStatsMonitor

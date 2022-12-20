@@ -81,6 +81,7 @@ def seed_everything(config: omegaconf.DictConfig) -> int:
 def get_package_root_dir() -> pathlib.Path:
     """Returns the path to this package's root directory (i.e. where its modules are located)."""
     import ssl4rs.utils.filesystem  # used here to avoid circular dependencies
+
     return ssl4rs.utils.filesystem.get_package_root_dir()
 
 
@@ -90,6 +91,7 @@ def get_framework_root_dir() -> typing.Optional[pathlib.Path]:
     If the package was NOT installed from source, this function will return `None`.
     """
     import ssl4rs.utils.filesystem  # used here to avoid circular dependencies
+
     return ssl4rs.utils.filesystem.get_framework_root_dir()
 
 
@@ -124,6 +126,7 @@ def get_runtime_tags() -> typing.Mapping[str, typing.Any]:
     """Returns a map (dictionary) of tags related to the current runtime."""
     import ssl4rs  # used here to avoid circular dependencies
     import ssl4rs.utils.filesystem
+
     tags = {
         "framework_name": "ssl4rs",
         "framework_version": ssl4rs.__version__,
@@ -145,13 +148,15 @@ def get_installed_packages() -> typing.List[str]:
     """
     try:
         import pip
+
         # noinspection PyUnresolvedReferences
         pkgs = pip.get_installed_distributions()
-        return list(sorted(["%s %s" % (pkg.key, pkg.version) for pkg in pkgs]))
+        return list(sorted(f"{pkg.key} {pkg.version}" for pkg in pkgs))
     except (ImportError, AttributeError):
         try:
             import pkg_resources as pkgr
-            return list(sorted([str(pkg) for pkg in pkgr.working_set]))
+
+            return list(sorted(str(pkg) for pkg in pkgr.working_set))
         except (ImportError, AttributeError):
             return []
 
@@ -196,11 +201,11 @@ def get_framework_dotenv_path(
 def get_data_root_dir() -> pathlib.Path:
     """Returns the data root directory for the current environment/config setup.
 
-    This function will first check if a config dictionary is registered inside the module, and return
-    its `data_root_dir` value if possible. If not, it will try to get the data root directory directly
-    from the already-loaded environment variables. If that fails, it will try to load the framework's
-    local dotenv config file to see if a local environment variable can be used. If all attempts fail,
-    it will throw an exception.
+    This function will first check if a config dictionary is registered inside the module, and
+    return its `data_root_dir` value if possible. If not, it will try to get the data root
+    directory directly from the already-loaded environment variables. If that fails, it will try to
+    load the framework's local dotenv config file to see if a local environment variable can be
+    used. If all attempts fail, it will throw an exception.
     """
     # first, check the globally registered cfg object
     global cfg
@@ -237,11 +242,11 @@ def init_hydra_and_compose_config(
     set_as_global_cfg: bool = True,
 ) -> omegaconf.DictConfig:
     """Initializes hydra and returns a config as a composition output.
-    
+
     This function is meant to be used by local entrypoints that are not the 'main' scripts used in
     the framework (such as `train.py` and `test.py`) in order to allow them to access a full hydra
     config. Unit tests will likely rely a lot on this...
-    
+
     Args:
         version_base: hydra version argument to forward to the initialization function (if any).
         configs_dir: Path to the `configs` directory that contains all the config files for the
@@ -260,8 +265,9 @@ def init_hydra_and_compose_config(
         configs_dir = pathlib.Path(os.path.relpath(str(configs_dir), str(pathlib.Path.cwd())))
         assert configs_dir.is_dir(), f"invalid configs dir: {configs_dir}"
         base_config_files = [f.name for f in configs_dir.iterdir() if f.is_file()]
-        assert all([f in base_config_files for f in ["train.yaml", "test.yaml", "debug.yaml"]]), \
-            f"found invalid root config directory using relpath: {configs_dir}"
+        assert all(
+            [f in base_config_files for f in ["train.yaml", "test.yaml", "debug.yaml"]]
+        ), f"found invalid root config directory using relpath: {configs_dir}"
     with hydra.initialize(version_base=version_base, config_path=str(configs_dir), caller_stack_depth=2):
         config = hydra.compose(config_name=config_name)
     extra_inits(config, set_as_global_cfg=set_as_global_cfg)

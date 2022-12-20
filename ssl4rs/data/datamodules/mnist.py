@@ -75,9 +75,9 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     def setup(self, stage: typing.Optional[str] = None) -> None:
         """Loads the MNIST data under the train/valid/test parsers.
 
-        This method is called by lightning when doing `trainer.fit()` and `trainer.test()`,
-        so be careful not to execute the random split twice! The `stage` can be used to
-        differentiate whether it's called before `trainer.fit()` or `trainer.test()`.
+        This method is called by lightning when doing `trainer.fit()` and `trainer.test()`, so be
+        careful not to execute the random split twice! The `stage` can be used to differentiate
+        whether it's called before `trainer.fit()` or `trainer.test()`.
         """
         # load datasets only if they're not loaded already
         if not self.data_train and not self.data_valid and not self.data_test:
@@ -124,6 +124,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
 
 def _local_main(data_root_dir: pathlib.Path) -> None:
     import ssl4rs.utils.config
+
     config = ssl4rs.utils.config.init_hydra_and_compose_config()
     datamodule = DataModule(
         data_dir=data_root_dir / "mnist",

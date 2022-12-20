@@ -65,24 +65,16 @@ def add_heatmap_on_base_image(
 
 
 def get_cv_colormap_from_class_color_map(
-    class_color_list: typing.Sequence[
-        typing.Union[np.ndarray, typing.Tuple[int, int, int]]
-    ],
+    class_color_list: typing.Sequence[typing.Union[np.ndarray, typing.Tuple[int, int, int]]],
     default_color: np.ndarray = np.array([0xFF, 0xFF, 0xFF], dtype=np.uint8),
 ) -> np.ndarray:
     """Converts a list of color triplets into a 256-len array of color triplets for OpenCV."""
-    assert (
-        len(class_color_list) < 256
-    ), "invalid class color list (should be less than 256 classes)"
+    assert len(class_color_list) < 256, "invalid class color list (should be less than 256 classes)"
     out_color_array = []
     for label_idx in range(256):
         if label_idx < len(class_color_list):
-            assert (
-                len(class_color_list[label_idx]) == 3
-            ), f"invalid triplet for idx={label_idx}"
-            out_color_array.append(
-                class_color_list[label_idx][::-1]
-            )  # RGB to BGR for opencv
+            assert len(class_color_list[label_idx]) == 3, f"invalid triplet for idx={label_idx}"
+            out_color_array.append(class_color_list[label_idx][::-1])  # RGB to BGR for opencv
         else:
             out_color_array.append(default_color)
     return np.asarray(out_color_array).astype(np.uint8)
@@ -100,9 +92,7 @@ def apply_cv_colormap(
     assert color_map.shape == (256, 3), "invalid color map shape"
     output = np.zeros((*class_idx_map.shape, 3), dtype=np.uint8)
     for ch_idx in range(3):
-        output[..., ch_idx] = cv.applyColorMap(class_idx_map, color_map[..., ch_idx])[
-            ..., ch_idx
-        ]
+        output[..., ch_idx] = cv.applyColorMap(class_idx_map, color_map[..., ch_idx])[..., ch_idx]
     return output
 
 
@@ -121,7 +111,8 @@ def resize_nn(
         return cv.resize(
             src=image,
             dsize=(-1, -1),
-            fx=zoom_factor, fy=zoom_factor,
+            fx=zoom_factor,
+            fy=zoom_factor,
             interpolation=cv.INTER_NEAREST,
         )
     return image
@@ -224,7 +215,7 @@ def vconcat_and_pad_if_needed(
 ) -> np.ndarray:
     """Concatenates a list of images vertically with optional auto-padding."""
     assert all([img.ndim == 3 for img in images])
-    max_width = max([img.shape[1] for img in images])
+    max_width = max(img.shape[1] for img in images)
     padded_images = []
     for img_idx, img in enumerate(images):
         req_padding = max_width - img.shape[1]
@@ -250,7 +241,7 @@ def hconcat_and_pad_if_needed(
 ) -> np.ndarray:
     """Concatenates a list of images horizontally with optional auto-padding."""
     assert all([img.ndim == 3 for img in images])
-    max_height = max([img.shape[0] for img in images])
+    max_height = max(img.shape[0] for img in images)
     padded_images = []
     for img_idx, img in enumerate(images):
         req_padding = max_height - img.shape[0]

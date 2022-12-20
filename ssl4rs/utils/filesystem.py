@@ -33,6 +33,7 @@ def download_file(
     """
     # inspired from torchvision.datasets.utils.download_url; no dep check
     from six.moves import urllib
+
     root = pathlib.Path(root).expanduser()
     root.mkdir(parents=True, exist_ok=True)
     fpath = root / filename
@@ -43,7 +44,7 @@ def download_file(
     if md5 is not None:  # once we have the file, checksum it (if possible)
         md5o = hashlib.md5()
         with open(str(fpath), "rb") as fd:
-            for chunk in iter(lambda: fd.read(1024 * 1024), b''):
+            for chunk in iter(lambda: fd.read(1024 * 1024), b""):
                 md5o.update(chunk)
         md5c = md5o.hexdigest()
         assert md5c == md5, f"md5 check failed for downloaded file: {fpath}"
@@ -62,6 +63,7 @@ def extract_tar(
         root: where to extract the archive's content.
         flags: extra flags passed to ``tarfile.open``.
     """
+
     class _FileWrapper(io.FileIO):
         def __init__(self, path, *args, **kwargs):
             self.start_time = time.time()
@@ -74,9 +76,7 @@ def extract_tar(
             speed = str(int(progress_size / (1024 * duration))) if duration > 0 else "?"
             percent = min(int(progress_size * 100 / self._size), 100)
             progress_size_mb = progress_size / (1024 * 1024)
-            sys.stdout.write(
-                f"\r\t=> extracted {percent}%% ({progress_size_mb} MB) @ {speed} KB/s..."
-            )
+            sys.stdout.write(f"\r\t=> extracted {percent}%% ({progress_size_mb} MB) @ {speed} KB/s...")
             sys.stdout.flush()
             return io.FileIO.read(self, *args, **kwargs)
 
@@ -107,16 +107,11 @@ def reporthook(
     speed = str(int(progress_size / (1024 * duration))) if duration > 0 else "?"
     percent = min(int(count * block_size * 100 / total_size), 100)
     progress_size_mb = progress_size / (1024 * 1024)
-    sys.stdout.write(
-        f"\r\t=> downloaded {percent}%% ({progress_size_mb} MB) @ {speed} KB/s..."
-    )
+    sys.stdout.write(f"\r\t=> downloaded {percent}%% ({progress_size_mb} MB) @ {speed} KB/s...")
     sys.stdout.flush()
 
 
-def read_in_chunks(
-    file_object: typing.Any,
-    chunk_size: int = 1024
-) -> typing.Any:
+def read_in_chunks(file_object: typing.Any, chunk_size: int = 1024) -> typing.Any:
     """Read a file object in chunks of size chunk_size.
 
     Args:
@@ -227,7 +222,8 @@ class WorkDirectoryContextManager:
         self.new_work_dir = str(new_work_dir)
 
     def __enter__(self):
-        """Changes the working directory to the specified one, saving the previous one for later."""
+        """Changes the working directory to the specified one, saving the previous one for
+        later."""
         self.old_work_dir = os.getcwd()
         os.chdir(self.new_work_dir)
 

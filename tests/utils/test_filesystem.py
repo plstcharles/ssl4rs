@@ -68,4 +68,3 @@ def test_work_dir_context_manager(tmpdir):
     new_cwdir = os.path.abspath(os.path.curdir)
     assert pathlib.Path(new_cwdir) == pathlib.Path(orig_cwdir)
     assert abs_file_path.is_file()
-

@@ -3,11 +3,11 @@
 
 tensorboard:
   _target_: pytorch_lightning.loggers.tensorboard.TensorBoardLogger
-  save_dir: ${utils.output_dir_prefix}/tensorboard/  # root where all tensorboard data will be logged
-  name: ${experiment_name}  # experiment name; if not set, the subdirectories will be flattened
-  version: ${utils.run_and_job_name}  # experiment version (if multi-run/job); auto-set if needed
-  log_graph: False  # toggles whether to log the graph using the model's `self.example_input_array`
-  default_hp_metric: True  # enables a placeholder metric with key 'hp_metric' if needed for logs
-  prefix: ""  # the string to prefix to all metric keys that will be logged
-  sub_dir: null  # subdirectory to group logs into underneath the version directory (if needed)
+  save_dir: ${utils.output_dir_prefix}/tensorboard/ # root where all tensorboard data will be logged
+  name: ${experiment_name} # experiment name; if not set, the subdirectories will be flattened
+  version: ${utils.run_and_job_name} # experiment version (if multi-run/job); auto-set if needed
+  log_graph: False # toggles whether to log the graph using the model's `self.example_input_array`
+  default_hp_metric: True # enables a placeholder metric with key 'hp_metric' if needed for logs
+  prefix: "" # the string to prefix to all metric keys that will be logged
+  sub_dir: null # subdirectory to group logs into underneath the version directory (if needed)
   # note: we could also add more args to pass more arguments directly to the summary writer object

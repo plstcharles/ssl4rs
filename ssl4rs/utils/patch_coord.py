@@ -6,8 +6,8 @@ import typing
 class PatchCoord:
     """Holds the N-dimensional coordinates of a patch.
 
-    This utility class is meant to simplify the conversion of top-left/bottom-right coordinates into
-    shape and center attributes.
+    This utility class is meant to simplify the conversion of top-left/bottom-right coordinates
+    into shape and center attributes.
     """
 
     def __init__(
@@ -27,13 +27,13 @@ class PatchCoord:
         if bottom_right is not None:
             bottom_right = tuple(bottom_right)
             assert len(bottom_right) == self._ndim, "dimension count mismatch!"
-            shape = tuple([bottom_right[d] - self._top_left[d] for d in range(self._ndim)])
+            shape = tuple(bottom_right[d] - self._top_left[d] for d in range(self._ndim))
             assert all([s >= 0 for s in shape]), "patch shape should never have negative dims!"
         else:
             shape = tuple(shape)
             assert len(shape) == self._ndim, "dimension count mismatch!"
             assert all([s >= 0 for s in shape]), "patch shape should never have negative dims!"
-            bottom_right = tuple([self._top_left[d] + shape[d] for d in range(self._ndim)])
+            bottom_right = tuple(self._top_left[d] + shape[d] for d in range(self._ndim))
         self._shape = shape
         self._bottom_right = bottom_right
 
@@ -49,7 +49,8 @@ class PatchCoord:
 
     @property
     def shape(self) -> typing.Tuple[int, ...]:
-        """Returns the shape of the patch, which should be strictly positive along all dimensions."""
+        """Returns the shape of the patch, which should be strictly positive along all
+        dimensions."""
         return self._shape
 
     @property
@@ -67,39 +68,37 @@ class PatchCoord:
 
     @property
     def tl(self) -> typing.Tuple[int, ...]:
-        """Returns the coordinates of the 'top-left' (closest-to-the-origin) corner of the patch."""
+        """Returns the coordinates of the 'top-left' (closest-to-the-origin) corner of the
+        patch."""
         return self._top_left
 
     @property
     def top_left(self) -> typing.Tuple[int, ...]:
-        """Returns the coordinates of the 'top-left' (closest-to-the-origin) corner of the patch."""
+        """Returns the coordinates of the 'top-left' (closest-to-the-origin) corner of the
+        patch."""
         return self._top_left
 
     @property
     def br(self) -> typing.Tuple[int, ...]:
-        """Returns the coordinates of the 'bottom-right' (farthest-from-the-origin) corner of the patch."""
+        """Returns the coordinates of the 'bottom-right' (farthest-from-the-origin) corner of the
+        patch."""
         return self._bottom_right
 
     @property
     def bottom_right(self) -> typing.Tuple[int, ...]:
-        """Returns the coordinates of the 'bottom-right' (farthest-from-the-origin) corner of the patch."""
+        """Returns the coordinates of the 'bottom-right' (farthest-from-the-origin) corner of the
+        patch."""
         return self._bottom_right
 
     @property
     def center_real(self) -> typing.Tuple[float, ...]:
         """Returns the real-valued coordinates of the patch center."""
-        return tuple([
-            (self._bottom_right[d] + self._top_left[d]) / 2
-            for d in range(self._ndim)
-        ])
+        return tuple((self._bottom_right[d] + self._top_left[d]) / 2 for d in range(self._ndim))
 
     @property
     def center(self) -> typing.Tuple[int, ...]:
         """Returns the floored integer coordinates of the patch center."""
-        return tuple([
-            int((self._bottom_right[d] + self._top_left[d]) / 2)
-            for d in range(self._ndim)
-        ])
+        return tuple(int((self._bottom_right[d] + self._top_left[d]) / 2) for d in range(self._ndim))
 
     def __eq__(self, other) -> bool:
         """Returns whether the specified object has the same coordinates as the current object."""
@@ -107,20 +106,20 @@ class PatchCoord:
         return self._top_left == other._top_left and self._bottom_right == other._bottom_right
 
     def __contains__(self, item) -> bool:
-        """Returns whether the specified object is entirely contained in the current patch region."""
+        """Returns whether the specified object is entirely contained in the current patch
+        region."""
         if isinstance(item, (tuple, list)):  # this means 'item' is a single point
             assert len(item) == self._ndim, "invalid coordinates provided to contain check!"
             assert all([isinstance(c, (int, float)) for c in item]), "invalid coord scalar type"
-            return all([
-                self._top_left[d] <= item[d] < self._bottom_right[d]
-                for d in range(self._ndim)
-            ])
+            return all([self._top_left[d] <= item[d] < self._bottom_right[d] for d in range(self._ndim)])
         elif isinstance(item, PatchCoord):  # here, we'll check for a rect-in-rect relationship
             assert item._ndim == self._ndim, "mismatch coordinate dimension count in contain check!"
-            return all([
-                self._top_left[d] <= item._top_left[d] and self._bottom_right[d] >= item._bottom_right[d]
-                for d in range(self._ndim)
-            ])
+            return all(
+                [
+                    self._top_left[d] <= item._top_left[d] and self._bottom_right[d] >= item._bottom_right[d]
+                    for d in range(self._ndim)
+                ]
+            )
         else:
             raise AssertionError("unexpected object type")
 
@@ -130,10 +129,12 @@ class PatchCoord:
             return item in self
         elif isinstance(item, PatchCoord):
             assert item._ndim == self._ndim, "mismatch coordinate dimension count in contain check!"
-            return not any([
-                item._bottom_right[d] <= self._top_left[d] or self._bottom_right[d] <= item._top_left[d]
-                for d in range(self._ndim)
-            ])
+            return not any(
+                [
+                    item._bottom_right[d] <= self._top_left[d] or self._bottom_right[d] <= item._top_left[d]
+                    for d in range(self._ndim)
+                ]
+            )
         else:
             raise AssertionError("unexpected object type")
 
@@ -142,8 +143,8 @@ class PatchCoord:
         # note: if there is no intersection between the two patches, we'll return `None`
         if isinstance(item, PatchCoord):
             assert item._ndim == self._ndim, "mismatch coordinate dimension count in intersection!"
-            br = tuple([min(item._bottom_right[d], self._bottom_right[d]) for d in range(self._ndim)])
-            tl = tuple([max(item._top_left[d], self._top_left[d]) for d in range(self._ndim)])
+            br = tuple(min(item._bottom_right[d], self._bottom_right[d]) for d in range(self._ndim))
+            tl = tuple(max(item._top_left[d], self._top_left[d]) for d in range(self._ndim))
             if any([tl[d] >= br[d] for d in range(self._ndim)]):
                 return None
             return PatchCoord(top_left=tl, bottom_right=br)
@@ -154,7 +155,7 @@ class PatchCoord:
     def slice(self) -> typing.Tuple[slice, ...]:
         """Returns the slices tuple that corresponds to the per-dim axis ranges for this patch."""
         # note: be careful when indexing with negative indices, some libraries do different things!
-        return tuple([slice(self._top_left[d], self.bottom_right[d]) for d in range(self._ndim)])
+        return tuple(slice(self._top_left[d], self.bottom_right[d]) for d in range(self._ndim))
 
     def __repr__(self) -> str:
         """Returns a pretty/printable version of the patch coordinates."""

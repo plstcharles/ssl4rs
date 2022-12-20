@@ -47,7 +47,7 @@ def test_patch_coord_contains_and_intersects():
     assert (10, 15) in rect1
     assert (14, 19) in rect1
     assert (15, 20) not in rect1
-    assert sum([(y, x) in rect1 for y in range(30) for x in range(30)]) == rect1.size
+    assert sum((y, x) in rect1 for y in range(30) for x in range(30)) == rect1.size
     assert rect1.intersects(rect1) and rect1 in rect1
     rect2 = patches.PatchCoord((5, 10), shape=(3, 3))
     assert rect2.intersects(rect1) and rect2 in rect1

@@ -7,7 +7,11 @@ import lz4.frame
 import numpy as np
 
 no_compression_flags = [
-    "None", "none", "raw", "", None,
+    "None",
+    "none",
+    "raw",
+    "",
+    None,
 ]
 """List of flags used to specify when NOT to compress data."""
 

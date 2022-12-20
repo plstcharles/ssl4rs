@@ -17,8 +17,8 @@ class AIDRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
     """Repackages the Aerial Image Dataset (AID) into a deeplake-compatible format.
 
     This dataset contains large-scale aerial images that can be used for classification. There are
-    10,000 images (600x600, RGB) in this dataset, and these are given one of 30 class labels.
-    See https://captain-whu.github.io/AID/ for more information and download links.
+    10,000 images (600x600, RGB) in this dataset, and these are given one of 30 class labels. See
+    https://captain-whu.github.io/AID/ for more information and download links.
     """
 
     class_distrib = {
@@ -102,35 +102,36 @@ class AIDRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             img_paths = sorted(class_dir_path.glob(f"{class_name.lower()}_*.jpg"))
             assert len(img_paths) != 0, f"could not find any images in class dir: {class_dir_path}"
             img_count, exp_img_count = len(img_paths), self.class_distrib[class_name]
-            assert img_count == exp_img_count, \
-                f"bad image count for {class_name} (found {img_count} instead of {exp_img_count})"
+            assert (
+                img_count == exp_img_count
+            ), f"bad image count for {class_name} (found {img_count} instead of {exp_img_count})"
             img_idxs = [int(str(p.parts[-1]).rsplit("_")[-1].split(".jpg")[0]) for p in img_paths]
-            assert np.array_equal(np.unique(img_idxs), np.unique(range(1, img_count + 1))), \
-                f"unexpected duplicate image names / split results for {class_name}"
+            assert np.array_equal(
+                np.unique(img_idxs), np.unique(range(1, img_count + 1))
+            ), f"unexpected duplicate image names / split results for {class_name}"
             # we'll open a single image per class here to make sure the resolution is as expected...
             picked_img_path = np.random.choice(img_paths)
             height, width = ssl4rs.utils.imgproc.get_image_shape_from_file(picked_img_path)
-            assert width == self.image_shape[1] and height == self.image_shape[0], \
-                f"unexpected image shape (got {width}x{height}, expected 600x600)"
+            assert (
+                width == self.image_shape[1] and height == self.image_shape[0]
+            ), f"unexpected image shape (got {width}x{height}, expected 600x600)"
         # finally, prepare the global-to-classwise index range mapper for the getitem function
         self.image_idxs_ranges = [
             range(
-                sum([self.class_distrib[self.class_names[cidx]] for cidx in range(0, class_idx)]),
-                sum([self.class_distrib[self.class_names[cidx]] for cidx in range(0, class_idx + 1)]),
+                sum(self.class_distrib[self.class_names[cidx]] for cidx in range(0, class_idx)),
+                sum(self.class_distrib[self.class_names[cidx]] for cidx in range(0, class_idx + 1)),
             )
             for class_idx, class_name in enumerate(self.class_names)
         ]
         # once we get here, we're ready to repackage the dataset!
 
-    def __getitem__(
-        self,
-        item: int
-    ) -> typing.Dict[str, typing.Any]:
+    def __getitem__(self, item: int) -> typing.Dict[str, typing.Any]:
         """Fetches and returns a data sample for this dataset.
 
-        In this case, we return an image and its associated class label into a dictionary. Note that
-        this code will likely be slower than the deeplake fetching implementation, thus why this is a
-        "repackager" object, and not a dataset parser (although it could be used as one...).
+        In this case, we return an image and its associated class label into a dictionary. Note
+        that this code will likely be slower than the deeplake fetching implementation, thus why
+        this is a "repackager" object, and not a dataset parser (although it could be used as
+        one...).
         """
         assert 0 <= item < len(self), f"invalid data sample index being queried: {item}"
         class_idx, sample_idx = next(
