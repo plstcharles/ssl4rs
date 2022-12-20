@@ -1,7 +1,6 @@
 """Implements a data module for the AID train/valid/test loaders.
 
-See the following URL for more info on this dataset:
-    https://captain-whu.github.io/AID/
+See the following URL for more info on this dataset: https://captain-whu.github.io/AID/
 """
 
 import pathlib

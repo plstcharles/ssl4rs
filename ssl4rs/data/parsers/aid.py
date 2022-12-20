@@ -1,7 +1,6 @@
 """Implements a data parser for the AID dataset.
 
-See the following URL for more info on this dataset:
-    https://captain-whu.github.io/AID/
+See the following URL for more info on this dataset: https://captain-whu.github.io/AID/
 """
 
 import ssl4rs.data.parsers
