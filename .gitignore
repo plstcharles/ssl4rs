@@ -153,4 +153,3 @@ configs/local/default.yaml
 /logs
 wandb/
 .env
-.autoenv

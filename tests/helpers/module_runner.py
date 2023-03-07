@@ -14,7 +14,8 @@ def run(
     """Launches a subprocess from the framework root using the provided command arguments list.
 
     Note: we expect this function to only be used to run python modules, so 'python' will always
-    be added as the first argument before calling `subprocess.run`.
+    be added as the first argument before calling `subprocess.run`. It will also likely only be
+    used in the context of unit testing command-line tools related to launching experiments.
     """
     assert len(args) > 0
     assert args[0] != "python", "will auto-add python as 1st argument!"

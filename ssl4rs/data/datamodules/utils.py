@@ -39,6 +39,20 @@ class DataModule(pytorch_lightning.LightningDataModule):
     ):
         """Initializes the base class interface using the map of loader-type-to-function pairs.
 
+        The map should contain an entry for each data loader type that may be instantiated; usually,
+        these include "train", "valid", and "test" data loaders. A special "_default_" entry can be
+        used to specify default data loader settings shared (but still overridable) by all data
+        loaders. The "_default_" entry or all other entries should specify a "_target_" class name
+        to be instantiated via `hydra.utils.instantiate`. The suggested default is the classic
+        PyTorch DataLoader class, i.e. `torch.utils.data.DataLoader`.
+
+        Example with a default batch size for all loaders (64) and a smaller one (32) for training:
+            _default_:
+                _target_: torch.utils.data.DataLoader
+                batch_size: 64
+            train:
+                batch_size: 32
+
         If any of the functions for the specified/supported loader types is null or missing, it
         will be set as a basic default.
         """
@@ -223,7 +237,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 combined_settings["worker_init_fn"] = omegaconf.OmegaConf.create(
                     {
                         "_partial_": True,
-                        "_target_": "pytorch_lightning.utilities.seed.pl_worker_init_function",
+                        "_target_": "lightning_fabric.utilities.seed.pl_worker_init_function",
                     }
                 )
         assert "_target_" in combined_settings, f"bad dataloader config for type: {loader_type}"

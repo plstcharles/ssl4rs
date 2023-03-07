@@ -20,11 +20,14 @@ class ParserWrapper(torch.utils.data.dataset.Dataset):
         dataset: typing.Any,
         batch_transforms: typing.Sequence["ssl4rs.data.BatchTransformType"] = (),
         batch_id_prefix: typing.AnyStr = "",
+        dataset_id_prefix: typing.AnyStr = "AUTO",  # if 'AUTO', will use wrapped object class name
     ):
-        """Parses a deeplake archive or wraps an already-opened object.
+        """Parses data from a PyTorch-Dataset-interface compatible object.
 
-        Note that due to the design of this class (and in contrast to the exporter class), all
-        datasets should only ever be opened in read-only mode here.
+        For the batch identifiers, the default format provided by the `__getitem__` function will
+        be the dataset identifier prefix, followed by the batch identifier prefix, followed by the
+        batch identifier itself (`batchXXXXXXXX`, with the index-specific number padded to 8
+        digits).
         """
         assert hasattr(dataset, "__len__"), "missing mandatory dataset length attribute!"
         dataset_size = len(dataset)
@@ -35,6 +38,9 @@ class ParserWrapper(torch.utils.data.dataset.Dataset):
             batch_transforms = torchvision.transforms.Compose(batch_transforms)
         self.batch_transforms = batch_transforms
         self.batch_id_prefix = str(batch_id_prefix)
+        if dataset_id_prefix == "AUTO":
+            dataset_id_prefix = ssl4rs.utils.filesystem.slugify(type(self.dataset).__name__)
+        self.dataset_id_prefix = str(dataset_id_prefix)
 
     def __len__(self) -> int:
         """Returns the total size (data sample count) of the dataset."""
@@ -43,16 +49,17 @@ class ParserWrapper(torch.utils.data.dataset.Dataset):
     def __getitem__(self, item: int) -> typing.Dict[str, typing.Any]:
         """Returns a single data sample loaded from the dataset.
 
-        The data sample is provided as a dictionary where the `tensor_names` property defined above
-        should each be the keys to tensors. Additional tensors may also be returned.
+        If the wrapper was provided with a set of transforms, those will be applied here.
+        Afterwards, the batch identifier will be generated and added to the dictionary for the
+        loaded sample.
         """
         if np.issubdtype(type(item), np.integer):
             item = int(item)
         batch = self.dataset[item]
         if self.batch_transforms:
             batch = self.batch_transforms(batch)
+        assert isinstance(batch, dict), "unexpected data sample type (should be dict)"
         if "batch_id" not in batch:
             prefix = f"{self.batch_id_prefix}_" if self.batch_id_prefix else ""
-            type_slug = ssl4rs.utils.filesystem.slugify(type(self.dataset).__name__)
-            batch["batch_id"] = f"{prefix}{type_slug}_batch{item:08d}"
+            batch["batch_id"] = f"{self.dataset_id_prefix}_{prefix}batch{item:08d}"
         return batch

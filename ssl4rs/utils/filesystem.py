@@ -172,7 +172,6 @@ def get_framework_root_dir() -> typing.Optional[pathlib.Path]:
     assert pkg_root_dir.is_dir(), f"unexpected package root directory: {pkg_root_dir}"
     expected_fw_root_dir = pkg_root_dir.parent
     expected_fw_file_paths = [  # note: this might need to be updated if we rename these files!
-        expected_fw_root_dir / "setup.cfg",
         expected_fw_root_dir / "setup.py",
         expected_fw_root_dir / "test.py",
         expected_fw_root_dir / "train.py",

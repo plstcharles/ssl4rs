@@ -2,52 +2,65 @@
 
 # SSL for Remote Sensing (SSL4RS) Sandbox
 
-<a href="https://pytorch.org/get-started/locally/"><img alt="PyTorch" src="https://img.shields.io/badge/PyTorch-ee4c2c?logo=pytorch&logoColor=white"></a>
-<a href="https://pytorchlightning.ai/"><img alt="Lightning" src="https://img.shields.io/badge/-Lightning-792ee5?logo=pytorchlightning&logoColor=white"></a>
-<a href="https://hydra.cc/"><img alt="Config: Hydra" src="https://img.shields.io/badge/Config-Hydra-89b8cd"></a>
-<a href="https://github.com/ashleve/lightning-hydra-template"><img alt="Template" src="https://img.shields.io/badge/-LH--Template-017F2F?style=flat&logo=github&labelColor=gray"></a><br>
+[![PyTorch](https://img.shields.io/badge/PyTorch-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
+[![Lightning](https://img.shields.io/badge/-Lightning-792ee5?logo=pytorchlightning&logoColor=white)](https://pytorchlightning.ai/%22)
+[![Hydra](https://img.shields.io/badge/Config-Hydra-89b8cd)](https://hydra.cc/)
+[![LH-Template](https://img.shields.io/badge/-LH--Template-017F2F?style=flat&logo=github&labelColor=gray)](https://github.com/ashleve/lightning-hydra-template)
+[![tests](https://github.com/plstcharles/ssl4rs/actions/workflows/test.yml/badge.svg)](https://github.com/plstcharles/ssl4rs/actions/workflows/test.yml)
 
 </div>
 
 ## Description
 
-TODO
+A deep learning sandbox for Self-Supervised Learning (SSL) applications for Remote Sensing (RS).
 
-## How to run
+This framework is primarily meant to help the prototyping of new models and data loaders. It relies
+on [PyTorch](https://pytorch.org/get-started/locally/) in combination with
+[PyTorch Lightning](https://pytorchlightning.ai/), and is derived from the [Lightning-Hydra-Template
+Project](https://github.com/ashleve/lightning-hydra-template).
 
-Install dependencies
+## How to run an experiment
+
+First, install the framework and its dependencies:
 
 ```bash
 # clone project
-git clone <URL_TO_REPO>
-cd your-repo-name
+git clone https://github.com/plstcharles/ssl4rs
+cd ssl4rs
 
 # create conda environment
-conda create -f environment.yaml
+conda create -n ssl4rs python=3.10 pip
 conda activate ssl4rs
+pip install -r requirements.txt
 ```
 
-Train model with default configuration
+Then, create an experiment using an existing config file, or use a new one:
 
 ```bash
-# train on CPU
-python train.py trainer.gpus=0
-
-# train on GPU
-python train.py trainer.gpus=1
+python train.py experiment=example_mnist_classif_fast
+# or
+python test.py experiment=example_mnist_classif_fast ckpt_path=<PATH_TO_AN_EXISTING_CHECKPOINT>
 ```
 
-Train model with chosen experiment configuration from [configs/experiment/](configs/experiment/)
+Note that since this is based on Hydra, you can override parameters from the command line:
 
 ```bash
-python train.py experiment=experiment_name.yaml
+python train.py experiment=example_mnist_classif_fast trainer.max_epochs=3
 ```
 
-You can override any parameter from command line like this
+The experiment configuration files provide the main location from where settings should be modified
+to run particular experiments. New experiments can be defined by copying and modifying existing
+files. For more information on these files, see the [relevant section](#configuration-files).
 
-```bash
-python train.py trainer.max_epochs=20 data.batch_size=64
-```
+## Framework Structure
+
+TODO! @@@@@@
+
+## Configuration Files
+
+TODO! @@@@@@
+
+## Other Notes
 
 For more info on the usage of the config files and hydra/PyTorch-Lightning tips+tricks, see the
 [original template repository](https://github.com/ashleve/lightning-hydra-template).

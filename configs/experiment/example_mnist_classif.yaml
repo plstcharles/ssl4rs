@@ -4,7 +4,6 @@
 #     python train.py experiment=example_mnist_classif
 
 defaults:
-  - default.yaml
   - /model/optimization: default.yaml # use default optim settings (adam + step scheduler)
   - override /data: mnist.yaml # defines the datamodule for MNIST classification tasks
   - override /callbacks: classification.yaml # adds a few useful callbacks for classification tasks

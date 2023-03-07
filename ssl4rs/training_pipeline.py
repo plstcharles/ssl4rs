@@ -43,7 +43,7 @@ def train(config: omegaconf.DictConfig) -> typing.Optional[float]:
             logger.info(f"Instantiating '{cb_name}' callback: {cb_config._target_}")
             callbacks.append(hydra.utils.instantiate(cb_config))
 
-    loggers: typing.List[pl_log.LightningLoggerBase] = []
+    loggers: typing.List[pl_log.Logger] = []
     if "logger" in config:
         for lg_name, lg_config in config.logger.items():
             logger.info(f"Instantiating '{lg_name}' logger: {lg_config._target_}")

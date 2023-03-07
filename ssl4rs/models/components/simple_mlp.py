@@ -18,6 +18,11 @@ class SimpleMLP(torch.nn.Module):
         out_channels: int,
     ):
         """Initializes the MLP using the provided settings."""
+        assert isinstance(in_channels, int) and in_channels > 0
+        assert isinstance(out_channels, int) and out_channels > 0
+        if isinstance(hidden_channels, str):
+            hidden_channels = hidden_channels.strip(" []()")
+            hidden_channels = [int(ch) for ch in hidden_channels.split(",")]
         assert len(hidden_channels) > 0 and all([c > 0 for c in hidden_channels])
         super().__init__()
         self.model = torch.nn.Sequential(

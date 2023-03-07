@@ -58,7 +58,10 @@ class MNISTClassifier(ssl4rs.models.BaseModel):
         """Configures and returns the metric objects to update when given predictions + labels."""
         return torchmetrics.MetricCollection(
             dict(
-                accuracy=torchmetrics.classification.accuracy.Accuracy(num_classes=10),
+                accuracy=torchmetrics.classification.accuracy.Accuracy(
+                    task="multiclass",
+                    num_classes=10,
+                ),
             )
         )
 

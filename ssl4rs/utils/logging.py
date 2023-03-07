@@ -97,7 +97,7 @@ def log_hyperparameters(
     datamodule: pytorch_lightning.LightningDataModule,
     trainer: pytorch_lightning.Trainer,
     callbacks: typing.List[pytorch_lightning.Callback],
-    loggers: typing.List[pytorch_lightning.loggers.LightningLoggerBase],
+    loggers: typing.List[pytorch_lightning.loggers.Logger],
 ) -> None:
     """Forwards all notable/interesting/important hyperparameters to the model logger.
 
@@ -175,7 +175,7 @@ def finalize_logs(
     datamodule: pytorch_lightning.LightningDataModule,
     trainer: pytorch_lightning.Trainer,
     callbacks: typing.List[pytorch_lightning.Callback],
-    loggers: typing.List[pytorch_lightning.loggers.LightningLoggerBase],
+    loggers: typing.List[pytorch_lightning.loggers.Logger],
 ) -> None:
     """Makes sure everything is logged and closed properly before ending the session."""
     for lg in loggers:
