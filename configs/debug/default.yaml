@@ -37,7 +37,7 @@ trainer:
   accelerator: cpu # run on CPU only (might be really slow, but change it if necessary)
   benchmark: False # turn benchmark mode off, we don't need crazy performance here
   deterministic: True # ... and of course, we'd like each session to behave the same as the last
-  max_epochs: 2 # run a single epoch by default (other debug configs might try overfit instead)
+  max_epochs: 1 # run a single epoch by default (other debug configs might try overfit instead)
   limit_train_batches: 5 # run at most 5 batches per training epoch
   limit_val_batches: 5 # run at most 5 batches per validation epoch
   limit_test_batches: 5 # run at most 5 batches per testing epoch

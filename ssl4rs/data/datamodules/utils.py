@@ -237,7 +237,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 combined_settings["worker_init_fn"] = omegaconf.OmegaConf.create(
                     {
                         "_partial_": True,
-                        "_target_": "lightning_fabric.utilities.seed.pl_worker_init_function",
+                        "_target_": "pytorch_lightning.utilities.seed.pl_worker_init_function",
                     }
                 )
         assert "_target_" in combined_settings, f"bad dataloader config for type: {loader_type}"

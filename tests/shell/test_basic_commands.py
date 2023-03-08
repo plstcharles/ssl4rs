@@ -3,7 +3,7 @@ import os
 import pytest
 
 import tests.helpers.module_runner as module_runner
-from tests.helpers.runif import RunIf
+import tests.helpers.runif
 
 
 def test_help():
@@ -41,7 +41,7 @@ def test_debug(tmpdir):
     """Test running 1 epoch on CPU."""
     command = [
         "train.py",
-        "trainer=debug",
+        "debug=default",
         "experiment=example_mnist_classif_fast",
         f"utils.output_root_dir='{tmpdir}'",
         "run_name=_pytest_debug",
@@ -51,6 +51,7 @@ def test_debug(tmpdir):
         pytest.fail(output.stderr)
     expected_out_dir = os.path.join(
         tmpdir,
+        "debug",
         "runs",
         "mnist_with_micro_mlp",
         "_pytest_debug",
@@ -64,13 +65,13 @@ def test_debug(tmpdir):
     assert os.path.isfile(expected_ckpt)
 
 
-@RunIf(min_gpus=1)
+@tests.helpers.runif.RunIf(min_gpus=1)
 @pytest.mark.slow
 def test_debug_gpu(tmpdir):
     """Test running 1 epoch on GPU."""
     command = [
         "train.py",
-        "trainer=debug",
+        "debug=default",
         "experiment=example_mnist_classif_fast",
         f"utils.output_root_dir='{tmpdir}'",
         "run_name=_pytest_debug_gpu",
@@ -94,13 +95,13 @@ def test_debug_gpu(tmpdir):
     assert os.path.isfile(expected_ckpt)
 
 
-@RunIf(min_gpus=1)
+@tests.helpers.runif.RunIf(min_gpus=1)
 @pytest.mark.slow
 def test_debug_gpu_halfprec(tmpdir):
     """Test running 1 epoch on GPU with half (16-bit) float precision."""
     command = [
         "train.py",
-        "trainer=debug",
+        "debug=default",
         "experiment=example_mnist_classif_fast",
         f"utils.output_root_dir='{tmpdir}'",
         "run_name=_pytest_debug_gpu_halfprec",
