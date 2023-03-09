@@ -14,6 +14,7 @@ import hydra
 import hydra.core.hydra_config
 import omegaconf
 import pytorch_lightning
+import torch.cuda
 
 import ssl4rs.utils.logging
 
@@ -42,11 +43,7 @@ def extra_inits(
     # optionally pretty print config tree using Rich library
     if config.utils.get("print_config"):
         logger.info("Printing config tree with rich... (utils.print_config=True)")
-        ssl4rs.utils.logging.print_config(
-            config=config,
-            resolve=True,
-            output_dir=output_dir,
-        )
+        ssl4rs.utils.logging.print_config(config=config, resolve=True)
 
     # optionally create some logs in the output directory
     if output_dir is not None:
@@ -54,6 +51,8 @@ def extra_inits(
             ssl4rs.utils.logging.log_installed_packages(output_dir)
         if config.utils.get("log_runtime_tags"):
             ssl4rs.utils.logging.log_runtime_tags(output_dir)
+        if config.utils.get("log_interpolated_config"):
+            ssl4rs.utils.logging.log_interpolated_config(config, output_dir)
 
     # we might reseed again elsewhere, but we'll at least do it here to make sure
     seed_everything(config)
@@ -122,7 +121,7 @@ def get_git_revision_hash() -> str:
         return "git-revision-unknown"
 
 
-def get_runtime_tags() -> typing.Mapping[str, typing.Any]:
+def get_runtime_tags(with_gpu_info: bool = False) -> typing.Mapping[str, typing.Any]:
     """Returns a map (dictionary) of tags related to the current runtime."""
     import ssl4rs  # used here to avoid circular dependencies
     import ssl4rs.utils.filesystem
@@ -136,6 +135,15 @@ def get_runtime_tags() -> typing.Mapping[str, typing.Any]:
         "git_hash": get_git_revision_hash(),
         "timestamp": time.strftime("%Y-%m-%d_%H-%M-%S"),
     }
+    if with_gpu_info:
+        dev_count = torch.cuda.device_count()
+        tags["cuda"] = {
+            "is_available": torch.cuda.is_available(),
+            "arch_list": torch.cuda.get_arch_list(),
+            "device_count": dev_count,
+            "device_names": [torch.cuda.get_device_name(i) for i in range(dev_count)],
+            "device_capabilities": [torch.cuda.get_device_capability(i) for i in range(dev_count)],
+        }
     return tags
 
 

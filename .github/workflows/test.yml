@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [master, "release/*", "dev"]
 
+env:
+  DATA_ROOT: /home/runner/work/ssl4rs/ssl4rs/data
+  OUTPUT_ROOT: /home/runner/work/ssl4rs/ssl4rs/logs
+
 jobs:
   run_tests_ubuntu:
     runs-on: ${{ matrix.os }}

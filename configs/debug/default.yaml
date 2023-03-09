@@ -7,7 +7,7 @@ defaults:
 
 callbacks:
   gradient_check:
-    # https://pytorch-lightning-bolts.readthedocs.io/en/latest/info_callbacks.html
+    # https://lightning-bolts.readthedocs.io/en/latest/callbacks/monitor.html
     _target_: pl_bolts.callbacks.BatchGradientVerificationCallback
 
 data:
@@ -53,6 +53,7 @@ utils:
   ignore_warnings: False # let's always enable all warnings by default in the debug configs
   log_installed_pkgs: True # always log all installed packages in the python env to the output dir
   log_runtime_tags: True # always log all runtime tags (e.g. platform name) to the output dir
+  log_interpolated_config: True # always log the hydra config with interpolated params
 
 seed: 1337 # seed is set to a fixed number by default to also make sure the RNG behavior is static
 seed_workers: True # will initialize workers with the above seed as well

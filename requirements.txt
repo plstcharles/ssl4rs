@@ -22,6 +22,7 @@ mock  # testingire
 nbstripout  # code formatting
 numpy  # generic data processing utility
 opencv-python  # generic image processing utility
+pandas  # used to read/write some simple tabular data
 pre-commit # code formatting and static analysis
 pyrootutils # tooling for python proj
 pytest  # testing

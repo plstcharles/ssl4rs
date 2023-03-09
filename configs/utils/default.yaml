@@ -13,3 +13,4 @@ print_config: False # toggles whether to pretty-print the config at the start of
 ignore_warnings: False # used to disable python warnings if they annoy you
 log_installed_pkgs: True # toggles whether to log all installed packages in the python env
 log_runtime_tags: True # toggles whether to log all runtime tags (e.g. platform name)
+log_interpolated_config: True # toggles whether to log the hydra config with interpolated params

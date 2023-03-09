@@ -82,6 +82,7 @@ def test_debug_gpu(tmpdir):
         pytest.fail(output.stderr)
     expected_out_dir = os.path.join(
         tmpdir,
+        "debug",
         "runs",
         "mnist_with_micro_mlp",
         "_pytest_debug_gpu",
@@ -113,6 +114,7 @@ def test_debug_gpu_halfprec(tmpdir):
         pytest.fail(output.stderr)
     expected_out_dir = os.path.join(
         tmpdir,
+        "debug",
         "runs",
         "mnist_with_micro_mlp",
         "_pytest_debug_gpu_halfprec",
