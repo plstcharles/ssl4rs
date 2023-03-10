@@ -219,17 +219,13 @@ def get_data_root_dir() -> pathlib.Path:
     global cfg
     if cfg is not None:
         try:
-            data_root_dir = pathlib.Path(cfg.data_root_dir)
-            assert data_root_dir.is_dir(), f"invalid dir: {data_root_dir}"
-            return data_root_dir
+            return pathlib.Path(cfg.data_root_dir)
         except omegaconf.errors.MissingMandatoryValue:
             pass
     # check the already-loaded environment variables
     data_root_dir = os.getenv("DATA_ROOT")
     if data_root_dir is not None:
-        data_root_dir = pathlib.Path(cfg.data_root_dir)
-        assert data_root_dir.is_dir(), f"invalid dir: {data_root_dir}"
-        return data_root_dir
+        return pathlib.Path(data_root_dir)
     # check the framework directory for a local env file and load it manually
     framework_dir = get_framework_root_dir()
     assert framework_dir is not None and framework_dir.is_dir(), "could not locate framework dir!"
@@ -238,9 +234,7 @@ def get_data_root_dir() -> pathlib.Path:
     dotenv_config = dotenv.dotenv_values(dotenv_path=framework_dotenv_path)
     data_root_dir = dotenv_config.get("DATA_ROOT", None)
     assert data_root_dir is not None, "could not find the data root dir anywhere!"
-    data_root_dir = pathlib.Path(data_root_dir)
-    assert data_root_dir.is_dir(), f"invalid dir: {data_root_dir}"
-    return data_root_dir
+    return pathlib.Path(data_root_dir)
 
 
 def init_hydra_and_compose_config(
