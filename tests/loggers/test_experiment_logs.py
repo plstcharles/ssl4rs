@@ -8,7 +8,7 @@ import yaml
 import tests.helpers.module_runner as module_runner
 
 
-def _launch_experiment_and_return_out_dir(tmpdir, run_suffix):
+def _launch_experiment_and_return_out_dir(tmpdir, run_suffix, *extra_cmd_args):
     command = [
         "train.py",
         "experiment=example_mnist_classif_fast",
@@ -19,6 +19,7 @@ def _launch_experiment_and_return_out_dir(tmpdir, run_suffix):
         "++trainer.limit_train_batches=5",
         "++trainer.limit_val_batches=5",
         "++trainer.limit_test_batches=5",
+        *extra_cmd_args,
     ]
     output = module_runner.run(command)
     if output.returncode != 0:
@@ -114,3 +115,26 @@ def test_mlflow(tmpdir):
     assert mlflow_exp_dirs2[0] == mlflow_exp_dir
     mlflow_run_dirs2 = [dir for dir in os.listdir(mlflow_exp_dir) if os.path.isdir(os.path.join(mlflow_exp_dir, dir))]
     assert len(mlflow_run_dirs2) == 2
+
+
+@pytest.mark.slow
+def test_comet_offline(tmpdir):
+    """Test Comet ML offline logger outputs after running 2 epoch on CPU with the fast config."""
+    out_dir = _launch_experiment_and_return_out_dir(tmpdir, run_suffix="comet_offline")
+    unexpected_comet_dir = os.path.join(out_dir, "comet")
+    assert not os.path.isdir(unexpected_comet_dir)
+    expected_comet_dir = os.path.join(tmpdir, "comet")
+    assert os.path.isdir(expected_comet_dir)
+    comet_zips = glob.glob(os.path.join(expected_comet_dir, "*.zip"))
+    assert len(comet_zips) > 0
+
+
+@pytest.mark.slow
+def test_comet_online(tmpdir):
+    """Test Comet ML online (but disabled) logger; there should be no local files at all."""
+    extra_cmd_arg = "++logger.comet.disabled=true"
+    out_dir = _launch_experiment_and_return_out_dir(tmpdir, "comet_online", extra_cmd_arg)
+    unexpected_comet_dir = os.path.join(out_dir, "comet")
+    assert not os.path.isdir(unexpected_comet_dir)
+    unexpected_comet_dir = os.path.join(tmpdir, "comet")
+    assert not os.path.isdir(unexpected_comet_dir)

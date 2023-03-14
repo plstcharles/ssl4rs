@@ -2,6 +2,7 @@
 # It is recommended to install these in a Miniconda/Anaconda environment with Python 3.10.
 
 black  # code formatting
+comet_ml  # visualization/logging
 deepdiff  # generic data manipulation utility
 deeplake  # i/o library for activeloop datasets
 einops  # to simplify some tensor ops

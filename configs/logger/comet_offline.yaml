@@ -1,0 +1,19 @@
+# For more information on the following hyperparameters, see the PyTorch Lightning documentation:
+# https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.loggers.comet.html
+# For the extra kwargs, see the original comet documentation:
+# https://www.comet.com/docs/v2/api-and-sdk/python-sdk/reference/Experiment/
+
+comet:
+  _target_: pytorch_lightning.loggers.comet.CometLogger
+  api_key: # required in online mode; if unspecified, will check env vars and ~/.comet.config
+  save_dir: ${utils.output_dir_prefix}/comet/ # required in offline mode; specifies where to log
+  project_name: ${utils.project_name} # optional, used to group experiments to a specific project
+  workspace: # optional, attaches the experiment to a specific workspace
+  log_code: True # toggles whether to enable/disable code logging
+  log_graph: True # toggles whether to enable/disable automatic computation graph logging
+  rest_api_key: # optional, key found in comet settings to determine version number
+  experiment_name: ${experiment_name} # optional, used to tag this particular experiment
+  experiment_key: # optional, used to restore data from existing experiments
+  offline: True # used to toggle whether online/offline in the case api key + save dir are provided
+  prefix: "" # extra prefix to add at the beginning of metrics keys
+  # extra kwargs can be provided below...

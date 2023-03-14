@@ -687,6 +687,11 @@ class BaseModel(pl.LightningModule):
                     image=image_rgb,
                     artifact_file=f"renders/{key}.png",
                 )
+            elif isinstance(loggr, pytorch_lightning.loggers.CometLogger):
+                loggr.experiment.log_image(
+                    image_data=image_rgb,
+                    name=key,
+                )
             elif isinstance(loggr, pytorch_lightning.loggers.WandbLogger):
                 loggr.log_image(
                     key=key,
