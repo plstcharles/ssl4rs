@@ -34,7 +34,20 @@ conda activate ssl4rs
 pip install -r requirements.txt
 ```
 
-Then, create an experiment using an existing config file, or use a new one:
+Next, create a copy of the `.env.template` file, rename it to `.env`, and modify its content so
+that at least all mandatory variables are filled. These include:
+ - `DATA_ROOT`: path to the root directory where all datasets are located. It will be internally
+   used via Hydra/OmegaConf through the `utils.data_root_dir` config key. All datamodules that are
+   implemented in the framework will likely define their root directory based on this location.
+ - `OUTPUT_ROOT`: path to the root directory where all outputs (logs, checkpoints, images, ...) will
+   be written. It will be internally used via Hydra/OmegaConf through the `utils.output_root_dir`
+   config key. It is at that location where experiment and run directories will be created.
+
+Note that this file is machine-specific, and it may contain secrets and API keys. Therefore, it will
+always be ignored by version control (due to the `.gitignore` filters), and you should be careful
+about logging its contents or printing it inside a script to avoid credential leaks.
+
+Finally, launch an experiment using an existing config file, or create a new one:
 
 ```bash
 python train.py experiment=example_mnist_classif_fast
@@ -42,7 +55,7 @@ python train.py experiment=example_mnist_classif_fast
 python test.py experiment=example_mnist_classif_fast ckpt_path=<PATH_TO_AN_EXISTING_CHECKPOINT>
 ```
 
-Note that since this is based on Hydra, you can override parameters from the command line:
+Note that since the entrypoints are Hydra-based, you can override parameters from the command line:
 
 ```bash
 python train.py experiment=example_mnist_classif_fast trainer.max_epochs=3
