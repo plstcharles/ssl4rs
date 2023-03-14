@@ -682,9 +682,8 @@ class BaseModel(pl.LightningModule):
                 )
             elif isinstance(loggr, pytorch_lightning.loggers.MLFlowLogger):
                 assert loggr.run_id is not None
-                import mlflow
-
-                mlflow.log_image(
+                loggr.experiment.log_image(
+                    run_id=loggr.run_id,
                     image=image_rgb,
                     artifact_file=f"renders/{key}.png",
                 )
