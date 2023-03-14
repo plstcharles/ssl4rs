@@ -1,4 +1,5 @@
 """Contains utilities related to logging data to terminal or filesystem."""
+import datetime
 import logging
 import pathlib
 import typing
@@ -180,7 +181,10 @@ def log_interpolated_config(
     """
     output_dir = pathlib.Path(output_dir).expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_log_path = output_dir / "config.log"
+    curr_time = datetime.datetime.now()
+    epoch_time_sec = int(curr_time.timestamp())  # for timezone independence
+    timestamp = curr_time.strftime("%Y%m%d-%H%M%S")
+    output_log_path = output_dir / f"config.{epoch_time_sec}.{timestamp}.log"
     with open(str(output_log_path), "w") as fd:
         yaml.dump(omegaconf.OmegaConf.to_object(config), fd)
 

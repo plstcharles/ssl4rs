@@ -1,3 +1,4 @@
+import glob
 import os
 import typing
 
@@ -54,8 +55,9 @@ def test_debug_limit_batches(tmpdir):
         "mnist_with_micro_mlp",
         "_pytest_debug_limit_batches",
     )
-    expected_config = os.path.join(expected_out_dir, "config.log")
-    assert os.path.isfile(expected_config)
+    expected_config_logs = glob.glob(os.path.join(expected_out_dir, "config.*.log"))
+    assert len(expected_config_logs) == 1
+    expected_config = expected_config_logs[0]
     with open(expected_config) as fd:
         config = yaml.safe_load(fd)
     expected_step_count = config["trainer"]["max_epochs"] * config["trainer"]["limit_train_batches"]
@@ -87,7 +89,9 @@ def test_debug_overfit(tmpdir):
         "mnist_with_micro_mlp",
         "_pytest_debug_overfit",
     )
-    with open(os.path.join(expected_out_dir, "config.log")) as fd:
+    expected_config_logs = glob.glob(os.path.join(expected_out_dir, "config.*.log"))
+    assert len(expected_config_logs) == 1
+    with open(expected_config_logs[0]) as fd:
         config = yaml.safe_load(fd)
     expected_step_count = config["trainer"]["max_epochs"] * config["trainer"]["overfit_batches"]
     # in this case, there should be a CSV logger dir, as we did not disable logging
