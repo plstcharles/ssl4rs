@@ -54,7 +54,7 @@ def test_tboard_and_csv(tmpdir):
     expected_config_logs = glob.glob(os.path.join(out_dir, "config.*.log"))
     assert len(expected_config_logs) == 1
     expected_config_log = expected_config_logs[0]
-    with open(expected_config_log, "r") as fd:
+    with open(expected_config_log) as fd:
         config = yaml.safe_load(fd)
     run_and_job_name = config["utils"]["run_and_job_name"]
 
@@ -80,16 +80,14 @@ def test_mlflow(tmpdir):
 
     ignored_mflow_dirs = ["0", ".trash"]  # not sure what '0' is... but it's always there
     mlflow_exp_dirs = [
-        dir for dir in os.listdir(expected_mlflow_dir)
+        os.path.join(expected_mlflow_dir, dir)
+        for dir in os.listdir(expected_mlflow_dir)
         if os.path.isdir(os.path.join(expected_mlflow_dir, dir)) and dir not in ignored_mflow_dirs
     ]
     assert len(mlflow_exp_dirs) == 1
-    mlflow_exp_dir = os.path.join(expected_mlflow_dir, mlflow_exp_dirs[0])
+    mlflow_exp_dir = mlflow_exp_dirs[0]
     assert os.path.isfile(os.path.join(mlflow_exp_dir, "meta.yaml"))
-    mlflow_run_dirs = [
-        dir for dir in os.listdir(mlflow_exp_dir)
-        if os.path.isdir(os.path.join(mlflow_exp_dir, dir))
-    ]
+    mlflow_run_dirs = [dir for dir in os.listdir(mlflow_exp_dir) if os.path.isdir(os.path.join(mlflow_exp_dir, dir))]
     # we only launched one run in the tmpdir, so there should only be one subdirectory
     assert len(mlflow_run_dirs) == 1
     mlflow_run_dir = os.path.join(mlflow_exp_dir, mlflow_run_dirs[0])
@@ -108,13 +106,11 @@ def test_mlflow(tmpdir):
     assert len(expected_config_logs) == 2
     # ...but it should have a 2nd run directory in the mlflow folder
     mlflow_exp_dirs2 = [
-        dir for dir in os.listdir(expected_mlflow_dir)
+        os.path.join(expected_mlflow_dir, dir)
+        for dir in os.listdir(expected_mlflow_dir)
         if os.path.isdir(os.path.join(expected_mlflow_dir, dir)) and dir not in ignored_mflow_dirs
     ]
     assert len(mlflow_exp_dirs2) == 1
-    assert os.path.join(expected_mlflow_dir, mlflow_exp_dirs2[0]) == mlflow_exp_dir
-    mlflow_run_dirs2 = [
-        dir for dir in os.listdir(mlflow_exp_dir)
-        if os.path.isdir(os.path.join(mlflow_exp_dir, dir))
-    ]
+    assert mlflow_exp_dirs2[0] == mlflow_exp_dir
+    mlflow_run_dirs2 = [dir for dir in os.listdir(mlflow_exp_dir) if os.path.isdir(os.path.join(mlflow_exp_dir, dir))]
     assert len(mlflow_run_dirs2) == 2
