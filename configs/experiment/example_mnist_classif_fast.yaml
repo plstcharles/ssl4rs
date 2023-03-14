@@ -43,6 +43,7 @@ target_metric_mode: max # optimization mode of the target metric defined above
 
 utils:
   print_config: True
+  project_name: ${utils.framework_name}-examples
 
 profiler: # in case we run the data profiler, these are the modified setting to use
   use_parser: False
