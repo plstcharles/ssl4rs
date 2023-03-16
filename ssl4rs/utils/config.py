@@ -5,6 +5,7 @@ import os
 import pathlib
 import platform
 import re
+import sys
 import time
 import typing
 import warnings
@@ -137,6 +138,7 @@ def get_runtime_tags(with_gpu_info: bool = False) -> typing.Mapping[str, typing.
         "platform_name": get_platform_name(),
         "git_hash": get_git_revision_hash(),
         "timestamp": time.strftime("%Y-%m-%d_%H-%M-%S"),
+        "sys_argv": sys.argv,
     }
     if with_gpu_info:
         dev_count = torch.cuda.device_count()
