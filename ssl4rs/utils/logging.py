@@ -128,19 +128,33 @@ def log_hyperparameters(
         logger.debug(f"{hparam_key}: {hparam_val}")
 
 
+def get_log_extension_slug() -> str:
+    """Returns a log file extension that includes a timestamp (for non-overlapping sortable logs).
+
+    The output format is:
+        `.{ROUNDED_SECS_SINCE_EPOCH}.{YEARMONTHDAY-TIMEIN24HFORMAT}.log`
+    """
+    curr_time = datetime.datetime.now()
+    epoch_time_sec = int(curr_time.timestamp())  # for timezone independence
+    timestamp = curr_time.strftime("%Y%m%d-%H%M%S")
+    return f".{epoch_time_sec}.{timestamp}.log"
+
+
 def log_runtime_tags(
     output_dir: typing.Union[typing.AnyStr, pathlib.Path],
     with_gpu_info: bool = True,
+    log_extension: typing.AnyStr = ".log",
 ) -> None:
     """Saves a list of all runtime tags to a log file.
 
     Args:
         output_dir: the output directory inside which we should be saving the package log.
         with_gpu_info: defines whether to log available GPU device info or not.
+        log_extension: extension to use in the log's file name.
     """
     output_dir = pathlib.Path(output_dir).expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_log_path = output_dir / "runtime_tags.log"
+    output_log_path = output_dir / f"runtime_tags{log_extension}"
     tag_dict = ssl4rs.utils.config.get_runtime_tags(with_gpu_info=with_gpu_info)
     tag_dict = omegaconf.OmegaConf.create(tag_dict)  # type: ignore
     with open(str(output_log_path), "w") as fd:
@@ -149,15 +163,17 @@ def log_runtime_tags(
 
 def log_installed_packages(
     output_dir: typing.Union[typing.AnyStr, pathlib.Path],
+    log_extension: typing.AnyStr = ".log",
 ) -> None:
     """Saves a list of all packages installed in the current environment to a log file.
 
     Args:
         output_dir: the output directory inside which we should be saving the package log.
+        log_extension: extension to use in the log's file name.
     """
     output_dir = pathlib.Path(output_dir).expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_log_path = output_dir / "installed_pkgs.log"
+    output_log_path = output_dir / f"installed_pkgs{log_extension}"
     with open(str(output_log_path), "w") as fd:
         for pkg_name in ssl4rs.utils.config.get_installed_packages():
             fd.write(f"{pkg_name}\n")
@@ -166,6 +182,7 @@ def log_installed_packages(
 def log_interpolated_config(
     config: omegaconf.DictConfig,
     output_dir: typing.Union[typing.AnyStr, pathlib.Path],
+    log_extension: typing.AnyStr = ".log",
 ) -> None:
     """Saves the interpolated configuration file content to a log file in YAML format.
 
@@ -178,13 +195,11 @@ def log_interpolated_config(
     Args:
         config: the not-yet-interpolated omegaconf dictionary that contains all parameters.
         output_dir: the output directory inside which we should be saving the package log.
+        log_extension: extension to use in the log's file name.
     """
     output_dir = pathlib.Path(output_dir).expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
-    curr_time = datetime.datetime.now()
-    epoch_time_sec = int(curr_time.timestamp())  # for timezone independence
-    timestamp = curr_time.strftime("%Y%m%d-%H%M%S")
-    output_log_path = output_dir / f"config.{epoch_time_sec}.{timestamp}.log"
+    output_log_path = output_dir / f"config{log_extension}"
     with open(str(output_log_path), "w") as fd:
         yaml.dump(omegaconf.OmegaConf.to_object(config), fd)
 

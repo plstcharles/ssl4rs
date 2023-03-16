@@ -49,12 +49,13 @@ def extra_inits(
 
     # optionally create some logs in the output directory
     if output_dir is not None:
+        log_extension = ssl4rs.utils.logging.get_log_extension_slug()
         if config.utils.get("log_installed_pkgs"):
-            ssl4rs.utils.logging.log_installed_packages(output_dir)
+            ssl4rs.utils.logging.log_installed_packages(output_dir, log_extension=log_extension)
         if config.utils.get("log_runtime_tags"):
-            ssl4rs.utils.logging.log_runtime_tags(output_dir)
+            ssl4rs.utils.logging.log_runtime_tags(output_dir, log_extension=log_extension)
         if config.utils.get("log_interpolated_config"):
-            ssl4rs.utils.logging.log_interpolated_config(config, output_dir)
+            ssl4rs.utils.logging.log_interpolated_config(config, output_dir, log_extension=log_extension)
 
     # we might reseed again elsewhere, but we'll at least do it here to make sure
     seed_everything(config)
