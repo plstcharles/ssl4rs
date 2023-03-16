@@ -29,9 +29,11 @@ def extra_inits(
     config: omegaconf.DictConfig,
     logger: typing.Optional[logging.Logger] = None,
     set_as_global_cfg: bool = True,
+    logging_captures_warnings: bool = True,
     output_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
 ) -> None:
     """Runs optional utilities initializations, controlled by config flags."""
+    logging.captureWarnings(logging_captures_warnings)
     if logger is None:
         logger = ssl4rs.utils.logging.get_logger(__name__)
 
