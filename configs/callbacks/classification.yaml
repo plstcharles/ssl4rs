@@ -9,7 +9,7 @@ model_checkpoint:
   dirpath: ${hydra:runtime.output_dir}/ckpts # save all checkpoints in the run's output directory
   filename: ${utils.checkpoint_name} # default filename pattern has zero-padded values for sorting
   monitor: ${target_metric} # name of the logged metric which determines when model is improving
-  verbose: False # verbosity mode for the callback
+  verbose: True # verbosity mode for the callback
   save_last: True # additionally always save model at the latest epoch
   save_top_k: 1 # save the k best models instead of just the best (if k > 1)
   mode: ${target_metric_mode} # "max" means higher metric value is better (can be also "min")
@@ -26,7 +26,7 @@ early_stopping:
   monitor: ${target_metric} # name of the logged metric which determines when model is improving
   # min_delta: 0.0  # minimum improvement in monitored value to consider it truly improved
   patience: 100 # number of failed checks (either steps or epochs, based on trainer) before stopping
-  verbose: False # verbosity mode for the callback
+  verbose: True # verbosity mode for the callback
   mode: ${target_metric_mode} # "max" means higher metric value is better (can be also "min")
   strict: True # whether to crash the training process if the metric is not found
   check_finite: True # whether to stop training if NaN or infinite value is found
