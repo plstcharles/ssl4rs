@@ -19,6 +19,7 @@ def _get_base_command(tmpdir, exp_name, test_name) -> typing.List[typing.AnyStr]
 def test_sweep_mnist_experiments(tmpdir):
     command = _get_base_command(tmpdir, "glob(example_mnist_*)", "mnist_experiments")
     command.append("++trainer.fast_dev_run=true")
+    command.append("++trainer.accelerator=cpu")
     output = module_runner.run(command)
     if output.returncode != 0:
         pytest.fail(output.stderr)
