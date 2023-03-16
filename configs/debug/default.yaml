@@ -5,10 +5,11 @@
 defaults:
   - override /logger: csv.yaml
 
-callbacks:
-  gradient_check:
-    # https://lightning-bolts.readthedocs.io/en/latest/callbacks/monitor.html
-    _target_: pl_bolts.callbacks.BatchGradientVerificationCallback
+# disabled as of 2023-03-15 since it comes from pl_bolts which is just about ALWAYS BROKEN
+#callbacks:
+#  gradient_check:
+#    # https://lightning-bolts.readthedocs.io/en/latest/callbacks/monitor.html
+#    _target_: pl_bolts.callbacks.BatchGradientVerificationCallback
 
 data:
   datamodule:
