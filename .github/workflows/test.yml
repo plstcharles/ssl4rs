@@ -10,7 +10,7 @@ env:
   DATA_ROOT: /home/runner/work/ssl4rs/ssl4rs/data
   OUTPUT_ROOT: /home/runner/work/ssl4rs/ssl4rs/logs
   HYDRA_FULL_ERROR: 1
-  COMET_API_KEY: 12345  # fake key, online experiments in CI should be disabled
+  COMET_API_KEY: 12345 # fake key, online experiments in CI should be disabled
   COMET_WORKSPACE: fake
 
 jobs:
