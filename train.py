@@ -1,6 +1,15 @@
 import dotenv
 import hydra
 
+try:
+    # comet likes to be imported before torch for auto-logging to work
+    # as of 2023-03-15 with comet_ml==3.32.4, we get a warning if not
+    # (this is likely one of the easiest places to perform the import)
+    import comet_ml
+except ImportError:
+    pass
+
+
 dotenv.load_dotenv(override=True)
 
 
