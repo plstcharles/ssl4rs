@@ -90,7 +90,7 @@ def log_hyperparameters(
     callbacks: typing.List[pytorch_lightning.Callback],
     loggers: typing.List[pytorch_lightning.loggers.Logger],
 ) -> None:
-    """Forwards all notable/interesting/important hyperparameters to the model logger.
+    """Forwards all notable/interesting/important hyperparameters to the trainer's logger.
 
     If the model does not have a logger that implements the `log_hyperparams`, this function does
     nothing. Note that hyperparameters (at least, those defined via config files) will always be

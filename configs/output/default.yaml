@@ -16,5 +16,8 @@ hydra:
         class: logging.FileHandler
         formatter: simple
         filename: ${hydra:runtime.output_dir}/console.log
+    loggers:
+      comet_ml: # in case we want to use comet, make sure it WILL propagate its messages!
+        propagate: True
   job:
     chdir: False # we will NOT be using hydra to auto-change the workdir to the output dir
