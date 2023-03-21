@@ -224,7 +224,7 @@ def get_data_root_dir() -> pathlib.Path:
     global cfg
     if cfg is not None:
         try:
-            return pathlib.Path(cfg.data_root_dir)
+            return pathlib.Path(cfg.utils.data_root_dir)
         except omegaconf.errors.MissingMandatoryValue:
             pass
     # check the already-loaded environment variables
@@ -245,7 +245,10 @@ def get_data_root_dir() -> pathlib.Path:
 def init_hydra_and_compose_config(
     version_base: typing.Optional[typing.AnyStr] = None,
     configs_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
-    config_name: typing.AnyStr = "debug.yaml",
+    config_name: typing.AnyStr = "train.yaml",
+    data_root_dir: typing.Optional[typing.AnyStr] = None,
+    output_root_dir: typing.Optional[typing.AnyStr] = None,
+    overrides: typing.List[typing.AnyStr] = None,
     set_as_global_cfg: bool = True,
 ) -> omegaconf.DictConfig:
     """Initializes hydra and returns a config as a composition output.
@@ -260,6 +263,11 @@ def init_hydra_and_compose_config(
             framework. If not specified, we'll try to detect/find it automatically using the
             relative path between the cwd and the framework directory (which is not super safe!).
         config_name: name of the configuration file to load by default as the compose target.
+        data_root_dir: path to the data root directory, if it needs to be specified or modified.
+            If not specified, the default will be used based on the environment variable.
+        output_root_dir: path to the output root directory, if it needs to be specified or modified.
+            If not specified, the default will be used based on the environment variable.
+        overrides: list of overrides to be provided to hydra's compose method.
         set_as_global_cfg: defines whether to store the loaded config as the global config or not.
 
     Returns:
@@ -273,9 +281,14 @@ def init_hydra_and_compose_config(
         assert configs_dir.is_dir(), f"invalid configs dir: {configs_dir}"
         base_config_files = [f.name for f in configs_dir.iterdir() if f.is_file()]
         assert all(
-            [f in base_config_files for f in ["train.yaml", "test.yaml", "debug.yaml"]]
+            [f in base_config_files for f in ["train.yaml", "test.yaml"]]
         ), f"found invalid root config directory using relpath: {configs_dir}"
+    overrides = [] if overrides is None else [o for o in overrides]
+    if data_root_dir is not None:
+        overrides.append(f"++utils.data_root_dir={data_root_dir}")
+    if output_root_dir is not None:
+        overrides.append(f"++utils.output_root_dir={output_root_dir}")
     with hydra.initialize(version_base=version_base, config_path=str(configs_dir), caller_stack_depth=2):
-        config = hydra.compose(config_name=config_name)
+        config = hydra.compose(config_name=config_name, overrides=overrides)
     extra_inits(config, set_as_global_cfg=set_as_global_cfg)
     return config
