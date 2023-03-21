@@ -246,8 +246,8 @@ def init_hydra_and_compose_config(
     version_base: typing.Optional[typing.AnyStr] = None,
     configs_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
     config_name: typing.AnyStr = "train.yaml",
-    data_root_dir: typing.Optional[typing.AnyStr] = None,
-    output_root_dir: typing.Optional[typing.AnyStr] = None,
+    data_root_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
+    output_root_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
     overrides: typing.List[typing.AnyStr] = None,
     set_as_global_cfg: bool = True,
 ) -> omegaconf.DictConfig:
@@ -285,9 +285,9 @@ def init_hydra_and_compose_config(
         ), f"found invalid root config directory using relpath: {configs_dir}"
     overrides = [] if overrides is None else [o for o in overrides]
     if data_root_dir is not None:
-        overrides.append(f"++utils.data_root_dir={data_root_dir}")
+        overrides.append(f"++utils.data_root_dir={str(data_root_dir)}")
     if output_root_dir is not None:
-        overrides.append(f"++utils.output_root_dir={output_root_dir}")
+        overrides.append(f"++utils.output_root_dir={str(output_root_dir)}")
     with hydra.initialize(version_base=version_base, config_path=str(configs_dir), caller_stack_depth=2):
         config = hydra.compose(config_name=config_name, overrides=overrides)
     extra_inits(config, set_as_global_cfg=set_as_global_cfg)
