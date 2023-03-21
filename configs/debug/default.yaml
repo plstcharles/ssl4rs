@@ -2,9 +2,6 @@
 # This config will be loaded in all debug sessions in order to simplify the debugging process!
 # (we'll run single-epoch training sessions with deterministic behavior and verbose settings)
 
-defaults:
-  - override /logger: csv.yaml
-
 # disabled as of 2023-03-15 since it comes from pl_bolts which is just about ALWAYS BROKEN
 #callbacks:
 #  gradient_check:
