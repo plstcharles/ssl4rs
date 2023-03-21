@@ -120,22 +120,3 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         """Returns the MNIST testing set data loader."""
         assert self.data_test is not None, "parser unavailable, call 'setup()' first!"
         return self._create_dataloader(self.data_test, loader_type="test")
-
-
-def _local_main(data_root_dir: pathlib.Path) -> None:
-    import ssl4rs.utils.config
-
-    config = ssl4rs.utils.config.init_hydra_and_compose_config()
-    datamodule = DataModule(
-        data_dir=data_root_dir / "mnist",
-        dataloader_fn_map=config.data.dataloader_fn_map,
-    )
-    datamodule.prepare_data()
-    datamodule.setup()
-    train_dataloader = datamodule.train_dataloader()
-    minibatch = next(iter(train_dataloader))
-    assert isinstance(minibatch, list) and len(minibatch) == 2
-
-
-if __name__ == "__main__":
-    _local_main(ssl4rs.utils.config.get_data_root_dir())

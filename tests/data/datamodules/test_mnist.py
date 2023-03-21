@@ -1,5 +1,4 @@
-import os
-
+import hydra
 import pytest
 import torch
 
@@ -7,7 +6,40 @@ import ssl4rs.utils.config
 from ssl4rs.data.datamodules.mnist import DataModule as MNISTDataModule
 
 
-@pytest.mark.parametrize("batch_size", [32, 128])
+def _check_minibatch_content(minibatch, expected_batch_size: int = 0):
+    # minibatch loaded by the new mnist datamodule should always be a dict w/ metadata!
+    assert isinstance(minibatch, dict)
+    batch_size = minibatch["batch_size"].sum().item()
+    assert isinstance(batch_size, int) and batch_size > 0
+    if expected_batch_size != 0:
+        assert batch_size == expected_batch_size
+    assert isinstance(minibatch["batch_id"], list)
+    assert len(minibatch["batch_id"]) == batch_size
+    assert len(set(minibatch["batch_id"])) == batch_size
+    # the original data/target fields from the tensor remap wrapper should also be there
+    assert all([key in minibatch for key in ["data", "target"]])
+    assert isinstance(minibatch["data"], torch.Tensor) and minibatch["data"].dtype == torch.float32
+    assert minibatch["data"].shape == (batch_size, 1, 28, 28)  # B x C x H x W
+    assert isinstance(minibatch["target"], torch.Tensor) and minibatch["target"].dtype == torch.int64
+    assert minibatch["target"].shape == (batch_size,)  # B
+    assert (minibatch["target"] >= 0).all().item() and (minibatch["target"] < 10).all().item()
+
+
+def test_mnist_datamodule_via_hydra(tmpdir):
+    config = ssl4rs.utils.config.init_hydra_and_compose_config(
+        configs_dir="../../../configs",
+        output_root_dir=tmpdir,
+        overrides=["data=mnist.yaml"],
+    )
+    datamodule = hydra.utils.instantiate(config.data.datamodule)
+    datamodule.prepare_data()
+    datamodule.setup()
+    train_dataloader = datamodule.train_dataloader()
+    minibatch = next(iter(train_dataloader))
+    _check_minibatch_content(minibatch)
+
+
+@pytest.mark.parametrize("batch_size", [32, 64])
 def test_mnist_datamodule(batch_size):
     dataloader_fn_map = dict(
         _default_=dict(
@@ -25,21 +57,5 @@ def test_mnist_datamodule(batch_size):
     assert datamodule.train_dataloader()
     assert datamodule.val_dataloader()
     assert datamodule.test_dataloader()
-
-    batch = next(iter(datamodule.train_dataloader()))
-    assert isinstance(batch, dict)
-    assert "data" in batch and "target" in batch
-    x, y = batch["data"], batch["target"]
-    assert len(x) == batch_size
-    assert len(y) == batch_size
-    assert x.dtype == torch.float32
-    assert y.dtype == torch.int64
-    assert (y >= 0).all() and (y < 10).all()
-
-    assert "batch_size" in batch
-    assert isinstance(batch["batch_size"], torch.Tensor)
-    assert batch["batch_size"].sum().item() == batch_size
-
-    assert "batch_id" in batch
-    assert len(batch["batch_id"]) == batch_size
-    assert len(set(batch["batch_id"])) == batch_size
+    minibatch = next(iter(datamodule.train_dataloader()))
+    _check_minibatch_content(minibatch)
