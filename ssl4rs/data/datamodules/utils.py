@@ -234,13 +234,15 @@ class DataModule(pytorch_lightning.LightningDataModule):
                     "(cannot use the lightning seed function here, make sure you use/call it yourself!)"
                 )
             else:
-                combined_settings["worker_init_fn"] = omegaconf.OmegaConf.create(
-                    {
-                        "_partial_": True,
-                        "_target_": "lightning_lite.utilities.seed.pl_worker_init_function",
-                    }
-                )
-        assert "_target_" in combined_settings, f"bad dataloader config for type: {loader_type}"
+                with omegaconf.open_dict(combined_settings):
+                    # open_dict allows us to write thru hydra's omegaconf struct
+                    combined_settings.worker_init_fn = omegaconf.OmegaConf.create(
+                        {
+                            "_partial_": True,
+                            "_target_": "lightning_lite.utilities.seed.pl_worker_init_function",
+                        }
+                    )
+        assert "_target_" in combined_settings, f"missing dataloader config for type: {loader_type}"
         assert not combined_settings.get(
             "_partial_", False
         ), "this function should not return a partial function, it's time to create the loader!"
