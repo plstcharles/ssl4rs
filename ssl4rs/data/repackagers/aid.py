@@ -13,12 +13,15 @@ import ssl4rs.data.repackagers.utils
 import ssl4rs.utils.imgproc
 
 
-class AIDRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
+class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
     """Repackages the Aerial Image Dataset (AID) into a deeplake-compatible format.
 
     This dataset contains large-scale aerial images that can be used for classification. There are
     10,000 images (600x600, RGB) in this dataset, and these are given one of 30 class labels. See
     https://captain-whu.github.io/AID/ for more information and download links.
+
+    Note that this dataset does NOT have a fixed Ground Sampling Distance (GSD); images contained
+    herein are mixed across different sources with GSDs between 0.5m and 8m.
     """
 
     class_distrib = {
@@ -73,7 +76,7 @@ class AIDRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
     def dataset_info(self):
         """Returns metadata information that will be exported in the deeplake object."""
         return dict(
-            name="AID",
+            name=self.dataset_name,
             class_names=self.class_names,
             class_distrib=self.class_distrib,
             image_shape=list(self.image_shape),  # tuples will be changed to lists by deeplake...
@@ -90,10 +93,14 @@ class AIDRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
 
     def __init__(
         self,
-        data_root_path: typing.AnyStr,
+        dataset_root_path: typing.Union[typing.AnyStr, pathlib.Path],
     ):
-        """Parses the dataset structure and makes sure all the data is present."""
-        self.data_root_path = pathlib.Path(data_root_path)
+        """Parses the dataset structure and makes sure all the data is present.
+
+        Args:
+            dataset_root_path: path to the directory containing all the AID data.
+        """
+        self.data_root_path = pathlib.Path(dataset_root_path)
         assert self.data_root_path.exists(), f"invalid dataset path: {self.data_root_path}"
         assert sum(self.class_distrib.values()) == len(self)
         for class_idx, class_name in enumerate(self.class_names):
@@ -149,12 +156,15 @@ class AIDRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         )
 
 
-def _repackage_aid(data_root_path: typing.AnyStr):
-    repackager = AIDRepackager(data_root_path)
-    output_path = data_root_path + "aid.deeplake"
+def _repackage_aid(dataset_root_path: pathlib.Path):
+    assert dataset_root_path.is_dir(), f"missing dataset root directory: {dataset_root_path}"
+    repackager = DeepLakeRepackager(dataset_root_path)
+    output_path = dataset_root_path / ".deeplake"
     repackager.export(output_path)
     assert pathlib.Path(output_path).exists()
 
 
 if __name__ == "__main__":
-    _repackage_aid("/nfs/server/datasets/aid/")
+    ssl4rs.utils.logging.setup_logging_for_analysis_script()
+    config_ = ssl4rs.utils.config.init_hydra_and_compose_config(config_name="data_profiler.yaml")
+    _repackage_aid(pathlib.Path(config_.utils.data_root_dir) / "aid")
