@@ -160,6 +160,28 @@ def get_file_hash(
     return file_hash.hexdigest()
 
 
+def recursively_remove_all(
+    path: typing.Union[typing.AnyStr, pathlib.Path],
+) -> None:
+    """Removes (deletes) the file/folder at the specified path, recursively if needed.
+
+    Args:
+        path: the path to the file/folder to remove (delete).
+    """
+    path = pathlib.Path(path)
+    assert path.exists(), f"invalid path: {path}"
+    if path.is_file():
+        path.unlink()
+    else:
+        if path.is_symlink():
+            path.unlink()
+        else:
+            assert path.is_dir()
+            for child in path.iterdir():
+                recursively_remove_all(child)
+            path.rmdir()
+
+
 def get_slurm_tmpdir() -> typing.Optional[pathlib.Path]:
     """Returns the local SLURM_TMPDIR path if available, or ``None`` otherwise."""
     slurm_tmpdir = os.getenv("SLURM_TMPDIR")
