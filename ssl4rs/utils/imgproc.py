@@ -1,5 +1,6 @@
 """Contains utilities related to image loading/processing/drawing."""
 
+import pathlib
 import typing
 
 import imagesize
@@ -9,14 +10,16 @@ import torch
 import ssl4rs.utils.patch_coord
 
 
-def get_image_shape_from_file(file_path: typing.AnyStr) -> typing.Tuple[int, int]:
+def get_image_shape_from_file(
+    file_path: typing.Union[typing.AnyStr, pathlib.Path],
+) -> typing.Tuple[int, int]:
     """Returns the (height, width) of an image stored on disk.
 
     This function will parse the file header and try to deduct the image size without actually
     opening the image. This should make it much faster to quickly parse datasets to validate their
     contents without opening each image directly.
     """
-    width, height = imagesize.get(file_path)
+    width, height = imagesize.get(str(file_path))
     assert width > 0 and height > 0, "invalid image shape!"
     return height, width
 
