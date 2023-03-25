@@ -1,7 +1,7 @@
 import dotenv
 import hydra
 
-dotenv.load_dotenv(override=True)
+dotenv.load_dotenv(override=True, verbose=True)
 
 
 @hydra.main(version_base=None, config_path="configs/", config_name="data_profiler.yaml")
