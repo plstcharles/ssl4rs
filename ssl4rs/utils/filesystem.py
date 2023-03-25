@@ -10,6 +10,7 @@ import tarfile
 import time
 import typing
 import unicodedata
+import zipfile
 
 _hook_start_time = time.time()
 
@@ -42,13 +43,25 @@ def download_file(
         sys.stdout.write("\r")
         sys.stdout.flush()
     if md5 is not None:  # once we have the file, checksum it (if possible)
-        md5o = hashlib.md5()
-        with open(str(fpath), "rb") as fd:
-            for chunk in iter(lambda: fd.read(1024 * 1024), b""):
-                md5o.update(chunk)
-        md5c = md5o.hexdigest()
-        assert md5c == md5, f"md5 check failed for downloaded file: {fpath}"
+        curr_md5 = get_file_hash(fpath)
+        assert curr_md5 == md5, f"md5 check failed for downloaded file: {fpath}"
     return fpath
+
+
+def extract_zip(
+    filepath: typing.Union[typing.AnyStr, pathlib.Path],
+    root: typing.Union[typing.AnyStr, pathlib.Path],
+    members: typing.Optional[typing.List[typing.AnyStr]] = None,
+) -> None:
+    """Extracts the content of a zip file to a specific location.
+
+    Args:
+        filepath: location of the zip archive.
+        root: where to extract the archive's content.
+        members: filenames that will be extracted. If `None`, extracts everything.
+    """
+    with zipfile.ZipFile(str(filepath), "r") as zip_fd:
+        zip_fd.extractall(path=root, members=members)
 
 
 def extract_tar(
@@ -107,7 +120,7 @@ def reporthook(
     speed = str(int(progress_size / (1024 * duration))) if duration > 0 else "?"
     percent = min(int(count * block_size * 100 / total_size), 100)
     progress_size_mb = progress_size / (1024 * 1024)
-    sys.stdout.write(f"\r\t=> downloaded {percent}%% ({progress_size_mb} MB) @ {speed} KB/s...")
+    sys.stdout.write(f"\r\t=> downloaded {percent}% ({progress_size_mb} MB) @ {speed} KB/s...")
     sys.stdout.flush()
 
 
