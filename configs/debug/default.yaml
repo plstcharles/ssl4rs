@@ -15,18 +15,27 @@ data:
         num_workers: 0 # debuggers don't like multiprocessing, let's run everything on the main thread
         pin_memory: False # disable gpu memory pin (no pre-allocation on the GPU at all might help)
         shuffle: False
+        persistent_workers: False
       train:
         num_workers: 0
         pin_memory: False
         shuffle: False
+        persistent_workers: False
       valid:
         num_workers: 0
         pin_memory: False
         shuffle: False
+        persistent_workers: False
       test:
         num_workers: 0
         pin_memory: False
         shuffle: False
+        persistent_workers: False
+      predict:
+        num_workers: 0
+        pin_memory: False
+        shuffle: False
+        persistent_workers: False
 
 hydra:
   verbose: True # this will set the level of all command line loggers to 'DEBUG' for max verbosity
