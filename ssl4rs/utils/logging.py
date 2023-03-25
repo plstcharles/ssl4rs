@@ -53,9 +53,9 @@ logger = get_logger(__name__)
 def setup_logging_for_analysis_script(level: int = logging.DEBUG) -> None:
     """Sets up logging with some console-only verbose settings for analysis scripts.
 
-    THIS SHOULD NEVER BE USED IN GENERIC CODE OR OUTSIDE AN ENTRYPOINT; in other words, the only place you
-    should ever see this function get called is close to a `if __name__ == "__main__":` statement in standalone
-    analysis scripts.
+    THIS SHOULD NEVER BE USED IN GENERIC CODE OR OUTSIDE AN ENTRYPOINT; in other words, the only
+    place you should ever see this function get called is close to a `if __name__ == "__main__":`
+    statement in standalone analysis scripts.
     """
     root = logging.getLogger()
     root.setLevel(level)
