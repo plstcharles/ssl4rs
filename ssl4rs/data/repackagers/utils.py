@@ -1,6 +1,7 @@
 """Implements generic data repackaging and utilities for common dataset formats."""
 
 import abc
+import pathlib
 import typing
 
 import deepdiff
@@ -86,7 +87,7 @@ class DeepLakeRepackager:
 
     def export(
         self,
-        output_path: typing.AnyStr,
+        output_path: typing.Union[typing.AnyStr, pathlib.Path],
         overwrite: bool = False,
         verbose: bool = True,
         num_workers: int = 4,
@@ -104,11 +105,17 @@ class DeepLakeRepackager:
         form `PROTOCOL://SERVERNAME/DATASETNAME`. Hub will take care of exporting the data during
         the dataset creation.
         """
+        output_path = str(output_path)
         # first, figure out if the dataset exists and whether we need to validate it...
         if not overwrite:
             existing_dataset = None
             try:
-                existing_dataset = deeplake.load(output_path, read_only=True, verbose=verbose, **extra_deeplake_kwargs)
+                existing_dataset = deeplake.load(
+                    output_path,
+                    read_only=True,
+                    verbose=verbose,
+                    **extra_deeplake_kwargs,
+                )
             except deeplake.util.exceptions.DatasetHandlerError:
                 pass  # dataset does not exist, we won't be overwriting anything, perfect
             if existing_dataset is not None:
