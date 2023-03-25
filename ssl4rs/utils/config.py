@@ -255,7 +255,7 @@ def init_hydra_and_compose_config(
 
     This function is meant to be used by local entrypoints that are not the 'main' scripts used in
     the framework (such as `train.py` and `test.py`) in order to allow them to access a full hydra
-    config. Unit tests will likely rely a lot on this...
+    config. Unit tests and analysis scripts will likely rely a lot on this...
 
     Args:
         version_base: hydra version argument to forward to the initialization function (if any).
@@ -273,6 +273,11 @@ def init_hydra_and_compose_config(
     Returns:
         The result of the config composition.
     """
+    # first, try to load dotenv file in case we have any mandatory cfg values derived from there
+    dotenv_path = get_framework_dotenv_path()
+    if dotenv_path is not None:
+        dotenv.load_dotenv(dotenv_path=str(dotenv_path), override=True, verbose=True)
+    # next, if the config dir is not provided, find it and get the relative path to it
     if configs_dir is None:
         framework_dir = get_framework_root_dir()
         assert framework_dir is not None, "cannot auto-locate framework directory!"
@@ -283,12 +288,14 @@ def init_hydra_and_compose_config(
         assert all(
             [f in base_config_files for f in ["train.yaml", "test.yaml"]]
         ), f"found invalid root config directory using relpath: {configs_dir}"
+    # setup overrides based on provided args
     overrides = [] if overrides is None else [o for o in overrides]
     if data_root_dir is not None:
         overrides.append(f"++utils.data_root_dir={str(data_root_dir)}")
     if output_root_dir is not None:
         overrides.append(f"++utils.output_root_dir={str(output_root_dir)}")
+    # initialize hydra and return the resulting config
     with hydra.initialize(version_base=version_base, config_path=str(configs_dir), caller_stack_depth=2):
         config = hydra.compose(config_name=config_name, overrides=overrides)
-    extra_inits(config, set_as_global_cfg=set_as_global_cfg)
+        extra_inits(config, set_as_global_cfg=set_as_global_cfg)
     return config
