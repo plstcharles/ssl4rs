@@ -33,7 +33,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     def __init__(
         self,
         data_dir: typing.Union[typing.AnyStr, pathlib.Path],
-        dataloader_fn_map: ssl4rs.data.datamodules.utils.DataLoaderFnMap,
+        dataloader_fn_map: typing.Optional[ssl4rs.data.datamodules.utils.DataLoaderFnMap] = None,
         train_val_test_split: typing.Tuple[int, int, int] = (55_000, 5_000, 10_000),
     ):
         """Initializes the MNIST data module.
@@ -41,6 +41,13 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         Note: it might look like we're not using the provided args at all, but we are actually
         automatically saving those to the `hparams` attribute (via the `save_hyperparameters`
         function) in order to use them later.
+
+        Args:
+            data_dir: directory where the MNIST dataset is located (or where it will be downloaded).
+            dataloader_fn_map: dictionary of data loader creation settings. See the base class
+                implementation for more information. When empty/null, the default data loader
+                settings are assumed.
+            train_val_test_split: sample split counts to use when separating the data.
         """
         super().__init__(dataloader_fn_map=dataloader_fn_map)
         assert data_dir is not None
@@ -108,15 +115,15 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
         """Returns the MNIST training set data loader."""
-        assert self.data_train is not None, "parser unavailable, call 'setup()' first!"
+        assert self.data_train is not None, "parser unavailable, call `setup()` first!"
         return self._create_dataloader(self.data_train, loader_type="train")
 
     def val_dataloader(self) -> torch.utils.data.DataLoader:
         """Returns the MNIST validation set data loader."""
-        assert self.data_valid is not None, "parser unavailable, call 'setup()' first!"
+        assert self.data_valid is not None, "parser unavailable, call `setup()` first!"
         return self._create_dataloader(self.data_valid, loader_type="valid")
 
     def test_dataloader(self) -> torch.utils.data.DataLoader:
         """Returns the MNIST testing set data loader."""
-        assert self.data_test is not None, "parser unavailable, call 'setup()' first!"
+        assert self.data_test is not None, "parser unavailable, call `setup()` first!"
         return self._create_dataloader(self.data_test, loader_type="test")
