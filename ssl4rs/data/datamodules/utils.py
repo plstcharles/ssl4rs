@@ -35,7 +35,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
 
     def __init__(
         self,
-        dataloader_fn_map: DataLoaderFnMap,
+        dataloader_fn_map: typing.Optional[DataLoaderFnMap] = None,
     ):
         """Initializes the base class interface using the map of loader-type-to-function pairs.
 
@@ -54,10 +54,13 @@ class DataModule(pytorch_lightning.LightningDataModule):
                 batch_size: 32
 
         If any of the functions for the specified/supported loader types is null or missing, it
-        will be set as a basic default.
+        will be set as the default from the _default_ section if a match exists, otherwise it will
+        use the default value from the DataLoader's constructor. For more info on these values,
+        see: https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader
         """
         super().__init__()
-        logger.debug("Instantiating LightningDataModule base class...")
+        if dataloader_fn_map is None:
+            dataloader_fn_map = dict()
         assert all(
             [isinstance(k, str) for k in dataloader_fn_map.keys()]
         ), "dataloader function map should have string keys that correspond to loader/loop types"
@@ -242,7 +245,11 @@ class DataModule(pytorch_lightning.LightningDataModule):
                             "_target_": "lightning_lite.utilities.seed.pl_worker_init_function",
                         }
                     )
-        assert "_target_" in combined_settings, f"missing dataloader config for type: {loader_type}"
+        if "_target_" not in combined_settings:
+            # if the type of dataloader is not specified, use PyTorch's
+            with omegaconf.open_dict(combined_settings):
+                # open_dict allows us to write thru hydra's omegaconf struct
+                combined_settings._target_ = "torch.utils.data.DataLoader"
         assert not combined_settings.get(
             "_partial_", False
         ), "this function should not return a partial function, it's time to create the loader!"
