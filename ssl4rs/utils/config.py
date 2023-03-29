@@ -12,6 +12,7 @@ import warnings
 
 import dotenv
 import hydra
+import hydra.conf
 import hydra.core.hydra_config
 import omegaconf
 import pytorch_lightning
@@ -50,7 +51,7 @@ def extra_inits(
 
     # optionally create some logs in the output directory
     if output_dir is not None:
-        log_extension = ssl4rs.utils.logging.get_log_extension_slug()
+        log_extension = ssl4rs.utils.logging.get_log_extension_slug(config=config)
         if config.utils.get("log_installed_pkgs"):
             ssl4rs.utils.logging.log_installed_packages(output_dir, log_extension=log_extension)
         if config.utils.get("log_runtime_tags"):
@@ -79,6 +80,14 @@ def seed_everything(config: omegaconf.DictConfig) -> int:
     if seed is None:
         config["seed"] = set_seed
     return set_seed
+
+
+def get_hydra_config() -> hydra.conf.HydraConf:
+    """Returns the hydra configuration dictionary for the current app.
+
+    Will probably throw is the app was not started from a proper hydra entrypoint...
+    """
+    return hydra.core.hydra_config.HydraConfig.get()
 
 
 def get_package_root_dir() -> pathlib.Path:

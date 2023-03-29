@@ -144,16 +144,20 @@ def log_hyperparameters(
         logger.debug(f"{hparam_key}: {hparam_val}")
 
 
-def get_log_extension_slug() -> str:
+def get_log_extension_slug(config: omegaconf.DictConfig) -> str:
     """Returns a log file extension that includes a timestamp (for non-overlapping sortable logs).
 
+    The 'rounded seconds since epoch' portion will be computed when this function is called, whereas
+    the timestamp will be derived from the hydra config's `utils.curr_timestamp` value. This will
+    help make sure that similar logs saved within the same run will not overwrite each other.
+
     The output format is:
-        `.{ROUNDED_SECS_SINCE_EPOCH}.{YEARMONTHDAY-TIMEIN24HFORMAT}.log`
+        `.{TIMESTAMP_WITH_DATE_AND_TIME}.{ROUNDED_SECS_SINCE_EPOCH}.log`
     """
     curr_time = datetime.datetime.now()
     epoch_time_sec = int(curr_time.timestamp())  # for timezone independence
-    timestamp = curr_time.strftime("%Y%m%d-%H%M%S")
-    return f".{epoch_time_sec}.{timestamp}.log"
+    timestamp = config.utils.curr_timestamp
+    return f".{timestamp}.{epoch_time_sec}.log"
 
 
 def log_runtime_tags(
