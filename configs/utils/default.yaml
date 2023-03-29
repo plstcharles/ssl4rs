@@ -8,7 +8,8 @@ experiment_folder_name: ${experiment_name} # defines the experiment folder name 
 run_folder_name: ${run_name} # defines the run folder name inside the experiment directory
 job_folder_name: ${job_name} # defines the job folder name inside the run directory
 run_and_job_name: ${run_name}_${oc.select:job_name,0} # always-valid version of the run+job name
-checkpoint_name: e{epoch:03d}_s{step:06d} # default pattern has zero-padded values for sorting
+checkpoint_dir_path: ${hydra:runtime.output_dir}/ckpts # path to the directory where to save ckpts
+checkpoint_name: e{epoch:03d}_s{step:06d}.${utils.curr_timestamp} # default pattern will be sortable
 print_config: False # toggles whether to pretty-print the config at the start of the run
 ignore_warnings: False # used to disable python warnings if they annoy you
 log_installed_pkgs: True # toggles whether to log all installed packages in the python env

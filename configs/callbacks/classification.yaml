@@ -6,7 +6,7 @@ defaults:
 model_checkpoint:
   _target_: pytorch_lightning.callbacks.ModelCheckpoint
   # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.ModelCheckpoint.html
-  dirpath: ${hydra:runtime.output_dir}/ckpts # save all checkpoints in the run's output directory
+  dirpath: ${utils.checkpoint_dir_path} # save all checkpoints in this particular directory
   filename: ${utils.checkpoint_name} # default filename pattern has zero-padded values for sorting
   monitor: ${target_metric} # name of the logged metric which determines when model is improving
   verbose: True # verbosity mode for the callback
