@@ -19,6 +19,11 @@ on [PyTorch](https://pytorch.org/get-started/locally/) in combination with
 [PyTorch Lightning](https://pytorchlightning.ai/), and is derived from the [Lightning-Hydra-Template
 Project](https://github.com/ashleve/lightning-hydra-template).
 
+The easiest way to use this framework is probably to clone it, add your own code inside its folder
+structure, modify things as needed, and run your own experiments (derived from defaults/examples).
+You can however also use it as a dependency if you are familiar with how Hydra configuration files
+are handled.
+
 ## How to run an experiment
 
 First, install the framework and its dependencies:
@@ -68,11 +73,133 @@ files. For more information on these files, see the [relevant section](#configur
 
 ## Framework Structure
 
-TODO! @@@@@@
+This is a YAML-configuration-based Hydra project. Therefore, experiment configurations are defined
+via a separate configuration file tree (`configs`; see the next section for more information).
+
+The rest of the framework can be defined as follows:
+
+```
+<repository_root>
+  ├── configs    => root directory for all configuration files; see next section
+  │   └── ...
+  ├── data       => suggested root directory for datasets (might not exist); can be a symlink
+  │   ├── <some_dataset_directory>
+  │   ├── <some_other_dataset_directory>
+  │   └── ...
+  ├── logs       => suggested root directory for outputs (might not exist); can be a symlink
+  │   ├── comet
+  │   ├── tensorboard
+  │   ├── ...
+  │   └── runs
+  │       └── <some_experiment_name>
+  │           ├── <some_run_name>
+  │           │   ├── ckpts
+  │           │   └── ...
+  │           └── <some_other_run_name>
+  │               └── ...
+  ├── notebooks  => contains notebooks used for data analysis, visualization, and demonstrations
+  │   └── ...
+  ├── ssl4rs     => root directory for the framework's packages and modules
+  │   ├── data                 => contains subpackages related to data loading
+  │   │   ├── datamodules      => datamodules for different datasets
+  │   │   ├── parsers          => dataset parsers used inside datamodules
+  │   │   ├── repackagers      => contains dataset repackagers/converters
+  │   │   └── transforms       => various data transformation classes/operations
+  │   ├── models               => contains subpackages related to models/architectures
+  │   │   └── components       => various basic components used for model building
+  │   └── utils                => generic utility module for the whole framework
+  └── tests     => contains unit tests for ssl4rs framework packages/modules
+      └── ...
+```
+
+There are three 'entrypoint'-type scripts in the framework off which we can easily launch an
+experiment. These are:
+
+- `<repository_root>/train.py`: used to launch model training experiments; will load the
+  configuration file at `configs/train.yaml` by default.
+- `<repository_root>/test.py`: used to launch inference runs; will load the configuration file
+  at `configs/test.yaml` by default.
+- `<repository_root>/data_profiler.py`: used to profile datamodule creation, data loader
+  initialization, and data sample loading; will load the configuration file at
+  `configs/data_profiler.yaml` by default.
 
 ## Configuration Files
 
-TODO! @@@@@@
+When using Hydra, configuration files (or structures) are used to provide and log settings across
+the entire application. For a tutorial on Hydra, see the
+[official documentation](https://hydra.cc/docs/tutorials/basic/your_first_app/simple_cli/).
+
+In this framework, most of the already-existing configuration files provide default values for
+settings across different categories. An experiment with a custom model, a custom dataset, custom
+metrics, and/or other user-specified settings will likely rely on a new configuration file that
+loads the default values and overrides some of them. Such experiment configuration files should be
+placed in the `<repository_root>/configs/experiment/` directory.
+
+The structure of all configuration directories is detailed below:
+
+```
+<repository_root>
+└── configs       => root directory for all YAML configuration files
+    ├── callbacks      => lists of commonly-used pytorch lightning callbacks
+    ├── data           => definitions for datamodules and data loader settings
+    ├── debug          => provides various overrides used to help debug experiments
+    ├── experiment     => examples of experiment configs and potential user-provided ones
+    ├── hparams_search => examples of hyperparameter search engine configurations
+    ├── local          => contains machine-specific ("local") configuration overrides
+    ├── logger         => settings for experiment logging tools such as tensorboard
+    ├── model          => model architecture, optimization, and loss-specific settings
+    ├── output         => output ("log") directory management settings
+    ├── trainer        => pytorch lightning trainer settings
+    └── utils          => generic framework-wide utility settings
+```
+
+For experiment configurations, these will typically override settings across the full scope
+of the configuration tree, meaning that they will likely be defined with the `# @package _global_`
+line. A good starting point on how to write such a configuration is to copy and modify one of the
+examples, such as [this one](./configs/experiment/example_mnist_classif.yaml). This file can be
+used to define overrides as well as new settings that may affect any aspect of an experiment
+launched with the framework. Remember: to launch a training experiment for a file named
+`some_new_experiment_config.yaml` in the `<repository_root>/configs/experiment/` directory, you
+would run:
+
+```bash
+python train.py experiment=some_new_experiment_config
+```
+
+## Output files
+
+The results of an experiment comes under the form of checkpoints, merged configuration files,
+console logs, and any other artefact that your code may produce. By default, these will be saved
+under the path defined by the `OUTPUT_ROOT` environment variable, under subdirectories named based
+on experiment and run identifiers. A typical output folder structure following an experiment using
+CSV and tensorboard loggers, launched for example with
+
+```bash
+python train.py experiment=example_mnist_classif_fast logger=tboard_and_csv
+```
+
+...will then look like this:
+
+```
+<OUTPUT_ROOT>
+├── runs
+│   └── mnist_with_micro_mlp      => experiment name
+│       └── 20230329_163039       => run name
+│           ├── ckpts             => where model checkpoints are saved
+│           │   ├── e002_s005157.<...>.ckpt   => epoch 2, step 5157
+│           │   └── last.ckpt                 => latest trainer checkpoint
+│           ├── config.<...>.log  => backup config with fully-interpolated values
+│           ├── console.log       => console log (concatenated across all launches)
+│           ├── csv               => the pytorch lightning csv logger output dir
+│           │   └── ...
+│           ├── installed_pkgs.<...>.log  => list of installed python packages
+│           └── runtime_tags.<...>.log    => dictionary of useful runtime info
+└── tensorboard     => the pytorch lightning tensorboard logger output dir
+    └── mnist_with_micro_mlp            => experiment name
+        └── 20230329_163039_0           => run name
+            ├── events.out.tfevents.<...>
+            └── ...
+```
 
 ## Other Notes
 
