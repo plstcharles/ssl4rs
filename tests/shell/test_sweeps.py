@@ -12,6 +12,7 @@ def _get_base_command(tmpdir, exp_name, test_name) -> typing.List[typing.AnyStr]
         f"experiment={exp_name}",
         f"utils.output_root_dir='{tmpdir}'",
         f"run_name=_pytest_debug_{test_name}",
+        "++resume_from_latest_if_possible=False",  # we CANNOT resume w/ hydra multiruns
     ]
 
 
