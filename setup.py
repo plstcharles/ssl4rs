@@ -11,10 +11,10 @@ version_str = match_output.group(1)
 setuptools.setup(
     name="ssl4rs",
     version=version_str,
-    description="TODO",
+    description="Self-Supervised Learning (SSL) Sandbox for Remote Sensing Applications",
     author="plstcharles",
     author_email="pierreluc.stcharles@gmail.com",
-    url="TODO",
+    url="https://github.com/plstcharles/ssl4rs",
     install_requires=["pytorch-lightning", "hydra-core"],
     packages=setuptools.find_packages(),
 )
