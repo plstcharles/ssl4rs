@@ -109,6 +109,7 @@ class BaseModel(pl.LightningModule):
         logger.debug("Instantiating generic metric collections...")
         default_loop_types_with_metrics = ["train", "valid", "test"]
         metrics = self.configure_metrics()
+        metrics.persistent(True)  # by default, all metrics WILL be saved to checkpoints with this
         default_loop_metrics = {
             loop_type: metrics.clone(prefix=(loop_type + "/")) for loop_type in default_loop_types_with_metrics
         }
