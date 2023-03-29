@@ -28,7 +28,7 @@ pre-commit # code formatting and static analysis
 pyrootutils # tooling for python proj
 pytest  # testing
 python-dotenv  # loads env variables from .env
-pytorch-lightning==1.8.6  # training helper
+pytorch-lightning==2.0.0  # training helper
 pyyaml  # configuration/logging
 rich  # better text formatting
 segmentation-models-pytorch  # model architectures
