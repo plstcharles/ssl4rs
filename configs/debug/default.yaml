@@ -48,7 +48,7 @@ trainer:
   limit_train_batches: 5 # run at most 5 batches per training epoch
   limit_val_batches: 5 # run at most 5 batches per validation epoch
   limit_test_batches: 5 # run at most 5 batches per testing epoch
-  num_sanity_val_steps: 1 # run through a single validation batch before training
+  num_sanity_val_steps: 2 # run through two validation batches before training
   devices: 1 # debuggers don't like multi-device setups, let's not use anything fancy here
   detect_anomaly: True # raise an exception if NaN or +/-inf is detected in any tensor
   track_grad_norm: 2 # track gradient norm with loggers
