@@ -251,6 +251,24 @@ def get_data_root_dir() -> pathlib.Path:
     return pathlib.Path(data_root_dir)
 
 
+def get_latest_checkpoint(config: omegaconf.DictConfig) -> typing.Optional[pathlib.Path]:
+    """Returns the path to the latest checkpoint for the current run.
+
+    If no checkpoint exists, the function will return `None`.
+    """
+    checkpoint_dir_path = pathlib.Path(config.utils.checkpoint_dir_path)
+    if not checkpoint_dir_path.is_dir():
+        return None
+    expected_last_ckpt_path = checkpoint_dir_path / "last.ckpt"
+    if expected_last_ckpt_path.is_file():
+        return expected_last_ckpt_path
+    # otherwise, assume checkpoint names are sortable, and the last will be the latest
+    available_ckpts = list(checkpoint_dir_path.glob("*.ckpt"))
+    if len(available_ckpts) == 0:
+        return None
+    return sorted(available_ckpts)[-1]
+
+
 def init_hydra_and_compose_config(
     version_base: typing.Optional[typing.AnyStr] = None,
     configs_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
