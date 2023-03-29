@@ -64,6 +64,27 @@ class BaseModel(pl.LightningModule):
         self.metrics = torch.nn.ModuleDict(metrics)  # will be auto-updated+reset
         self._ids_to_render: typing.Dict[str, typing.List[typing.Hashable]] = {}
 
+    def has_metric(self, metric_name: typing.AnyStr) -> bool:
+        """Returns whether this model possesses a metric with a specific name.
+
+        The metric name is expected to be in `<loop_type>/<metric_name>` format. For example, it
+        might be `valid/accuracy`. This metric name will be prefixed with `metric` internally.
+        """
+        loop_type, metric_name = metric_name.split("/")
+        metric_group_name = f"metrics/{loop_type}"
+        return metric_group_name in self.metrics and metric_name in self.metrics[metric_group_name]
+
+    def compute_metric(self, metric_name: typing.AnyStr) -> typing.Any:
+        """Returns the current value of a metric with a specific name.
+
+        The metric name is expected to be in `<loop_type>/<metric_name>` format. For example, it
+        might be `valid/accuracy`. This metric name will be prefixed with `metric` internally.
+        """
+        loop_type, metric_name = metric_name.split("/")
+        metric_group_name = f"metrics/{loop_type}"
+        assert metric_group_name in self.metrics
+        return self.metrics[metric_group_name][metric_name].compute()
+
     @abc.abstractmethod
     def configure_metrics(self) -> torchmetrics.MetricCollection:
         """Configures and returns the metric objects to update when given predictions + labels.
