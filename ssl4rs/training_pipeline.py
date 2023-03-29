@@ -3,6 +3,7 @@ import typing
 
 import hydra
 import hydra.core.hydra_config
+import hydra.types
 import omegaconf
 import pytorch_lightning as pl
 import pytorch_lightning.loggers as pl_log
@@ -27,7 +28,8 @@ def train(config: omegaconf.DictConfig) -> typing.Optional[float]:
     exp_name, run_name, run_type, job_name = config.experiment_name, config.run_name, config.run_type, config.job_name
     logger.info(f"Launching ({exp_name}: {run_name}, '{run_type}', job={job_name})")
 
-    output_dir = pathlib.Path(hydra.core.hydra_config.HydraConfig.get().runtime.output_dir)
+    hydra_config = ssl4rs.utils.config.get_hydra_config()
+    output_dir = pathlib.Path(hydra_config.runtime.output_dir)
     logger.info(f"Output directory: {output_dir.absolute()}")
     ssl4rs.utils.config.extra_inits(config, output_dir=output_dir)
 
