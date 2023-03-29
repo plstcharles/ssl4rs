@@ -21,6 +21,7 @@ defaults:
   - optional local: default.yaml # optional overriding config for machine/user specific settings
   - debug: null # debugging configs allow for extra logging and deactivation of optimization stuff
 
+resume_from_latest_if_possible: True # toggles whether to reload latest ckpt, always, if possible
 experiment_name: default # defines the experiment name used in various output/logging paths
 run_type: train-test # defines whether to train, test, or train-and-test in case we might skip one
 run_name: ${utils.curr_timestamp} # defines the run name used in various output/logging paths

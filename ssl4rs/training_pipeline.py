@@ -6,6 +6,7 @@ import hydra.core.hydra_config
 import hydra.types
 import omegaconf
 import pytorch_lightning as pl
+import pytorch_lightning.callbacks as pl_callbacks
 import pytorch_lightning.loggers as pl_log
 
 import ssl4rs
@@ -69,26 +70,42 @@ def train(config: omegaconf.DictConfig) -> typing.Optional[float]:
     )
 
     completed_training = False
+    resume_from_ckpt_path = None
     if "train" in run_type:
+        if config.resume_from_latest_if_possible:
+            assert (
+                hydra_config.mode == hydra.types.RunMode.RUN
+            ), "cannot resume training from a checkpoint in multi-run mode!"
+            resume_from_ckpt_path = ssl4rs.utils.config.get_latest_checkpoint(config)
+            if resume_from_ckpt_path is not None:
+                resume_from_ckpt_path = str(resume_from_ckpt_path)
+                logger.info(f"Will resume from 'latest' checkpoint at: {resume_from_ckpt_path}")
         logger.info("Running trainer.fit()...")
-        trainer.fit(model=model, datamodule=datamodule)
+        trainer.fit(model=model, datamodule=datamodule, ckpt_path=resume_from_ckpt_path)
         completed_training = not trainer.interrupted
 
     target_metric_val: typing.Optional[float] = None
     if not trainer.interrupted:
+        has_ckpt_callback = isinstance(trainer.checkpoint_callback, pl_callbacks.ModelCheckpoint)
+        if not completed_training or config.trainer.get("fast_dev_run") or not has_ckpt_callback:
+            best_ckpt_path = None
+        else:
+            assert hasattr(trainer.checkpoint_callback, "best_model_path"), "missing callback attrib?"
+            best_ckpt_path = trainer.checkpoint_callback.best_model_path
+            logger.info(f"Best model ckpt at: {best_ckpt_path}")
         target_metric_name = config.get("target_metric")
-        if target_metric_name is not None:
-            assert target_metric_name in trainer.callback_metrics, (
+        if target_metric_name is not None and not config.trainer.get("fast_dev_run"):
+            assert model.has_metric(target_metric_name), (
                 f"target metric {target_metric_name} for hyperparameter optimization not found! "
                 "make sure the `target_metric` field in the config is correct!"
             )
-            target_metric_val = trainer.callback_metrics.get(target_metric_name)
+            if best_ckpt_path:
+                best_model = model.load_from_checkpoint(best_ckpt_path)
+                target_metric_val = best_model.compute_metric(target_metric_name)
+                logger.info(f"Best target metric: {target_metric_name}: {target_metric_val}")
         if "test" in run_type:
-            ckpt_path = "best"
-            if not completed_training or config.trainer.get("fast_dev_run"):
-                ckpt_path = None
             logger.info("Running trainer.test()...")
-            trainer.test(model=model, datamodule=datamodule, ckpt_path=ckpt_path)
+            trainer.test(model=model, datamodule=datamodule, ckpt_path=best_ckpt_path)
             if hasattr(model, "compute_metrics") and callable(model.compute_metrics):
                 metrics = model.compute_metrics(loop_type="test")
                 for metric_name, metric_val in metrics.items():
@@ -103,9 +120,6 @@ def train(config: omegaconf.DictConfig) -> typing.Optional[float]:
         callbacks=callbacks,
         loggers=loggers,
     )
-
-    if completed_training and not config.trainer.get("fast_dev_run"):
-        logger.info(f"Best model ckpt at: {trainer.checkpoint_callback.best_model_path}")
 
     logger.info(f"Done ({exp_name}: {run_name}, '{run_type}', job={job_name})")
     return target_metric_val
