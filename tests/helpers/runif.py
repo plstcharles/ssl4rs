@@ -1,3 +1,9 @@
+"""RunIf test configurator.
+
+Adapted from:
+https://github.com/PyTorchLightning/pytorch-lightning/blob/master/tests/helpers/runif.py
+"""
+
 import sys
 from typing import Optional
 
@@ -6,14 +12,10 @@ import torch
 from packaging.version import Version
 from pkg_resources import get_distribution
 
-"""
-Adapted from:
-    https://github.com/PyTorchLightning/pytorch-lightning/blob/master/tests/helpers/runif.py
-"""
-
 from tests.helpers.module_available import (
     _DEEPSPEED_AVAILABLE,
     _FAIRSCALE_AVAILABLE,
+    _IS_ON_MILA_CLUSTER,
     _IS_WINDOWS,
     _RPC_AVAILABLE,
 )
@@ -39,6 +41,7 @@ class RunIf:
         max_torch: Optional[str] = None,
         min_python: Optional[str] = None,
         skip_windows: bool = False,
+        only_on_mila_cluster: bool = False,
         rpc: bool = False,
         fairscale: bool = False,
         deepspeed: bool = False,
@@ -51,6 +54,7 @@ class RunIf:
             max_torch: maximum pytorch version to run test
             min_python: minimum python version required to run test
             skip_windows: skip test for Windows platform
+            only_on_mila_cluster: only run test on Mila cluster environment
             rpc: requires Remote Procedure Call (RPC)
             fairscale: if `fairscale` module is required to run the test
             deepspeed: if `deepspeed` module is required to run the test
@@ -81,6 +85,10 @@ class RunIf:
         if skip_windows:
             conditions.append(_IS_WINDOWS)
             reasons.append("does not run on Windows")
+
+        if only_on_mila_cluster:
+            conditions.append(not _IS_ON_MILA_CLUSTER)
+            reasons.append("can only run on Mila cluster")
 
         if rpc:
             conditions.append(not _RPC_AVAILABLE)
