@@ -251,6 +251,37 @@ def get_data_root_dir() -> pathlib.Path:
     return pathlib.Path(data_root_dir)
 
 
+def get_output_root_dir() -> pathlib.Path:
+    """Returns the output (log) root directory for the current environment/config setup.
+
+    This function will first check if a config dictionary is registered inside the module, and
+    return its `output_root_dir` value if possible. If not, it will try to get the output root
+    directory directly from the already-loaded environment variables. If that fails, it will try to
+    load the framework's local dotenv config file to see if a local environment variable can be
+    used. If all attempts fail, it will throw an exception.
+    """
+    # first, check the globally registered cfg object
+    global cfg
+    if cfg is not None:
+        try:
+            return pathlib.Path(cfg.utils.output_root_dir)
+        except omegaconf.errors.MissingMandatoryValue:
+            pass
+    # check the already-loaded environment variables
+    output_root_dir = os.getenv("OUTPUT_ROOT")
+    if output_root_dir is not None:
+        return pathlib.Path(output_root_dir)
+    # check the framework directory for a local env file and load it manually
+    framework_dir = get_framework_root_dir()
+    assert framework_dir is not None and framework_dir.is_dir(), "could not locate framework dir!"
+    framework_dotenv_path = get_framework_dotenv_path(framework_dir)
+    assert framework_dotenv_path is not None, f"no dotenv config file found at: {framework_dir}"
+    dotenv_config = dotenv.dotenv_values(dotenv_path=framework_dotenv_path)
+    output_root_dir = dotenv_config.get("OUTPUT_ROOT", None)
+    assert output_root_dir is not None, "could not find the output root dir anywhere!"
+    return pathlib.Path(output_root_dir)
+
+
 def get_latest_checkpoint(config: omegaconf.DictConfig) -> typing.Optional[pathlib.Path]:
     """Returns the path to the latest checkpoint for the current run.
 
