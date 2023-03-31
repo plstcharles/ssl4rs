@@ -4,7 +4,6 @@ import torch
 
 import ssl4rs.utils.config
 from ssl4rs.data.datamodules.mnist import DataModule as MNISTDataModule
-from tests.helpers.fixtures import global_cfg_cleaner
 
 
 def _check_minibatch_content(minibatch, expected_batch_size: int = 0):

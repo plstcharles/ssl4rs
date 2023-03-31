@@ -56,9 +56,8 @@ def _launch_sbatch_and_wait_for_completion(
     output = module_runner.run(["sbatch", str(script_path)])
     assert output.returncode == 0
     expected_job_id_prefix = "Submitted batch job "
-    assert str(output.stdout).startswith(expected_job_id_prefix), \
-        f"unexpected sbatch launch output: {output.stdout}"
-    job_id = str(output.stdout)[len(expected_job_id_prefix):].strip()
+    assert str(output.stdout).startswith(expected_job_id_prefix), f"unexpected sbatch launch output: {output.stdout}"
+    job_id = str(output.stdout)[len(expected_job_id_prefix) :].strip()
     start_time = time.time()
     job_finished = False
     while not job_finished and (time.time() - start_time) < timeout_sec:
@@ -111,7 +110,7 @@ def test_mila_cluster_train_1gpu():
     )
     command = [
         "srun",
-        "\"$CONDA_PREFIX/bin/python\"",
+        '"$CONDA_PREFIX/bin/python"',
         "train.py",
         "debug=default",
         "experiment=example_mnist_classif_fast",
@@ -126,8 +125,7 @@ def test_mila_cluster_train_1gpu():
     script_path = tmp_shared_dir / "train_1gpu.sh"
     with open(script_path, "w") as fd:
         fd.write(script_full)
-    expected_out_dir = \
-        tmp_shared_dir / "debug" / "runs" / "mnist_with_micro_mlp" / "_pytest_mila_cluster_train_1gpu"
+    expected_out_dir = tmp_shared_dir / "debug" / "runs" / "mnist_with_micro_mlp" / "_pytest_mila_cluster_train_1gpu"
     if expected_out_dir.is_dir():
         ssl4rs.utils.filesystem.recursively_remove_all(expected_out_dir)
     job_id, job_finished = _launch_sbatch_and_wait_for_completion(script_path, timeout_sec=180)
