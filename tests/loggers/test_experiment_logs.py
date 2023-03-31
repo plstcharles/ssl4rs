@@ -6,6 +6,7 @@ import pytest
 import yaml
 
 import tests.helpers.module_runner as module_runner
+import tests.helpers.runif
 
 
 def _launch_experiment_and_return_out_dir(tmpdir, run_suffix, *extra_cmd_args):
@@ -130,6 +131,7 @@ def test_comet_offline(tmpdir):
     assert len(comet_zips) > 0
 
 
+@tests.helpers.runif.RunIf(has_comet_api_key=True)
 @pytest.mark.slow
 def test_comet_online(tmpdir):
     """Test Comet ML online (but disabled) logger; there should be no local files at all."""

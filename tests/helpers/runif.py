@@ -3,15 +3,17 @@
 Adapted from:
 https://github.com/PyTorchLightning/pytorch-lightning/blob/master/tests/helpers/runif.py
 """
-
+import os
 import sys
 from typing import Optional
 
+import dotenv
 import pytest
 import torch
 from packaging.version import Version
 from pkg_resources import get_distribution
 
+import ssl4rs.utils.config
 from tests.helpers.module_available import (
     _DEEPSPEED_AVAILABLE,
     _FAIRSCALE_AVAILABLE,
@@ -42,6 +44,7 @@ class RunIf:
         min_python: Optional[str] = None,
         skip_windows: bool = False,
         only_on_mila_cluster: bool = False,
+        has_comet_api_key: bool = False,
         rpc: bool = False,
         fairscale: bool = False,
         deepspeed: bool = False,
@@ -89,6 +92,15 @@ class RunIf:
         if only_on_mila_cluster:
             conditions.append(not _IS_ON_MILA_CLUSTER)
             reasons.append("can only run on Mila cluster")
+
+        if has_comet_api_key:
+            # this one might be in a .dotenv file, so we'll load one if possible
+            dotenv_path = ssl4rs.utils.config.get_framework_dotenv_path()
+            if dotenv_path is not None:
+                dotenv.load_dotenv(dotenv_path=str(dotenv_path), override=True, verbose=True)
+            comet_api_key = os.getenv("COMET_API_KEY")
+            conditions.append(comet_api_key is None)
+            reasons.append("can only run with `COMET_API_KEY` defined")
 
         if rpc:
             conditions.append(not _RPC_AVAILABLE)
