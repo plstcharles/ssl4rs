@@ -68,6 +68,18 @@ def extra_inits(
         cfg = config
 
 
+def clear_global_config() -> None:
+    """Clears (replaces the reference) to the global configuration dictionary.
+
+    If one did not exist, this function does nothing. This function should likely be called in
+    scripts where we 'initialize' experiments inside a single process repeatedly, or when doing
+    so inside unit tests.
+    """
+    global cfg
+    if cfg is not None:
+        cfg = None
+
+
 def seed_everything(config: omegaconf.DictConfig) -> int:
     """Pulls the seed from the config and resets the RNGs with it using pytorch-lightning.
 

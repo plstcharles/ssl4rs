@@ -4,6 +4,7 @@ import torch
 
 import ssl4rs.utils.config
 from ssl4rs.data.datamodules.mnist import DataModule as MNISTDataModule
+from tests.helpers.fixtures import global_cfg_cleaner
 
 
 def _check_minibatch_content(minibatch, expected_batch_size: int = 0):
@@ -25,7 +26,7 @@ def _check_minibatch_content(minibatch, expected_batch_size: int = 0):
     assert (minibatch["target"] >= 0).all().item() and (minibatch["target"] < 10).all().item()
 
 
-def test_mnist_datamodule_via_hydra(tmpdir):
+def test_mnist_datamodule_via_hydra(tmpdir, global_cfg_cleaner):
     config = ssl4rs.utils.config.init_hydra_and_compose_config(
         configs_dir="../../../configs",
         output_root_dir=tmpdir,
