@@ -10,6 +10,7 @@ import tests.helpers.module_runner as module_runner
 
 def _launch_experiment_and_return_out_dir(tmpdir, run_suffix, *extra_cmd_args):
     command = [
+        "python",
         "train.py",
         "experiment=example_mnist_classif_fast",
         f"utils.output_root_dir='{tmpdir}'",

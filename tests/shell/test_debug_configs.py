@@ -11,6 +11,7 @@ import tests.helpers.module_runner as module_runner
 
 def _get_base_command(tmpdir, test_name) -> typing.List[typing.AnyStr]:
     return [
+        "python",
         "train.py",
         "experiment=example_mnist_classif_fast",
         f"utils.output_root_dir='{tmpdir}'",

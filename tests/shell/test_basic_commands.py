@@ -8,7 +8,7 @@ import tests.helpers.runif
 
 def test_help():
     """Test just executing the train script to get the help message."""
-    command = ["train.py", "--help"]
+    command = ["python", "train.py", "--help"]
     output = module_runner.run(command)
     assert output.returncode == 0 and "Powered by Hydra" in output.stdout
 
@@ -16,6 +16,7 @@ def test_help():
 def test_fast_dev_run(tmpdir):
     """Test running for 1 train, val and test batch."""
     command = [
+        "python",
         "train.py",
         "experiment=example_mnist_classif_fast",
         f"utils.output_root_dir='{tmpdir}'",
@@ -40,6 +41,7 @@ def test_fast_dev_run(tmpdir):
 def test_debug(tmpdir):
     """Test running 1 epoch on CPU."""
     command = [
+        "python",
         "train.py",
         "debug=default",
         "experiment=example_mnist_classif_fast",
@@ -70,6 +72,7 @@ def test_debug(tmpdir):
 def test_debug_gpu(tmpdir):
     """Test running 1 epoch on GPU."""
     command = [
+        "python",
         "train.py",
         "debug=default",
         "experiment=example_mnist_classif_fast",
@@ -101,6 +104,7 @@ def test_debug_gpu(tmpdir):
 def test_debug_gpu_halfprec(tmpdir):
     """Test running 1 epoch on GPU with half (16-bit) float precision."""
     command = [
+        "python",
         "train.py",
         "debug=default",
         "experiment=example_mnist_classif_fast",

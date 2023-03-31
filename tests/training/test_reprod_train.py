@@ -6,6 +6,7 @@ import pytest
 import tests.helpers.module_runner as module_runner
 
 base_cli_args = [
+    "python",
     "train.py",
     "experiment=example_mnist_classif_fast",
     # these settings will make the run fast-enough

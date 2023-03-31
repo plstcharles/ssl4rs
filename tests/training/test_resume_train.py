@@ -10,6 +10,7 @@ import tests.helpers.module_runner as module_runner
 def test_resume_after_completion(tmpdir):
     """Test resuming a training session after it was actually completed."""
     command = [
+        "python",
         "train.py",
         "experiment=example_mnist_classif_fast",
         f"utils.output_root_dir='{tmpdir}'",
@@ -56,6 +57,7 @@ def test_resume_after_completion(tmpdir):
 def test_resume_after_interruption(tmpdir):
     """Test resuming a training session after it was interrupted mid-epoch."""
     command = [
+        "python",
         "train.py",
         "experiment=example_mnist_classif_fast",
         f"utils.output_root_dir='{tmpdir}'",

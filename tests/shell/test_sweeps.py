@@ -7,6 +7,7 @@ import tests.helpers.module_runner as module_runner
 
 def _get_base_command(tmpdir, exp_name, test_name) -> typing.List[typing.AnyStr]:
     return [
+        "python",
         "train.py",
         "-m",
         f"experiment={exp_name}",
