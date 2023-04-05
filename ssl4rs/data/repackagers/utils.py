@@ -16,6 +16,8 @@ import ssl4rs
 # need parsers for DOTA_, BigEarthNet, NWPU-VHR-10, NWPU-RESISC45, xview, MLRSN, agrivis, spacenet?
 # TODO @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 
+logger = ssl4rs.utils.logging.get_logger(__name__)
+
 
 class DeepLakeRepackager:
     """Base interface used to provide common definitions for all deeplake exporters/repackagers.
@@ -160,6 +162,8 @@ class DeepLakeRepackager:
                     data_sample = self[sample_idx]
                     dataset.append(data_sample)
         # all done!
+        size_approx_mb = dataset.size_approx() // (1024 * 1024)
+        logger.debug(f"export complete, approx size = {size_approx_mb} MB")
 
 
 def check_info_overlap(
