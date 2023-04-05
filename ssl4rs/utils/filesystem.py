@@ -77,29 +77,12 @@ def extract_tar(
         flags: extra flags passed to ``tarfile.open``.
     """
 
-    class _FileWrapper(io.FileIO):
-        def __init__(self, path, *args, **kwargs):
-            self.start_time = time.time()
-            self._size = os.path.getsize(path)
-            super().__init__(path, *args, **kwargs)
-
-        def read(self, *args, **kwargs):
-            duration = time.time() - self.start_time
-            progress_size = self.tell()
-            speed = str(int(progress_size / (1024 * duration))) if duration > 0 else "?"
-            percent = min(int(progress_size * 100 / self._size), 100)
-            progress_size_mb = progress_size / (1024 * 1024)
-            sys.stdout.write(f"\r\t=> extracted {percent}%% ({progress_size_mb} MB) @ {speed} KB/s...")
-            sys.stdout.flush()
-            return io.FileIO.read(self, *args, **kwargs)
-
     cwd = os.getcwd()
-    tar = tarfile.open(fileobj=_FileWrapper(str(filepath)), mode=str(flags))
     root = pathlib.Path(root).expanduser()
     root.mkdir(parents=True, exist_ok=True)
     os.chdir(str(root))
-    tar.extractall()
-    tar.close()
+    with tarfile.open(fileobj=FileReaderProgressBar(str(filepath)), mode=str(flags)) as tarfd:
+        tarfd.extractall()
     os.chdir(cwd)
     sys.stdout.write("\r")
     sys.stdout.flush()
@@ -264,3 +247,24 @@ class WorkDirectoryContextManager:
     def __exit__(self, etype, value, traceback):
         """Restores the original working directory."""
         os.chdir(self.old_work_dir)
+
+
+class FileReaderProgressBar(io.FileIO):
+    """Provides a progress bar for file read operations; useful e.g. when decompressing."""
+
+    def __init__(self, path: typing.AnyStr, *args, **kwargs):
+        """Wraps the io.FileIO constructor and forwards all arguments."""
+        self.start_time = time.time()
+        self._size = os.path.getsize(path)
+        super().__init__(path, *args, **kwargs)
+
+    def read(self, *args, **kwargs):
+        """Reads data from the underlying io.FileIO object while updating a progress bar."""
+        duration = time.time() - self.start_time
+        progress_size = self.tell()
+        speed = str(int(progress_size / (1024 * duration))) if duration > 0 else "?"
+        percent = min(int(progress_size * 100 / self._size), 100)
+        progress_size_mb = progress_size / (1024 * 1024)
+        sys.stdout.write(f"\r\t=> loaded {percent}% ({progress_size_mb} MB) @ {speed} KB/s...")
+        sys.stdout.flush()
+        return io.FileIO.read(self, *args, **kwargs)
