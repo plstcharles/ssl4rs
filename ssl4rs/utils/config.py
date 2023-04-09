@@ -216,18 +216,18 @@ def get_installed_packages() -> typing.List[str]:
     a grain of salt (i.e. just for logging is fine).
     """
     try:
-        import pip  # noqa
+        import importlib.metadata
 
-        # noinspection PyUnresolvedReferences
-        pkgs = pip.get_installed_distributions()
-        return list(sorted(f"{pkg.key} {pkg.version}" for pkg in pkgs))
+        pkgs = [f"{pkg.name}=={pkg.version}" for pkg in importlib.metadata.distributions()]
     except (ImportError, AttributeError):
         try:
-            import pkg_resources as pkgr  # noqa
+            import pip  # noqa
 
-            return list(sorted(str(pkg) for pkg in pkgr.working_set))  # noqa
+            # noinspection PyUnresolvedReferences
+            pkgs = [f"{pkg.key}=={pkg.version}" for pkg in pip.get_installed_distributions()]
         except (ImportError, AttributeError):
-            return []
+            pkgs = []
+    return sorted(pkgs, key=str.casefold)
 
 
 def get_params_hash(*args, **kwargs):
