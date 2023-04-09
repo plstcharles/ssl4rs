@@ -6,17 +6,11 @@ https://www.tensorflow.org/datasets/catalog/uc_merced
 http://weegee.vision.ucmerced.edu/datasets/UCMerced_LandUse.zip
 """
 
-import ssl4rs.data.parsers
-import ssl4rs.data.repackagers.ucmerced
+import ssl4rs.data.metadata.ucmerced
+import ssl4rs.data.parsers.utils
 
 
-class DeepLakeParser(ssl4rs.data.parsers.DeepLakeParser):
-    """UCMerced does not require any special handling on top of the base deeplake parser.
+class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
+    """UCMerced does not require any special handling on top of the base deeplake parser."""
 
-    This means that apart from the utility attributes/defines, this class is empty.
-    """
-
-    class_distrib = ssl4rs.data.repackagers.ucmerced.DeepLakeRepackager.class_distrib
-    class_names = ssl4rs.data.repackagers.ucmerced.DeepLakeRepackager.class_names
-    image_shape = ssl4rs.data.repackagers.ucmerced.DeepLakeRepackager.image_shape
-    ground_sampling_distance = ssl4rs.data.repackagers.ucmerced.DeepLakeRepackager.ground_sampling_distance
+    metadata = ssl4rs.data.metadata.ucmerced
