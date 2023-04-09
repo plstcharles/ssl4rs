@@ -1,4 +1,4 @@
-"""Implements a deep lake data repackager for the Functional Map of the World (FMoW) dataset.
+"""Implements a deeplake data repackager for the Functional Map of the World (FMoW) dataset.
 
 See the following URLs for more info on this dataset:
 https://arxiv.org/abs/1711.07846
@@ -13,15 +13,16 @@ import re
 import tarfile
 import typing
 
-import PIL.Image
 import deeplake
 import numpy as np
+import PIL.Image
 import tqdm
 
+import ssl4rs.data.metadata.fmow
 import ssl4rs.data.repackagers.utils
 import ssl4rs.utils.imgproc
 
-expected_max_fmow_pixels = 20000 * 20000  # some fmow images are big!
+expected_max_fmow_pixels = np.prod(ssl4rs.data.metadata.fmow.max_image_shape[0:2])
 PIL.Image.MAX_IMAGE_PIXELS = max(expected_max_fmow_pixels, PIL.Image.MAX_IMAGE_PIXELS)
 logger = ssl4rs.utils.logging.get_logger(__name__)
 
@@ -37,81 +38,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
     memory to simplify/speed up mappings.
     """
 
-    class_names = [
-        "airport",
-        "airport_hangar",
-        "airport_terminal",
-        "amusement_park",
-        "aquaculture",
-        "archaeological_site",
-        "barn",
-        "border_checkpoint",
-        "burial_site",
-        "car_dealership",
-        "construction_site",
-        "crop_field",
-        "dam",
-        "debris_or_rubble",
-        "educational_institution",
-        "electric_substation",
-        "factory_or_powerplant",
-        "fire_station",
-        "flooded_road",
-        "fountain",
-        "gas_station",
-        "golf_course",
-        "ground_transportation_station",
-        "helipad",
-        "hospital",
-        "impoverished_settlement",
-        "interchange",
-        "lake_or_pond",
-        "lighthouse",
-        "military_facility",
-        "multi-unit_residential",
-        "nuclear_powerplant",
-        "office_building",
-        "oil_or_gas_facility",
-        "park",
-        "parking_lot_or_garage",
-        "place_of_worship",
-        "police_station",
-        "port",
-        "prison",
-        "race_track",
-        "railway_bridge",
-        "recreational_facility",
-        "road_bridge",
-        "runway",
-        "shipyard",
-        "shopping_mall",
-        "single-unit_residential",
-        "smokestack",
-        "solar_farm",
-        "space_facility",
-        "stadium",
-        "storage_tank",
-        "surface_mine",
-        "swimming_pool",
-        "toll_booth",
-        "tower",
-        "tunnel_opening",
-        "waste_disposal",
-        "water_treatment_facility",
-        "wind_farm",
-        "zoo",
-    ]
-    """List of class names used in the dataset (still using a capital 1st letter for each noun)."""
-
-    supported_image_types = ["rgb", "full"]
-    """List of supported raw image types for repackaging.
-
-    The 'RGB' dataset corresponds to multispectral or panchromatic-based RGB images. The 'full'
-    dataset corresponds to the 4-band or 8-band multispectral images.
-    """
-
-    supported_subset_types = ["train", "val", "test", "seq", "all"]
-    """List of supported split subsets that can be repackaged."""
+    metadata = ssl4rs.data.metadata.fmow
 
     @property  # we need to provide this for the base class!
     def tensor_info(self) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
@@ -120,25 +47,25 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         return dict(
             views=dict(htype="sequence[image.rgb]", dtype=np.uint8, sample_compression="jpg"),
             metadata=dict(htype="sequence[json]", sample_compression=None),
-            bboxes=dict(htype="sequence[bbox]", dtype=np.int32, coords=dict(type="pixel", mode="LTRB")),
-            label=dict(htype="class_label", dtype=np.int16, class_names=self.class_names),
-            subset=dict(htype="class_label", dtype=np.int8, class_names=self._expected_subset_types),
+            bboxes=dict(htype="sequence[bbox]", dtype=np.int32, coords=dict(type="pixel", mode="LTWH")),
+            label=dict(htype="class_label", dtype=np.int16, class_names=self.metadata.class_names),
+            subset=dict(htype="class_label", dtype=np.int8, class_names=self.metadata.subset_types),
             instance=dict(htype="text", dtype=str, sample_compression=None),
         )
 
     @property  # we need to provide this for the base class!
-    def dataset_info(self):
+    def dataset_info(self) -> typing.Dict[str, typing.Any]:
         """Returns metadata information that will be exported in the deeplake object."""
         return dict(
             name=self.dataset_name,
-            class_names=self.class_names,
+            class_names=self.metadata.class_names,
             image_type=self.image_type,
             subset_types=self.subset_types,
             version=self.version,
         )
 
     @property  # we need to provide this for the base class!
-    def dataset_name(self):
+    def dataset_name(self) -> str:
         """Returns the dataset name used to identify this particular dataset."""
         return f"FMoW-{self.image_type}"
 
@@ -150,7 +77,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         key_delimiter: typing.AnyStr = "/",
         overwrite_if_needed: bool = True,
     ) -> None:
-        """Inserts a value inside a dictionary with a recursive key, creating subdicts if needed."""
+        """Inserts a value inside a dictionary with a recursive key, with subdicts if needed."""
         assert isinstance(key_delimiter, str) and isinstance(key, str)
         sub_keys = key.split(key_delimiter)
         for group_key in sub_keys[:-1]:
@@ -163,7 +90,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         out_dict[final_key] = data
 
     def _load_version(self) -> typing.AnyStr:
-        """Loads the content of `CHANGELOG.md` and reads the latest dataset version from it."""
+        """Loads the content of FMoW's CHANGELOG.md and reads the latest version from it."""
         changelog_path = self.data_root_path / "CHANGELOG.md"
         assert changelog_path.is_file(), f"invalid changelog file: {changelog_path}"
         latest_version_number = None
@@ -178,7 +105,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         logger.info(f"will load FMoW v{version}")
         return version
 
-    def _load_manifest(self):
+    def _load_manifest(self) -> typing.List:
         """Loads the `manifest.json.bz2` file contents to memory."""
         manifest_path = self.data_root_path / "manifest.json.bz2"
         assert manifest_path.is_file(), f"invalid manifest file: {manifest_path}"
@@ -251,21 +178,21 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                 assert len(remapped_tokens) == 3
                 remapped_subset_id, class_id, instance_id = remapped_tokens
                 assert remapped_subset_id == subset_id + "_gt"
-                assert class_id in self.class_names
+                assert class_id in self.metadata.class_names
                 instance_metadata = self._gt_data[remapped_subset_id][class_id][instance_id]
             else:
                 # we can extract the class/instance ids as-is
                 assert len(file_name_tokens) == 4, "unexpected file name tokens for train/val set"
                 subset_id, class_id, instance_id, file_id = file_name_tokens
                 assert subset_id in self.subset_types
-                assert class_id in self.class_names
+                assert class_id in self.metadata.class_names
                 instance_metadata = self._gt_data[subset_id][class_id][instance_id]
             assert isinstance(instance_metadata, dict)
             for curr_view_meta in instance_metadata.values():
                 assert "bounding_boxes" in curr_view_meta
                 assert isinstance(curr_view_meta["bounding_boxes"], list)
                 # there should only be one groundtruth bbox per entire view/image
-                assert sum([bbox["ID"] == -1 for bbox in curr_view_meta["bounding_boxes"]]) == 1
+                assert sum(bbox["ID"] == -1 for bbox in curr_view_meta["bounding_boxes"]) == 1
                 # ... and it should be the first in the list
                 assert curr_view_meta["bounding_boxes"][0]["ID"] == -1
             assert instance_id.startswith(class_id)
@@ -301,7 +228,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             for instance_id, view_ids in self._metadata[subset_id].items():
                 assert len(list(view_ids)) > 0
                 views = [self._metadata[subset_id][instance_id][view_id] for view_id in view_ids]
-                assert len(set([v["class_id"] for v in views])) == 1
+                assert len({v["class_id"] for v in views}) == 1
                 class_id = views[0]["class_id"]
                 ids_tuple = (subset_id, class_id, instance_id, tuple(view_ids))
                 assert ids_tuple not in self._ids_to_idx_map
@@ -326,17 +253,18 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             subset_type: subset type to extract; should be train/val/test/seq, or 'all' for their
                 combination.
         """
-        assert image_type in self.supported_image_types
+        assert image_type in self.metadata.image_types
         self.image_type = image_type
-        self._expected_subset_types = ["train", "val", "test", "seq"]
         if not isinstance(subset_type, list):
-            assert subset_type in self.supported_subset_types, f"unsupported subset type: {subset_type}"
+            assert subset_type in self.metadata.subset_types, f"unsupported FMoW subset type: {subset_type}"
             if subset_type == "all":
-                self.subset_types = self._expected_subset_types
+                self.subset_types = [s for s in self.metadata.subset_types if s != "all"]
             else:
                 self.subset_types = [subset_type]
         else:
-            assert all([s in self._expected_subset_types for s in subset_type]), "bad subset type(s)"
+            assert all(
+                [s in self.metadata.subset_types for s in subset_type]
+            ), f"bad FMoW subset type(s): {subset_type}"
             self.subset_types = list(set(subset_type))
         dataset_root_path = pathlib.Path(dataset_root_path)
         self.data_root_path = dataset_root_path / f"fmow-{self.image_type}"
@@ -357,7 +285,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         self._prepare_maps()
         # once we get here, we're ready to repackage the dataset!
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Returns the total number of instances defined in this dataset.
 
         Note: each instance may have more than one view, meaning more than one image!
@@ -378,7 +306,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         assert 0 <= item < len(self), f"invalid data sample index being queried: {item}"
         (subset_id, class_id, instance_id, view_ids) = self._idx_to_ids_map[item]
         assert subset_id in self.subset_types
-        assert class_id in self.class_names
+        assert class_id in self.metadata.class_names
         view_dicts = list(self._metadata[subset_id][instance_id].values())
         # using deeplake.read will defer loading the full image data if possible/needed
         views = [deeplake.read(str(view["file_abs_path"])) for view in view_dicts]
@@ -390,8 +318,8 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             views=views,
             metadata=metadata,
             bboxes=bboxes,
-            label=self.class_names.index(class_id),
-            subset=self._expected_subset_types.index(subset_id),
+            label=self.metadata.class_names.index(class_id),
+            subset=self.metadata.subset_types.index(subset_id),
             instance=instance_id,
         )
 

@@ -1,4 +1,4 @@
-"""Implements a DeepLake data repackager for the UC Merced Land Use dataset.
+"""Implements a deeplake data repackager for the UC Merced Land Use dataset.
 
 See the following URL(s) for more info on this dataset:
 http://weegee.vision.ucmerced.edu/datasets/landuse.html
@@ -13,6 +13,7 @@ import cv2 as cv
 import deeplake
 import numpy as np
 
+import ssl4rs.data.metadata.ucmerced
 import ssl4rs.data.repackagers.utils
 import ssl4rs.utils.config
 import ssl4rs.utils.filesystem
@@ -31,71 +32,35 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         https://www.tensorflow.org/datasets/catalog/uc_merced
     """
 
-    class_distrib = {
-        "Agricultural": 100,
-        "Airplane": 100,
-        "BaseballDiamond": 100,
-        "Beach": 100,
-        "Buildings": 100,
-        "Chaparral": 100,
-        "DenseResidential": 100,
-        "Forest": 100,
-        "Freeway": 100,
-        "GolfCourse": 100,
-        "Harbor": 100,
-        "Intersection": 100,
-        "MediumResidential": 100,
-        "MobileHomePark": 100,
-        "Overpass": 100,
-        "Parkinglot": 100,
-        "River": 100,
-        "Runway": 100,
-        "SparseResidential": 100,
-        "StorageTanks": 100,
-        "TennisCourt": 100,
-    }
-    """Distribution (counts) of images across all dataset categories."""
-
-    class_names = list(class_distrib.keys())
-    """List of class names used in the dataset (still using a capital 1st letter for each noun)."""
-
-    image_shape = (256, 256, 3)
-    """Shape of the image tensors in this dataset (height, width, channels).
-
-    Note that there are a handful of images in the dataset that are not 256x256; these will be
-    resampled to the correct size.
-    """
-
-    ground_sampling_distance = 0.3
-    """Distance between two consecutive pixel centers measured on the ground for this dataset."""
+    metadata = ssl4rs.data.metadata.ucmerced
 
     @property  # we need to provide this for the base class!
     def tensor_info(self) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
         """Returns the dictionary of tensor info (declaration) arguments used during creation."""
         return dict(
             image=dict(htype="image", dtype=np.uint8, sample_compression="jpg"),
-            label=dict(htype="class_label", dtype=np.int16, class_names=self.class_names),
+            label=dict(htype="class_label", dtype=np.int16, class_names=self.metadata.class_names),
         )
 
     @property  # we need to provide this for the base class!
-    def dataset_info(self):
+    def dataset_info(self) -> typing.Dict[str, typing.Any]:
         """Returns metadata information that will be exported in the deeplake object."""
         return dict(
             name=self.dataset_name,
-            class_names=self.class_names,
-            class_distrib=self.class_distrib,
-            image_shape=list(self.image_shape),  # tuples will be changed to lists by deeplake...
-            ground_sampling_distance=self.ground_sampling_distance,
+            class_names=self.metadata.class_names,
+            class_distrib=self.metadata.class_distrib,
+            image_shape=list(self.metadata.image_shape),  # tuples will be changed to lists by deeplake...
+            ground_sampling_distance=self.metadata.ground_sampling_distance,
         )
 
     @property  # we need to provide this for the base class!
-    def dataset_name(self):
+    def dataset_name(self) -> str:
         """Returns the dataset name used to identify this particular dataset."""
         return "UCMerced"
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Returns the total number of images defined in this dataset."""
-        return len(self.class_names) * 100
+        return self.metadata.image_count
 
     def __init__(
         self,
@@ -108,29 +73,28 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         """
         self.data_root_path = pathlib.Path(dataset_root_path)
         assert self.data_root_path.exists(), f"invalid dataset path: {self.data_root_path}"
-        assert sum(self.class_distrib.values()) == len(self)
-        for class_idx, class_name in enumerate(self.class_names):
+        for class_idx, class_name in enumerate(self.metadata.class_names):
             class_name_slug = ssl4rs.utils.filesystem.slugify(class_name)
             class_dir_path = self.data_root_path / class_name_slug
             assert class_dir_path.is_dir(), f"invalid class directory path: {class_dir_path}"
             img_paths = list(sorted(class_dir_path.glob(f"{class_name_slug}*.tif")))
             assert len(img_paths) != 0, f"could not find any images in class dir: {class_dir_path}"
-            img_count, exp_img_count = len(img_paths), self.class_distrib[class_name]
+            img_count, exp_img_count = len(img_paths), self.metadata.class_distrib[class_name]
             assert (
                 img_count == exp_img_count
             ), f"bad image count for {class_name} (found {img_count} instead of {exp_img_count})"
             # we'll open a single image per class here to make sure the resolution is as expected...
             height, width = ssl4rs.utils.imgproc.get_image_shape_from_file(img_paths[0])
             assert (
-                height == self.image_shape[0] and width == self.image_shape[1]
+                height == self.metadata.image_shape[0] and width == self.metadata.image_shape[1]
             ), f"unexpected image shape (got {height}x{width}, expected 256x256)"
         # finally, prepare the global-to-classwise index range mapper for the getitem function
         self.image_idxs_ranges = [
             range(
-                sum(self.class_distrib[self.class_names[cidx]] for cidx in range(0, class_idx)),
-                sum(self.class_distrib[self.class_names[cidx]] for cidx in range(0, class_idx + 1)),
+                sum(self.metadata.class_distrib[self.metadata.class_names[cidx]] for cidx in range(0, class_idx)),
+                sum(self.metadata.class_distrib[self.metadata.class_names[cidx]] for cidx in range(0, class_idx + 1)),
             )
-            for class_idx, class_name in enumerate(self.class_names)
+            for class_idx, class_name in enumerate(self.metadata.class_names)
         ]
         # once we get here, we're ready to repackage the dataset!
 
@@ -148,15 +112,15 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             for class_idx, class_range in enumerate(self.image_idxs_ranges)
             if item in class_range
         )
-        class_name_slug = ssl4rs.utils.filesystem.slugify(self.class_names[class_idx])
+        class_name_slug = ssl4rs.utils.filesystem.slugify(self.metadata.class_names[class_idx])
         image_name = f"{class_name_slug}{sample_idx:02d}.tif"
         image_path = self.data_root_path / class_name_slug / image_name
         assert image_path.exists(), f"unexpected invalid image path in getitem: {image_path}"
         image = deeplake.read(str(image_path)).array
-        if image.shape != self.image_shape:
+        if image.shape != self.metadata.image_shape:
             image = cv.resize(
                 image,
-                dsize=(self.image_shape[1], self.image_shape[0]),
+                dsize=(self.metadata.image_shape[1], self.metadata.image_shape[0]),
                 interpolation=cv.INTER_CUBIC,
             )
         return dict(  # note: the tensor names here must match with the ones in `tensor_info`!
