@@ -232,7 +232,7 @@ def slugify(
 
 
 class WorkDirectoryContextManager:
-    """Context manager class used to change and revert the current working directory."""
+    """Context manager used to change and revert the current working directory."""
 
     def __init__(self, new_work_dir: typing.Union[typing.AnyStr, pathlib.Path]):
         """Saves the new working directory we'll be landing in once initialization is complete."""
