@@ -28,7 +28,7 @@ class ParserWrapper(DataParser):
         self.dataset = dataset  # should be read-only, as we'll cache the dataset size
         self._dataset_size: typing.Optional[int] = None
         if dataset_name == "AUTO":
-            dataset_name = self.ssl4rs.utils.filesystem.slugify(type(self.dataset).__name__)
+            dataset_name = ssl4rs.utils.filesystem.slugify(type(self.dataset).__name__)
         self._dataset_name = str(dataset_name)
         self._tensor_names: typing.List[str] = []  # will be filled when needed/available
 
