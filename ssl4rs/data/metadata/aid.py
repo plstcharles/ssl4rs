@@ -1,7 +1,6 @@
 """Defines static metadata for the AID dataset.
 
-See the following URL for more info on this dataset:
-https://captain-whu.github.io/AID/
+See the following URL for more info on this dataset: https://captain-whu.github.io/AID/
 """
 
 class_distrib = {
