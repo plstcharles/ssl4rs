@@ -10,6 +10,7 @@ import torch
 import torch.utils.data
 
 import ssl4rs.data.datamodules.utils
+import ssl4rs.data.metadata.aid
 import ssl4rs.data.parsers.aid
 import ssl4rs.data.repackagers.aid
 import ssl4rs.utils.config
@@ -30,9 +31,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     herein are mixed across different sources with GSDs between 0.5m and 8m.
     """
 
-    class_distrib = ssl4rs.data.repackagers.aid.DeepLakeRepackager.class_distrib
-    class_names = ssl4rs.data.repackagers.aid.DeepLakeRepackager.class_names
-    image_shape = ssl4rs.data.repackagers.aid.DeepLakeRepackager.image_shape
+    metadata = ssl4rs.data.metadata.aid
     split_seed: int = 42  # should not really vary, ever...
 
     # noinspection PyUnusedLocal
@@ -62,7 +61,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         assert data_dir.is_dir(), f"invalid AID dataset directory: {data_dir}"
         if data_dir.name != ".deeplake":
             deeplake_subdir = data_dir / ".deeplake"
-            all_class_subdirs = [data_dir / class_name for class_name in self.class_names]
+            all_class_subdirs = [data_dir / class_name for class_name in self.metadata.class_names]
             assert deeplake_subdir.is_dir() or all(
                 [d.is_dir() for d in all_class_subdirs]
             ), "dataset directory should contain .deeplake folder or a folder for each data class"
@@ -76,7 +75,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     @property
     def num_classes(self) -> int:
         """Returns the number of labels/classes in the dataset."""
-        return len(self.class_names)
+        return len(self.metadata.class_names)
 
     def _is_preparation_complete(self) -> bool:
         """Returns whether the dataset is prepared for setup/loading or not."""

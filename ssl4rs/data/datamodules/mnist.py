@@ -1,7 +1,7 @@
 """Implements a data module for the MNIST train/valid/test loaders.
 
 See the following URL for more info on this dataset:
-    https://pytorch.org/vision/stable/generated/torchvision.datasets.MNIST.html
+https://pytorch.org/vision/stable/generated/torchvision.datasets.MNIST.html
 """
 
 import pathlib

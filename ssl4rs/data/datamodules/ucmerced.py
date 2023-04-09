@@ -13,6 +13,7 @@ import torch
 import torch.utils.data
 
 import ssl4rs.data.datamodules.utils
+import ssl4rs.data.metadata.ucmerced
 import ssl4rs.data.parsers.ucmerced
 import ssl4rs.data.repackagers.ucmerced
 import ssl4rs.utils.config
@@ -34,15 +35,8 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         https://www.tensorflow.org/datasets/catalog/uc_merced
     """
 
-    class_distrib = ssl4rs.data.repackagers.ucmerced.DeepLakeRepackager.class_distrib
-    class_names = ssl4rs.data.repackagers.ucmerced.DeepLakeRepackager.class_names
-    image_shape = ssl4rs.data.repackagers.ucmerced.DeepLakeRepackager.image_shape
-    ground_sampling_distance = ssl4rs.data.repackagers.ucmerced.DeepLakeRepackager.ground_sampling_distance
+    metadata = ssl4rs.data.metadata.ucmerced
     split_seed: int = 42  # should not really vary, ever...
-
-    zip_download_url = "http://weegee.vision.ucmerced.edu/datasets/UCMerced_LandUse.zip"
-    """Direct URL that can be used to download the UC Merced Land Use dataset online."""
-    zip_file_md5_hash = "5b7ec56793786b6dc8a908e8854ac0e4"
 
     # noinspection PyUnusedLocal
     def __init__(
@@ -79,22 +73,22 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     @property
     def num_classes(self) -> int:
         """Returns the number of labels/classes in the dataset."""
-        return len(self.class_names)
+        return len(self.metadata.class_names)
 
     @classmethod
     def _download_and_unpack(cls, dataset_root_path: pathlib.Path) -> None:
         """Downloads and unpacks the UC Merced Land Use dataset to the specified path."""
         dataset_root_path.mkdir(parents=True, exist_ok=True)
         zip_path = ssl4rs.utils.filesystem.download_file(
-            url=cls.zip_download_url,
+            url=cls.metadata.zip_download_url,
             root=dataset_root_path,
             filename="UCMerced_LandUse.zip",
-            md5=cls.zip_file_md5_hash,
+            md5=cls.metadata.zip_file_md5_hash,
         )
         ssl4rs.utils.filesystem.extract_zip(zip_path, dataset_root_path)
         extected_dir_path = dataset_root_path / "UCMerced_LandUse"
         assert extected_dir_path.is_dir()
-        for class_name in cls.class_names:
+        for class_name in cls.metadata.class_names:
             class_name_slug = ssl4rs.utils.filesystem.slugify(class_name)
             expected_dir_path = extected_dir_path / "Images" / class_name_slug
             assert expected_dir_path.is_dir(), f"missing class dir: {expected_dir_path}"
