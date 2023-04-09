@@ -49,19 +49,25 @@ def get_logger(*args, **kwargs) -> logging.Logger:
 logger = get_logger(__name__)
 
 
-def setup_logging_for_analysis_script(level: int = logging.DEBUG) -> None:
+def setup_logging_for_analysis_script(level: int = logging.DEBUG) -> logging.Logger:
     """Sets up logging with some console-only verbose settings for analysis scripts.
 
     THIS SHOULD NEVER BE USED IN GENERIC CODE OR OUTSIDE AN ENTRYPOINT; in other words, the only
     place you should ever see this function get called is close to a `if __name__ == "__main__":`
-    statement in standalone analysis scripts.
+    statement in standalone analysis scripts. It should also never be called more than once, and
+    it will reset the handlers attached to the root logger.
+
+    The function returns a logger with the framework name which may be used/ignored as needed.
     """
     root = logging.getLogger()
+    for h in root.handlers:  # reset all root handlers, in case this is called multiple times
+        root.removeHandler(h)
     root.setLevel(level)
     formatter = logging.Formatter("[%(asctime)s][%(name)s][%(levelname)s] - %(message)s")
     stream_handler = logging.StreamHandler(stream=sys.stdout)
     stream_handler.setFormatter(formatter)
     root.addHandler(stream_handler)
+    return get_logger("ssl4rs")
 
 
 @pl_utils.rank_zero_only
