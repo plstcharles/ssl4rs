@@ -1,65 +1,104 @@
 import typing
 
-import numpy as np
-import torch.utils.data
-import torchvision
+import ssl4rs.utils.logging
+from ssl4rs.data.parsers.utils.base import DataParser
 
-import ssl4rs
+logger = ssl4rs.utils.logging.get_logger(__name__)
 
 
-class ParserWrapper(torch.utils.data.dataset.Dataset):
-    """Base interface used to wrap generic data parsers.
+class ParserWrapper(DataParser):
+    """Base interface used to wrap generic data parsers (e.g. from other DL frameworks).
 
     This is meant to provide a compatibility layer between data parsers that might be imported from
-    other framework and that do not have a simple way to interface with the rest of the framework,
+    other framework and that do not have a simple way to interface with the rest of this framework,
     e.g. to apply batch-level transformation operations and generate batch identifiers.
     """
 
     def __init__(
         self,
         dataset: typing.Any,
-        batch_transforms: typing.Sequence["ssl4rs.data.BatchTransformType"] = (),
-        batch_id_prefix: typing.AnyStr = "",
-        dataset_id_prefix: typing.AnyStr = "AUTO",  # if 'AUTO', will use wrapped object class name
+        dataset_name: typing.AnyStr = "AUTO",  # if 'AUTO', will use wrapped object class name
+        batch_transforms: "ssl4rs.data.BatchTransformType" = None,
+        batch_id_prefix: typing.Optional[typing.AnyStr] = None,
     ):
-        """Parses data from a PyTorch-Dataset-interface compatible object.
-
-        For the batch identifiers, the default format provided by the `__getitem__` function will
-        be the dataset identifier prefix, followed by the batch identifier prefix, followed by the
-        batch identifier itself (`batchXXXXXXXX`, with the index-specific number padded to 8
-        digits).
-        """
+        """Validates that the provided PyTorch-Dataset-compatible object can be wrapped."""
+        super().__init__(batch_transforms=batch_transforms, batch_id_prefix=batch_id_prefix)
         assert hasattr(dataset, "__len__"), "missing mandatory dataset length attribute!"
-        dataset_size = len(dataset)
-        assert dataset_size >= 0, f"invalid dataset sample count: {dataset_size}"
         assert hasattr(dataset, "__getitem__"), "missing mandatory dataset item getter!"
-        self.dataset = dataset
-        if batch_transforms is not None and len(batch_transforms) > 0:
-            batch_transforms = torchvision.transforms.Compose(batch_transforms)
-        self.batch_transforms = batch_transforms
-        self.batch_id_prefix = str(batch_id_prefix)
-        if dataset_id_prefix == "AUTO":
-            dataset_id_prefix = ssl4rs.utils.filesystem.slugify(type(self.dataset).__name__)
-        self.dataset_id_prefix = str(dataset_id_prefix)
+        self.dataset = dataset  # should be read-only, as we'll cache the dataset size
+        self._dataset_size: typing.Optional[int] = None
+        if dataset_name == "AUTO":
+            dataset_name = self.ssl4rs.utils.filesystem.slugify(type(self.dataset).__name__)
+        self._dataset_name = str(dataset_name)
+        self._tensor_names: typing.List[str] = []  # will be filled when needed/available
 
     def __len__(self) -> int:
-        """Returns the total size (data sample count) of the dataset."""
-        return len(self.dataset)
+        """Returns the total size (in terms of data batch count) of the dataset.
 
-    def __getitem__(self, item: int) -> typing.Dict[str, typing.Any]:
-        """Returns a single data sample loaded from the dataset.
-
-        If the wrapper was provided with a set of transforms, those will be applied here.
-        Afterwards, the batch identifier will be generated and added to the dictionary for the
-        loaded sample.
+        It might be called fairly often to validate indexing ranges, so in order to avoid issues
+        with dataset implementations that re-iterate over their entire data in order to figure out
+        the batch count each time this function is called, we cache that value.
         """
-        if np.issubdtype(type(item), np.integer):
-            item = int(item)
-        batch = self.dataset[item]
-        if self.batch_transforms:
-            batch = self.batch_transforms(batch)
-        assert isinstance(batch, dict), "unexpected data sample type (should be dict)"
-        if "batch_id" not in batch:
-            prefix = f"{self.batch_id_prefix}_" if self.batch_id_prefix else ""
-            batch["batch_id"] = f"{self.dataset_id_prefix}_{prefix}batch{item:08d}"
+        if self._dataset_size is None:
+            self._dataset_size = len(self.dataset)  # cached in case it takes a while to get it
+        return self._dataset_size
+
+    def __getitem__(self, index: typing.Hashable) -> typing.Dict[str, typing.Any]:
+        """Returns a single data batch loaded from the dataset at the given index."""
+        batch = super().__getitem__(index)  # load the batch data using the base class impl
+        if not self._tensor_names:  # if we have not seen tensor names yet, fill them in
+            # note: this assumes that ALL data batches have the same attribs across all indices
+            self._tensor_names = [name for name in batch.keys() if name != self.batch_id_key]
         return batch
+
+    def _get_raw_batch(
+        self,
+        index: typing.Hashable,
+    ) -> typing.Any:
+        """Returns a single data batch loaded from the dataset at a specified index.
+
+        In its raw version, the loaded data can be in any format (tensors, arrays, tuples, dicts,
+        references/views inside the parent dataset object, ...). We assume that if it is not a
+        string-keyed dictionary object (as is expected as the output of the `__getitem__`
+        function), it will be converted into one by the batch transforms.
+        """
+        # we fetch the corresponding batch data for the given index from the wrapped dataset object;
+        # if this line fails, it means we do not have a PyTorch-Dataset-compatible object
+        return self.dataset[index]
+
+    @property
+    def tensor_names(self) -> typing.List[str]:
+        """Names of the data tensors that will be provided in the loaded batches.
+
+        In this particular class, the tensor names will be filled in when we first load a data
+        batch, so if this function returns nothing, make sure you call `__getitem__` at least once
+        before calling it.
+
+        Note that additional tensors and other attributes may be loaded as well, but these are the
+        'primary' fields that should be expected by downstream processing stages.
+
+        Typical 'tensor' names are include: 'image', 'label', 'mask', etc.
+        """
+        return self._tensor_names
+
+    @property
+    def dataset_info(self) -> typing.Dict[str, typing.Any]:
+        """Returns metadata information parsed from the dataset (if any)."""
+        return dict(name=self.dataset_name)
+
+    @property
+    def dataset_name(self) -> typing.AnyStr:
+        """Returns the dataset name used to identify this particular dataset."""
+        return self._dataset_name
+
+    def summary(self, *args, **kwargs) -> None:
+        """Prints a summary of the dataset using the default logger.
+
+        This function should be easy-to-call (parameter-free, if possible) and fast-to-return
+        (takes seconds or tens-of-seconds at most) in order to remain friendly to high-level users.
+        What it does specifically is totally up to the derived class.
+
+        All outputs should be sent to the default logger.
+        """
+        logger.info(self)
+        logger.info(f"dataset_name={self.dataset_name}, length={len(self)}")
