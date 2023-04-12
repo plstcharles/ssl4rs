@@ -4,9 +4,9 @@ import pathlib
 import typing
 
 import hydra
+import lightning.pytorch as pl
 import numpy as np
 import omegaconf
-import pytorch_lightning as pl
 import torch.utils.data
 
 import ssl4rs

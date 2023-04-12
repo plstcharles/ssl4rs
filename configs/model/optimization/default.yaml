@@ -1,7 +1,8 @@
-# For more info on the contents and default values in this file, refer to PyTorch-Lightning:
-# https://pytorch-lightning.readthedocs.io/en/latest/common/lightning_module.html#configure-optimizers
+# For more info on the contents and default values in this file, refer to Lightning:
+# https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#configure-optimizers
+# (parameters and defaults last checked on 2023/10/04 for Lightning 2.0.1)
 
-optimizer:
+optimizer: # note: the optimizer will always be created while providing it with model parameters
   _target_: torch.optim.Adam # it's a good default, really! https://arxiv.org/abs/1910.05446
   # lr: 0.001
   # betas: [0.9, 0.999]
@@ -9,7 +10,7 @@ optimizer:
   # weight_decay: 0
   # amsgrad: False
 
-lr_scheduler:
+lr_scheduler: # note: the scheduler will always be created while providing it with the optimizer
   scheduler: # this field is actually MANDATORY when specifying the lr scheduler config!
     _target_: torch.optim.lr_scheduler.StepLR # just a dummy one, really, pick whatever you want
     step_size: 1000 # again, unlikely we get there, this is just a dummy value

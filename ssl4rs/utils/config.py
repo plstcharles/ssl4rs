@@ -14,11 +14,12 @@ import dotenv
 import hydra
 import hydra.conf
 import hydra.core.hydra_config
+import lightning.pytorch as pl
+import lightning.pytorch.loggers as pl_loggers
 import omegaconf
-import pytorch_lightning
+import torch
 import torch.cuda
-
-import ssl4rs.utils.logging
+import torch.distributed
 
 DictConfig = typing.Union[typing.Dict[typing.AnyStr, typing.Any], omegaconf.DictConfig]
 """Type for configuration dictionaries that might be regular dicts or omegaconf dicts."""
@@ -35,6 +36,8 @@ def extra_inits(
     output_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
 ) -> None:
     """Runs optional utilities initializations, controlled by config flags."""
+    import ssl4rs.utils.logging  # used here to avoid circular dependencies
+
     logging.captureWarnings(logging_captures_warnings)
     if logger is None:
         logger = ssl4rs.utils.logging.get_logger(__name__)
@@ -81,14 +84,14 @@ def clear_global_config() -> None:
 
 
 def seed_everything(config: omegaconf.DictConfig) -> int:
-    """Pulls the seed from the config and resets the RNGs with it using pytorch-lightning.
+    """Pulls the seed from the config and resets the RNGs with it using Lightning.
 
     If the seed is not set (i.e. its value is `None`), a new seed will be picked randomly and set
     inside the config dictionary. In any case, the seed that is set is returned by the function.
     """
     seed, seed_workers = config.get("seed", None), config.get("seed_workers")
     assert isinstance(seed_workers, bool)
-    set_seed = pytorch_lightning.seed_everything(seed, workers=seed_workers)
+    set_seed = pl.seed_everything(seed, workers=seed_workers)
     if seed is None:
         config["seed"] = set_seed
     return set_seed
@@ -129,6 +132,27 @@ def get_timestamp() -> str:
     return time.strftime("%Y%m%d-%H%M%S")
 
 
+def get_failsafe_rank(group: typing.Optional[torch.distributed.ProcessGroup] = None) -> int:
+    """Returns the result of torch.distributed.get_rank, or zero if not in a process group."""
+    if torch.distributed.is_initialized():
+        return torch.distributed.get_rank(group)
+    return 0
+
+
+def get_failsafe_worldsize(group: typing.Optional[torch.distributed.ProcessGroup] = None) -> int:
+    """Returns the result of torch.distributed.get_world_size, or -1 if not in a process group."""
+    if torch.distributed.is_initialized():
+        torch.distributed.get_world_size(group)
+    return -1
+
+
+def get_failsafe_backend(group: typing.Optional[torch.distributed.ProcessGroup] = None) -> str:
+    """Returns the result of torch.distributed.get_backend, or "n/a" if not in a process group."""
+    if torch.distributed.is_initialized():
+        return torch.distributed.get_backend(group)
+    return "n/a"
+
+
 def get_git_revision_hash() -> str:
     """Returns a print-friendly hash (SHA1 signature) for the underlying git repository (if found).
 
@@ -146,9 +170,12 @@ def get_git_revision_hash() -> str:
         return "git-revision-unknown"
 
 
-def get_runtime_tags(with_gpu_info: bool = False) -> typing.Mapping[str, typing.Any]:
+def get_runtime_tags(
+    with_gpu_info: bool = False,
+    with_distrib_info: bool = False,
+) -> typing.Mapping[str, typing.Any]:
     """Returns a map (dictionary) of tags related to the current runtime."""
-    import ssl4rs  # used here to avoid circular dependencies
+    import ssl4rs  # used here to avoid circular dependencies  # noqa
     import ssl4rs.utils.filesystem
 
     tags = {
@@ -170,6 +197,14 @@ def get_runtime_tags(with_gpu_info: bool = False) -> typing.Mapping[str, typing.
             "device_names": [torch.cuda.get_device_name(i) for i in range(dev_count)],
             "device_capabilities": [torch.cuda.get_device_capability(i) for i in range(dev_count)],
         }
+    if with_distrib_info:
+        tags["distrib"] = {
+            "is_available": torch.distributed.is_available(),
+            "is_initialized": torch.distributed.is_initialized(),
+            "backend": get_failsafe_backend(),
+            "rank": get_failsafe_rank(),
+            "world_size": get_failsafe_worldsize(),
+        }
     return tags
 
 
@@ -181,16 +216,16 @@ def get_installed_packages() -> typing.List[str]:
     a grain of salt (i.e. just for logging is fine).
     """
     try:
-        import pip
+        import pip  # noqa
 
         # noinspection PyUnresolvedReferences
         pkgs = pip.get_installed_distributions()
         return list(sorted(f"{pkg.key} {pkg.version}" for pkg in pkgs))
     except (ImportError, AttributeError):
         try:
-            import pkg_resources as pkgr
+            import pkg_resources as pkgr  # noqa
 
-            return list(sorted(str(pkg) for pkg in pkgr.working_set))
+            return list(sorted(str(pkg) for pkg in pkgr.working_set))  # noqa
         except (ImportError, AttributeError):
             return []
 
@@ -310,6 +345,56 @@ def get_latest_checkpoint(config: omegaconf.DictConfig) -> typing.Optional[pathl
     if len(available_ckpts) == 0:
         return None
     return sorted(available_ckpts)[-1]
+
+
+def get_callbacks(config: omegaconf.DictConfig) -> typing.List[pl.Callback]:
+    """Returns the list of callbacks to pass to the trainer for the current run.
+
+    If no callbacks are specified, the list will be empty.
+    """
+    import ssl4rs.utils.logging  # used here to avoid circular dependencies
+
+    logger = ssl4rs.utils.logging.get_logger(__name__)
+    callbacks: typing.List[pl.Callback] = []
+    if "callbacks" in config:
+        for cb_name, cb_config in config.callbacks.items():
+            logger.info(f"Instantiating '{cb_name}' callback: {cb_config._target_}")  # noqa
+            callbacks.append(hydra.utils.instantiate(cb_config))
+    return callbacks
+
+
+def get_loggers(config: omegaconf.DictConfig) -> typing.List[pl_loggers.Logger]:
+    """Returns the list of callbacks to pass to the trainer for the current run.
+
+    If no callbacks are specified, the list will be empty.
+    """
+    import ssl4rs.utils.logging  # used here to avoid circular dependencies
+
+    logger = ssl4rs.utils.logging.get_logger(__name__)
+    loggers: typing.List[pl_loggers.Logger] = []
+    if "logger" in config:
+        for lg_name, lg_config in config.logger.items():
+            logger.info(f"Instantiating '{lg_name}' logger: {lg_config._target_}")  # noqa
+            loggers.append(hydra.utils.instantiate(lg_config))
+    return loggers
+
+
+def get_model(config: omegaconf.DictConfig) -> torch.nn.Module:
+    """Returns the instantiated and potentially compiled model to pass to the trainer."""
+    import ssl4rs.utils.logging  # used here to avoid circular dependencies
+
+    logger = ssl4rs.utils.logging.get_logger(__name__)
+    logger.info(f"Instantiating model: {config.model._target_}")  # noqa
+    model: pl.LightningModule = hydra.utils.instantiate(config.model)
+    if config.get("compile_model", False):
+        logger.debug("Compiling model...")
+        compile_model_kwargs = config.get("compile_model_kwargs", None)
+        if not compile_model_kwargs:
+            compile_model_kwargs = {}
+        assert isinstance(compile_model_kwargs, (dict, omegaconf.DictConfig))
+        model = torch.compile(model, **compile_model_kwargs)
+        logger.debug("Compilation complete")
+    return model
 
 
 def init_hydra_and_compose_config(

@@ -10,6 +10,7 @@ job_folder_name: ${job_name} # defines the job folder name inside the run direct
 run_and_job_name: ${run_name}_${oc.select:job_name,0} # always-valid version of the run+job name
 checkpoint_dir_path: ${hydra:runtime.output_dir}/ckpts # path to the directory where to save ckpts
 checkpoint_name: e{epoch:03d}_s{step:06d}.${utils.curr_timestamp} # default pattern will be sortable
+default_num_workers: 4 # default number of workers (processes) to run in data loaders
 print_config: False # toggles whether to pretty-print the config at the start of the run
 ignore_warnings: False # used to disable python warnings if they annoy you
 log_installed_pkgs: True # toggles whether to log all installed packages in the python env

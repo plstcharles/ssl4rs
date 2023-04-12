@@ -10,8 +10,8 @@ flake8  # code formatting
 flake8-docstrings  # code formatting
 gitpython  # for git i/o and hash tagging
 h5py  # i/o library for HDF5 datasets
-hydra-colorlog==1.2.0  # configuration/logging
-hydra-core==1.3.0  # configuration/logging
+hydra-colorlog~=1.2  # configuration/logging
+hydra-core~=1.3  # configuration/logging
 imagesize  # generic imgproc utility
 isort  # code formatting
 jupyter  # for data exploration notebooks
@@ -19,22 +19,24 @@ lightning-bolts==0.6.0.post1  # for extra lightning goodies
 lz4  # data compression
 matplotlib  # visualization/logging
 mlflow  # visualization/logging
-mock  # testingire
+mock  # testing
 nbstripout  # code formatting
 numpy  # generic data processing utility
 opencv-python  # generic image processing utility
 pandas  # used to read/write some simple tabular data
+Pillow~=9.3  # basic image i/o + processing
 pre-commit # code formatting and static analysis
 pyrootutils # tooling for python proj
 pytest  # testing
 python-dotenv  # loads env variables from .env
-pytorch-lightning==2.0.1  # training helper
+lightning~=2.0  # pytorch training helper
 pyyaml  # configuration/logging
 rich  # better text formatting
 segmentation-models-pytorch  # model architectures
 setuptools  # package install tool
-torch>=1.10.0  # deep learning backbone
-torchmetrics>=0.11.0  # model evaluation
-torchvision>=0.11.0  # model architectures + data utilities
+tensorboard  # visualization/logging
+torch~=2.0  # deep learning backbone
+torchmetrics~=0.11  # model evaluation
+torchvision~=0.15  # model architectures + data utilities
 tqdm  # logging and progress bars
 wandb  # visualization/logging

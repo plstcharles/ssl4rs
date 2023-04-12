@@ -4,10 +4,8 @@ import typing
 import hydra
 import hydra.core.hydra_config
 import hydra.types
+import lightning.pytorch as pl
 import omegaconf
-import pytorch_lightning as pl
-import pytorch_lightning.callbacks as pl_callbacks
-import pytorch_lightning.loggers as pl_log
 
 import ssl4rs
 
@@ -34,25 +32,14 @@ def train(config: omegaconf.DictConfig) -> typing.Optional[float]:
     logger.info(f"Output directory: {output_dir.absolute()}")
     ssl4rs.utils.config.extra_inits(config, output_dir=output_dir)
 
-    logger.info(f"Instantiating datamodule: {config.data.datamodule._target_}")
+    logger.info(f"Instantiating datamodule: {config.data.datamodule._target_}")  # noqa
     datamodule: pl.LightningDataModule = hydra.utils.instantiate(config.data.datamodule)
 
-    logger.info(f"Instantiating model: {config.model._target_}")
-    model: pl.LightningModule = hydra.utils.instantiate(config.model)
+    model = ssl4rs.utils.config.get_model(config)
+    callbacks = ssl4rs.utils.config.get_callbacks(config)
+    loggers = ssl4rs.utils.config.get_loggers(config)
 
-    callbacks: typing.List[pl.Callback] = []
-    if "callbacks" in config:
-        for cb_name, cb_config in config.callbacks.items():
-            logger.info(f"Instantiating '{cb_name}' callback: {cb_config._target_}")
-            callbacks.append(hydra.utils.instantiate(cb_config))
-
-    loggers: typing.List[pl_log.Logger] = []
-    if "logger" in config:
-        for lg_name, lg_config in config.logger.items():
-            logger.info(f"Instantiating '{lg_name}' logger: {lg_config._target_}")
-            loggers.append(hydra.utils.instantiate(lg_config))
-
-    logger.info(f"Instantiating trainer: {config.trainer._target_}")
+    logger.info(f"Instantiating trainer: {config.trainer._target_}")  # noqa
     trainer: pl.Trainer = hydra.utils.instantiate(
         config.trainer,
         callbacks=callbacks,
@@ -86,12 +73,12 @@ def train(config: omegaconf.DictConfig) -> typing.Optional[float]:
 
     target_metric_val: typing.Optional[float] = None
     if not trainer.interrupted:
-        has_ckpt_callback = isinstance(trainer.checkpoint_callback, pl_callbacks.ModelCheckpoint)
+        has_ckpt_callback = isinstance(trainer.checkpoint_callback, pl.callbacks.ModelCheckpoint)
         if not completed_training or config.trainer.get("fast_dev_run") or not has_ckpt_callback:
             best_ckpt_path = None
         else:
             assert hasattr(trainer.checkpoint_callback, "best_model_path"), "missing callback attrib?"
-            best_ckpt_path = trainer.checkpoint_callback.best_model_path
+            best_ckpt_path = trainer.checkpoint_callback.best_model_path  # noqa
             logger.info(f"Best model ckpt at: {best_ckpt_path}")
         target_metric_name = config.get("target_metric")
         if target_metric_name is not None and not config.trainer.get("fast_dev_run"):

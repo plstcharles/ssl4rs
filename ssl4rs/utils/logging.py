@@ -5,16 +5,15 @@ import pathlib
 import sys
 import typing
 
+import lightning.pytorch as pl
+import lightning.pytorch.loggers as pl_loggers
+import lightning.pytorch.utilities as pl_utils
 import omegaconf
-import pytorch_lightning
-import pytorch_lightning.loggers
-import pytorch_lightning.utilities
-import pytorch_lightning.utilities.memory
 import rich.syntax
 import rich.tree
+import torch
+import torch.distributed
 import yaml
-
-import ssl4rs
 
 default_print_configs = (
     "data",
@@ -43,7 +42,7 @@ def get_logger(*args, **kwargs) -> logging.Logger:
         "critical",
     )
     for level in possible_log_levels:
-        setattr(logger, level, pytorch_lightning.utilities.rank_zero_only(getattr(logger, level)))
+        setattr(logger, level, pl_utils.rank_zero_only(getattr(logger, level)))
     return logger
 
 
@@ -65,7 +64,7 @@ def setup_logging_for_analysis_script(level: int = logging.DEBUG) -> None:
     root.addHandler(stream_handler)
 
 
-@pytorch_lightning.utilities.rank_zero_only
+@pl_utils.rank_zero_only
 def print_config(
     config: omegaconf.DictConfig,
     print_configs: typing.Sequence[str] = default_print_configs,
@@ -97,18 +96,18 @@ def print_config(
     rich.print(tree)
 
 
-@pytorch_lightning.utilities.rank_zero_only
+@pl_utils.rank_zero_only
 def log_hyperparameters(
     config: omegaconf.DictConfig,
-    model: pytorch_lightning.LightningModule,
-    datamodule: pytorch_lightning.LightningDataModule,
-    trainer: pytorch_lightning.Trainer,
-    callbacks: typing.List[pytorch_lightning.Callback],
-    loggers: typing.List[pytorch_lightning.loggers.Logger],
+    model: typing.Union[pl.LightningModule, torch.nn.Module],
+    datamodule: pl.LightningDataModule,
+    trainer: pl.Trainer,
+    callbacks: typing.List[pl.Callback],
+    loggers: typing.List[pl_loggers.Logger],
 ) -> None:
     """Forwards all notable/interesting/important hyperparameters to the trainer's logger.
 
-    If the model does not have a logger that implements the `log_hyperparams`, this function does
+    If the trainer does not have a logger that implements the `log_hyperparams`, this function does
     nothing. Note that hyperparameters (at least, those defined via config files) will always be
     automatically logged in `${hydra:runtime.output_dir}`.
     """
@@ -120,8 +119,6 @@ def log_hyperparameters(
     hparams["model/params/total"] = sum(p.numel() for p in model.parameters())
     hparams["model/params/trainable"] = sum(p.numel() for p in model.parameters() if p.requires_grad)
     hparams["model/params/non_trainable"] = sum(p.numel() for p in model.parameters() if not p.requires_grad)
-    model_size_in_MB = pytorch_lightning.utilities.memory.get_model_size_mb(model)
-    hparams["model/size_in_MB"] = model_size_in_MB
     # data and training configs should also go in for sure (they should also always exist)
     hparams["data"] = config["data"]
     hparams["trainer"] = config["trainer"]
@@ -145,37 +142,50 @@ def log_hyperparameters(
 
 
 def get_log_extension_slug(config: omegaconf.DictConfig) -> str:
-    """Returns a log file extension that includes a timestamp (for non-overlapping sortable logs).
+    """Returns a log file extension that includes a timestamp (for non-overlapping, sortable logs).
 
     The 'rounded seconds since epoch' portion will be computed when this function is called, whereas
     the timestamp will be derived from the hydra config's `utils.curr_timestamp` value. This will
     help make sure that similar logs saved within the same run will not overwrite each other.
 
     The output format is:
-        `.{TIMESTAMP_WITH_DATE_AND_TIME}.{ROUNDED_SECS_SINCE_EPOCH}.log`
+        `.{TIMESTAMP_WITH_DATE_AND_TIME}.{ROUNDED_SECS_SINCE_EPOCH}.rank{RANK_ID}.log`
     """
+    import ssl4rs.utils.config  # doing it here to avoid circular imports
+
     curr_time = datetime.datetime.now()
     epoch_time_sec = int(curr_time.timestamp())  # for timezone independence
     timestamp = config.utils.curr_timestamp
-    return f".{timestamp}.{epoch_time_sec}.log"
+    rank_id = ssl4rs.utils.config.get_failsafe_rank()
+    return f".{timestamp}.{epoch_time_sec}.rank{rank_id:02d}.log"
 
 
 def log_runtime_tags(
     output_dir: typing.Union[typing.AnyStr, pathlib.Path],
     with_gpu_info: bool = True,
+    with_distrib_info: bool = True,
     log_extension: typing.AnyStr = ".log",
 ) -> None:
     """Saves a list of all runtime tags to a log file.
 
+    Note: this may run across multiple processes simultaneously as long as the rank ID is used
+    inside the log file extension.
+
     Args:
         output_dir: the output directory inside which we should be saving the package log.
         with_gpu_info: defines whether to log available GPU device info or not.
+        with_distrib_info: defines whether to log available distribution backend/rank info or not.
         log_extension: extension to use in the log's file name.
     """
+    import ssl4rs.utils.config  # doing it here to avoid circular imports
+
     output_dir = pathlib.Path(output_dir).expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
     output_log_path = output_dir / f"runtime_tags{log_extension}"
-    tag_dict = ssl4rs.utils.config.get_runtime_tags(with_gpu_info=with_gpu_info)
+    tag_dict = ssl4rs.utils.config.get_runtime_tags(
+        with_gpu_info=with_gpu_info,
+        with_distrib_info=with_distrib_info,
+    )
     tag_dict = omegaconf.OmegaConf.create(tag_dict)  # type: ignore
     with open(str(output_log_path), "w") as fd:
         fd.write(omegaconf.OmegaConf.to_yaml(tag_dict))
@@ -187,10 +197,15 @@ def log_installed_packages(
 ) -> None:
     """Saves a list of all packages installed in the current environment to a log file.
 
+    Note: this may run across multiple processes simultaneously as long as the rank ID is used
+    inside the log file extension.
+
     Args:
         output_dir: the output directory inside which we should be saving the package log.
         log_extension: extension to use in the log's file name.
     """
+    import ssl4rs.utils.config  # doing it here to avoid circular imports
+
     output_dir = pathlib.Path(output_dir).expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
     output_log_path = output_dir / f"installed_pkgs{log_extension}"
@@ -209,6 +224,9 @@ def log_interpolated_config(
     If a configuration parameter cannot be interpolated because it is missing, this will throw
     an exception.
 
+    Note: this may run across multiple processes simultaneously as long as the rank ID is used
+    inside the log file extension.
+
     Note: this file should never be used to try to reload a completed run! (refer to hydra
     documentation on how to do that instead)
 
@@ -224,17 +242,18 @@ def log_interpolated_config(
         yaml.dump(omegaconf.OmegaConf.to_object(config), fd)
 
 
+@pl_utils.rank_zero_only
 def finalize_logs(
     config: omegaconf.DictConfig,
-    model: pytorch_lightning.LightningModule,
-    datamodule: pytorch_lightning.LightningDataModule,
-    trainer: pytorch_lightning.Trainer,
-    callbacks: typing.List[pytorch_lightning.Callback],
-    loggers: typing.List[pytorch_lightning.loggers.Logger],
+    model: pl.LightningModule,
+    datamodule: pl.LightningDataModule,
+    trainer: pl.Trainer,
+    callbacks: typing.List[pl.Callback],
+    loggers: typing.List[pl_loggers.Logger],
 ) -> None:
     """Makes sure everything is logged and closed properly before ending the session."""
     for lg in loggers:
-        if isinstance(lg, pytorch_lightning.loggers.wandb.WandbLogger):
+        if isinstance(lg, pl_loggers.wandb.WandbLogger):
             # without this, sweeps with wandb logger might crash!
             import wandb
 

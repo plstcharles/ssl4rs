@@ -1,10 +1,8 @@
 import pathlib
-import typing
 
 import hydra
+import lightning.pytorch as pl
 import omegaconf
-import pytorch_lightning as pl
-import pytorch_lightning.loggers as pl_log
 
 import ssl4rs
 
@@ -28,17 +26,16 @@ def test(config: omegaconf.DictConfig) -> None:
     logger.info(f"Instantiating datamodule: {config.data.datamodule._target_}")
     datamodule: pl.LightningDataModule = hydra.utils.instantiate(config.data.datamodule)
 
-    logger.info(f"Instantiating model: {config.model._target_}")
-    model: pl.LightningModule = hydra.utils.instantiate(config.model)
-
-    loggers: typing.List[pl_log.Logger] = []
-    if "logger" in config:
-        for lg_name, lg_config in config.logger.items():
-            logger.info(f"Instantiating '{lg_name}' logger: {lg_config._target_}")
-            loggers.append(hydra.utils.instantiate(lg_config))
+    model = ssl4rs.utils.config.get_model(config)
+    callbacks = ssl4rs.utils.config.get_callbacks(config)
+    loggers = ssl4rs.utils.config.get_loggers(config)
 
     logger.info(f"Instantiating trainer: {config.trainer._target_}")
-    trainer: pl.Trainer = hydra.utils.instantiate(config.trainer, logger=loggers)
+    trainer: pl.Trainer = hydra.utils.instantiate(
+        config.trainer,
+        callbacks=callbacks,
+        logger=loggers,
+    )
 
     logger.info("Logging hyperparameters...")
     ssl4rs.utils.logging.log_hyperparameters(
@@ -46,7 +43,7 @@ def test(config: omegaconf.DictConfig) -> None:
         model=model,
         datamodule=datamodule,
         trainer=trainer,
-        callbacks=[],
+        callbacks=callbacks,
         loggers=loggers,
     )
 

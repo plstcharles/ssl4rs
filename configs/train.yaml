@@ -13,7 +13,7 @@ defaults:
   - output: default.yaml # output configs define the root path and name patterns to use for logging
   - data: default.yaml # data configs define the datamodule and dataloaders to instantiate
   - model: default.yaml # model configs define the LightningModule-derived models to instantiate
-  - callbacks: default.yaml # callbacks configs define pytorch lightning callbacks to be enabled
+  - callbacks: default.yaml # callbacks configs define which lightning callbacks will be enabled
   - logger: default.yaml # logger configs define what kind of logging to use (e.g. MLFlow, wandb)
   - trainer: default.yaml # trainer configs define the (lightning-derived) trainer to instantiate
   - experiment: null # experiment configs allow for overrides and version control of all settings

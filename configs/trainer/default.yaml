@@ -1,45 +1,48 @@
-_target_: pytorch_lightning.Trainer
+_target_: lightning.pytorch.Trainer
 
-# For more information on the following hyperparameters, see the PyTorch Lightning documentation:
-# https://pytorch-lightning.readthedocs.io/en/latest/api/pytorch_lightning.trainer.trainer.Trainer.html#trainer
-# ... note that the 'callbacks' and 'logger' arguments are handled based on their respective configs!
+# For more information on the following hyperparameters, see the Lightning documentation:
+# https://lightning.ai/docs/pytorch/stable/common/trainer.html
+# (parameters and defaults last checked on 2023/10/04 for Lightning 2.0.1)
+
+# Note that the 'callbacks' and 'logger' arguments are handled based on their respective config
+# directories, meaning that they should NEVER be specified here!
 
 accelerator: auto # defines the 'accelerator' (device type) to use (e.g. gpu, cpu, tpu, ...)
-# accumulate_grad_batches: null  # defines whether we should do grad accumulation on multiple batches
-# amp_backend: native  # defines the automatic mixed precision backend to use ('native' or 'apex')
-# auto_select_gpus: False  # defines whether to auto-select GPUs when 'gpus' or 'devices' is an int
-# benchmark: null  # defines whether to set 'torch.backends.cnn.benchmark' to true or not
-# enable_checkpointing: True  # toggles auto-model-checkpointing if no such callback is provided
-check_val_every_n_epoch: 1 # toggles whether to do validation each N epoch instead of every N steps
-default_root_dir: ${hydra:runtime.output_dir} # default path for logs/ckpts when not set in loggers
-# detect_anomaly: False  # toggles whether to turn on the 'anomaly' (NaN/Inf) detector while training
-# deterministic: null  # toggles whether pytorch should only use deterministic algos or not
-# fast_dev_run: False  # toggles whether to run a 'fast run' (with 1x train/valid/test batch only)
+# strategy: auto # defines what specific training strategy to use if a special one is needed
 devices: auto # defines the number of devices or the device IDs to run on by default
-# gradient_clip_val: null  # defines the value at which to clip gradients (if any)
-# gradient_clip_algorithm: norm  # defines the gradient clipping algorithm to use (if needed)
-# limit_train_batches: 1.0  # defines the ratio or number of available batches to use during training
-# limit_val_batches: 1.0  # defines the ratio or number of available batches to use during validation
-# limit_test_batches: 1.0  # defines the ratio or number of available batches to use during testing
-# limit_predict_batches: 1.0  # defines the ratio or number of available batches to do predictions on
-# enable_progress_bar: True  # toggles auto-progress-display if no such callback is already provided
-# profiler: null  # selects what step to profile while running the trainer looking for bottlenecks
-# overfit_batches: 0.0  # selects a fraction or number of train/valid batches to overfit on
-# plugins: null  # defines the list of plugins to use while training (if any)
-# precision: 32  # defines the precision to use (can be 64, 32, 16, or bf16)
+# num_nodes: 1 # number of GPU nodes to use while training in a distributed fashion
+# precision: 32-true # defines the precision to use (can be 64, 32, 16, bf16, ...)
+# logger: DO NOT USE ME! (we will always provide these at runtime based on the loggers config
+# logger: DO NOT USE ME! (we will always provide these at runtime based on the callbacks config
+# fast_dev_run: False # toggles whether to run a 'fast run' (with 1x train/valid/test batch only)
 max_epochs: 10 # defines the maximum number of epochs to train for, stopping if it is reached
-# min_epochs: null  # defines the minimum number of epochs to train for without early stopping
-# max_steps: -1  # defines the maximum number of steps to train for, stopping if it is reached
-# min_steps: null  # defines the minimum number of steps to train for without early stopping
-# max_time: null  # defines the maximum amount of time to train for, stopping if it is reached
-# num_nodes: 1  # number of GPU nodes to use while training in a distributed fashion
+# min_epochs: null # defines the minimum number of epochs to train for without early stopping
+# max_steps: -1 # defines the maximum number of steps to train for, stopping if it is reached
+# min_steps: null # defines the minimum number of steps to train for without early stopping
+# max_time: null # defines the maximum amount of time to train for, stopping if it is reached
+# limit_train_batches: null # defines the ratio or number of available batches to use during training
+# limit_val_batches: null # defines the ratio or number of available batches to use during validation
+# limit_test_batches: null # defines the ratio or number of available batches to use during testing
+# limit_predict_batches: null # defines the ratio or number of available batches to do predictions on
+# overfit_batches: 0.0 # selects a fraction or number of train/valid batches to overfit on
+# val_check_interval: null # defines how often to run validation (as a train fraction or batch count)
+check_val_every_n_epoch: 1 # toggles whether to do validation each N epoch instead of every N steps
 num_sanity_val_steps: 2 # defines the number of validation batches to cycle through before training
-# reload_dataloaders_every_n_epochs: 0  # defines the frequency at which to reload data loaders
-# replace_sampler_ddp: True  # explicitly enables or disables sampler replacement with DDP
-# strategy: null  # defines what specific training strategy to use if a special one is needed
-# sync_batchnorm: False  # defines whether batch norm layers should be sync'd during training
-# track_grad_norm: -1  # defines the gradient p-norm type to track during training
-# val_check_interval: 1.0  # defines how often to run validation (as a train fraction or batch count)
+# log_every_n_steps: null # defines how often to log across loop steps
+# enable_checkpointing: null # toggles auto-model-checkpointing if no such callback is provided
+# enable_progress_bar: null # toggles auto-progress-display if no such callback is already provided
 enable_model_summary: False # defines whether to enable model summarization if not in callbacks
-# move_metrics_to_cpu: False  # defines whether to always move metrics to CPU to save a bit of VRAM
-# multiple_trainloader_mode: max_size_cycle  # defines the loop mode to use with multiple train loaders
+# accumulate_grad_batches: 1 # accumulates gradients over k batches before stepping the optimizer
+# gradient_clip_val: null # defines the value at which to clip gradients (if any)
+# gradient_clip_algorithm: null # defines the gradient clipping algorithm to use (if needed)
+# deterministic: null # toggles whether pytorch should only use deterministic algos or not
+# benchmark: null # defines whether to set 'torch.backends.cnn.benchmark' to true or not
+# inference_mode: True # whether to use torch.inference_mode() or torch.no_grad() during eval loops
+# use_distributed_sampler: True # whether to wrap the loader sampler with PyTorch's DistributedSampler
+# profiler: null # selects what step to profile while running the trainer looking for bottlenecks
+# detect_anomaly: False # toggles whether to turn on the 'anomaly' (NaN/Inf) detector while training
+# barebones: False # whether to disable all features that may impact raw speed
+# plugins: null # defines the list of plugins to use while training (if any)
+# sync_batchnorm: False # defines whether batch norm layers should be sync'd during training
+# reload_dataloaders_every_n_epochs: 0 # defines the frequency at which to reload data loaders
+default_root_dir: ${hydra:runtime.output_dir} # default path for logs/ckpts when not set in loggers

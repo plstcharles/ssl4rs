@@ -25,9 +25,9 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         - val_dataloader (the validation dataloader(s))
         - test_dataloader (the test dataloader(s))
 
-    This PyTorch Lightning interface allows you to share a full dataset without explaining how to
-    download, split, transform, and process the data. More info here:
-        https://pytorch-lightning.readthedocs.io/en/latest/extensions/datamodules.html
+    This Lightning interface allows you to share a full dataset without explaining how to download,
+    split, transform, and process the data. More info here:
+        https://lightning.ai/docs/pytorch/stable/data/datamodule.html
     """
 
     def __init__(

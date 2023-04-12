@@ -3,10 +3,11 @@
 # SSL for Remote Sensing (SSL4RS) Sandbox
 
 [![PyTorch](https://img.shields.io/badge/PyTorch-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
-[![Lightning](https://img.shields.io/badge/-Lightning-792ee5?logo=pytorchlightning&logoColor=white)](https://pytorchlightning.ai/%22)
+[![Lightning](https://img.shields.io/badge/-Lightning-792ee5?logo=pytorchlightning&logoColor=white)](https://lightning.ai/)
 [![Hydra](https://img.shields.io/badge/Config-Hydra-89b8cd)](https://hydra.cc/)
-[![LH-Template](https://img.shields.io/badge/-LH--Template-017F2F?style=flat&logo=github&labelColor=gray)](https://github.com/ashleve/lightning-hydra-template)
-[![tests](https://github.com/plstcharles/ssl4rs/actions/workflows/test.yml/badge.svg)](https://github.com/plstcharles/ssl4rs/actions/workflows/test.yml)
+[![Last Commit](https://img.shields.io/github/last-commit/plstcharles/ssl4rs/master)](https://github.com/plstcharles/ssl4rs)
+[![License](https://img.shields.io/github/license/plstcharles/ssl4rs)](https://github.com/plstcharles/ssl4rs/blob/master/LICENSE)
+[![tests](https://img.shields.io/github/actions/workflow/status/plstcharles/ssl4rs/test.yml)](https://github.com/plstcharles/ssl4rs/actions/workflows/test.yml)
 
 </div>
 
@@ -16,7 +17,7 @@ A deep learning sandbox for Self-Supervised Learning (SSL) applications for Remo
 
 This framework is primarily meant to help the prototyping of new models and data loaders. It relies
 on [PyTorch](https://pytorch.org/get-started/locally/) in combination with
-[PyTorch Lightning](https://pytorchlightning.ai/), and is derived from the [Lightning-Hydra-Template
+[Lightning](https://lightning.ai/), and is derived from the [Lightning-Hydra-Template
 Project](https://github.com/ashleve/lightning-hydra-template).
 
 The easiest way to use this framework is probably to clone it, add your own code inside its folder
@@ -140,7 +141,7 @@ The structure of all configuration directories is detailed below:
 ```
 <repository_root>
 └── configs       => root directory for all YAML configuration files
-    ├── callbacks      => lists of commonly-used pytorch lightning callbacks
+    ├── callbacks      => lists of commonly-used lightning callbacks
     ├── data           => definitions for datamodules and data loader settings
     ├── debug          => provides various overrides used to help debug experiments
     ├── experiment     => examples of experiment configs and potential user-provided ones
@@ -149,7 +150,7 @@ The structure of all configuration directories is detailed below:
     ├── logger         => settings for experiment logging tools such as tensorboard
     ├── model          => model architecture, optimization, and loss-specific settings
     ├── output         => output ("log") directory management settings
-    ├── trainer        => pytorch lightning trainer settings
+    ├── trainer        => lightning trainer settings
     └── utils          => generic framework-wide utility settings
 ```
 
@@ -190,11 +191,11 @@ python train.py experiment=example_mnist_classif_fast logger=tboard_and_csv
 │           │   └── last.ckpt                 => latest trainer checkpoint
 │           ├── config.<...>.log  => backup config with fully-interpolated values
 │           ├── console.log       => console log (concatenated across all launches)
-│           ├── csv               => the pytorch lightning csv logger output dir
+│           ├── csv               => the lightning csv logger output dir
 │           │   └── ...
 │           ├── installed_pkgs.<...>.log  => list of installed python packages
 │           └── runtime_tags.<...>.log    => dictionary of useful runtime info
-└── tensorboard     => the pytorch lightning tensorboard logger output dir
+└── tensorboard     => the lightning tensorboard logger output dir
     └── mnist_with_micro_mlp            => experiment name
         └── 20230329_163039_0           => run name
             ├── events.out.tfevents.<...>
@@ -203,5 +204,5 @@ python train.py experiment=example_mnist_classif_fast logger=tboard_and_csv
 
 ## Other Notes
 
-For more info on the usage of the config files and hydra/PyTorch-Lightning tips+tricks, see the
+For more info on the usage of the config files and hydra/Lightning tips+tricks, see the
 [original template repository](https://github.com/ashleve/lightning-hydra-template).

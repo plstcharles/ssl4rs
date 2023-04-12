@@ -49,10 +49,13 @@ def test_tboard_and_csv(tmpdir):
     csv_data = pd.read_csv(expected_csv_log)
     assert all([metric in csv_data.columns for metric in ["train/accuracy", "valid/accuracy", "test/accuracy"]])
     assert csv_data["step"].max() == 10  # 10th step with 0-based = test time
-    assert csv_data["epoch"].max() == 1  # 0-based
+    assert csv_data["epoch"].max() == 2  # 2nd epoch with 0-based = test time
     assert csv_data[~csv_data["train/accuracy"].isna()]["step"].max() == 9
     assert csv_data[~csv_data["valid/accuracy"].isna()]["step"].max() == 9
     assert csv_data[~csv_data["test/accuracy"].isna()]["step"].max() == 10
+    assert csv_data[~csv_data["train/accuracy"].isna()]["epoch"].max() == 1
+    assert csv_data[~csv_data["valid/accuracy"].isna()]["epoch"].max() == 1
+    assert csv_data[~csv_data["test/accuracy"].isna()]["epoch"].max() == 2
 
     expected_config_logs = glob.glob(os.path.join(out_dir, "config.*.log"))
     assert len(expected_config_logs) == 1

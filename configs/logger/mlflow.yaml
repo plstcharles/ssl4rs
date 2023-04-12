@@ -1,8 +1,9 @@
-# For more information on the following hyperparameters, see the PyTorch Lightning documentation:
-# https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.loggers.mlflow.html
+# For more information on the following hyperparameters, see the Lightning documentation:
+# https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.loggers.mlflow.html
+# (parameters and defaults last checked on 2023/10/04 for Lightning 2.0.1)
 
 mlflow:
-  _target_: pytorch_lightning.loggers.mlflow.MLFlowLogger
+  _target_: lightning.pytorch.loggers.mlflow.MLFlowLogger
   experiment_name: ${experiment_name} # name of the experiment also used in mlflow
   run_name: ${utils.run_and_job_name} # run name (if multi-run/job); auto-set if needed
   tracking_uri: file:${utils.output_dir_prefix}/mlruns/ # run `mlflow ui` in parent to open the UI

@@ -1,4 +1,4 @@
-"""Implements a simple MNIST image classification module based on PyTorch-Lightning."""
+"""Implements a simple MNIST image classification module based on Lightning."""
 import copy
 import typing
 
@@ -22,7 +22,7 @@ class MNISTClassifier(ssl4rs.models.BaseModel):
     goodies required for automatic rendering/logging of predictions.
 
     For more information on the role and responsibilities of the LightningModule, see:
-        https://pytorch-lightning.readthedocs.io/en/latest/common/lightning_module.html
+        https://lightning.ai/docs/pytorch/stable/common/lightning_module.html
 
     For more information on the base class, see:
         `ssl4rs.models.utils.BaseModel`
@@ -66,8 +66,7 @@ class MNISTClassifier(ssl4rs.models.BaseModel):
         )
 
     def configure_optimizers(self) -> typing.Dict[typing.AnyStr, typing.Any]:
-        """Configures and returns model-specific optimizers and schedulers to use during
-        training."""
+        """Configures and returns a model-specific optimizer+scheduler to use during training."""
         logger.debug("Configuring MNIST module optimizer and scheduler...")
         assert self.optim_config is not None, "we're about to train, we need an optimization cfg!"
         optim_config = copy.deepcopy(self.optim_config)  # we'll fully resolve + convert it below
@@ -138,38 +137,6 @@ class MNISTClassifier(ssl4rs.models.BaseModel):
             "target": target,  # so that metric update functions have access to the tensor itself
             "batch_size": ssl4rs.data.get_batch_size(batch),  # so that logging functions can use it
         }
-
-    def _get_data_id(
-        self,
-        loop_type: str,  # 'train', 'valid', or 'test'
-        batch: typing.Optional[typing.Dict[typing.AnyStr, typing.Any]],  # null when not in loop
-        batch_idx: int,  # index of the batch itself inside the dataloader loop
-        sample_idx: int,  # index of the data sample itself that should be ID'd inside the batch
-        dataloader_idx: int = 0,  # index of the dataloader that the batch was loaded from
-    ) -> typing.Hashable:
-        """Returns a unique 'identifier' for a particular data sample in a specific batch."""
-        # if the batch data is available, we'll return the original ID from the parser...
-        if batch is not None:
-            assert (
-                "batch_id" in batch
-            ), "missing mandatory 'batch_id' field required to generate persistent data sample IDs!"
-            assert (
-                "batch_size" in batch
-            ), "missing mandatory 'batch_size' field required to validate persistent data sample IDs!"
-            batch_size, batch_ids = ssl4rs.data.get_batch_size(batch), batch["batch_id"]
-            assert len(batch_ids) == batch_size, "unexpected batch id/size mismatch?"
-            assert 0 <= sample_idx < batch_size, "out-of-scope sample idx wrt batch size!"
-            batch_id = batch_ids[sample_idx]
-            assert isinstance(batch_id, typing.Hashable), f"bad batch id type: {type(batch_id)}"
-            return batch_id
-        # otherwise, we cannot do any better than to use the default impl as temporary IDs
-        return super()._get_data_id(
-            loop_type=loop_type,
-            batch=None,
-            batch_idx=batch_idx,
-            sample_idx=sample_idx,
-            dataloader_idx=dataloader_idx,
-        )
 
     def _render_and_log_samples(
         self,
