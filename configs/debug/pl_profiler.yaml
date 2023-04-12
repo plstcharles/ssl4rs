@@ -9,9 +9,10 @@ trainer:
   limit_train_batches: 32
   limit_val_batches: 32
   limit_test_batches: 32
-  # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.profiler.SimpleProfiler.htm
+  limit_predict_batches: 32
   profiler: simple
-  # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.profiler.AdvancedProfiler.html
+  # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.profilers.SimpleProfiler.html
   # profiler: advanced
-  # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.profiler.PyTorchProfiler.html
+  # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.profilers.AdvancedProfiler.html
   # profiler: pytorch
+  # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.profilers.PyTorchProfiler.html

@@ -1,11 +1,12 @@
-"""Contains utility functions and a base interface for pytorch-lightning datamodules."""
+"""Contains utility functions and a base interface for lightning datamodules."""
 import os
 import typing
 
 import hydra.utils
+import lightning.pytorch as pl
+import lightning.pytorch.utilities.types as pl_types
 import numpy as np
 import omegaconf
-import pytorch_lightning.utilities.types
 import torch
 import torch.utils.data
 
@@ -19,7 +20,7 @@ DataLoaderFnMap = typing.Mapping[typing.AnyStr, typing.Optional[omegaconf.DictCo
 logger = ssl4rs.utils.logging.get_logger(__name__)
 
 
-class DataModule(pytorch_lightning.LightningDataModule):
+class DataModule(pl.LightningDataModule):
     """Wraps the standard LightningDataModule interface to combine it with Hydra.
 
     Each derived data module will likely correspond to the combination of one data source and one
@@ -27,7 +28,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
     document what functions should have an override in the derived classes and why.
 
     For more information, see:
-        https://pytorch-lightning.readthedocs.io/en/stable/extensions/datamodules.html
+        https://lightning.ai/docs/pytorch/stable/data/datamodule.html
     """
 
     default_dataloader_types = tuple(["train", "valid", "test", "predict"])
@@ -76,24 +77,25 @@ class DataModule(pytorch_lightning.LightningDataModule):
         """Use this to download and prepare data.
 
         Downloading and saving data with multiple processes (distributed settings) will result in
-        corrupted data. PyTorch-Lightning ensures this method is called only within a single process,
-        so you can safely add your downloading logic within.
+        corrupted data. Lightning ensures this method is called only within a single process, so
+        you can safely add your downloading logic within.
 
         For more information, see:
-            https://pytorch-lightning.readthedocs.io/en/stable/extensions/datamodules.html#prepare-data
+            https://lightning.ai/docs/pytorch/stable/data/datamodule.html#prepare-data
         """
         pass
 
     def setup(self, stage: typing.Optional[str] = None) -> None:
-        """Called at the beginning of `fit` (training + validation), `validate`, `test`, or
-        `predict`.
+        """Called at the beginning of `fit` (train + validation), `validate`, `test`, or `predict`.
 
-        This is where the metadata, size, and other high-level info of the already-downloaded/prepared
-        dataset should be parsed. The outcome of this parsing should be a "state" inside the data
-        module itself, likely in a data parser (e.g. derived from `torch.utils.data.Dataset`).
+        This is where the metadata, size, and other high-level info of the already-downloaded
+        and prepared dataset should be parsed. The outcome of this parsing should be a "state"
+        inside the data module itself, likely in a data parser (e.g. an instance derived from
+        `torch.utils.data.Dataset`). With a distributed training strategy, this will be called on
+        each node.
 
         For more information, see:
-            https://pytorch-lightning.readthedocs.io/en/stable/extensions/datamodules.html#setup
+            https://lightning.ai/docs/pytorch/stable/data/datamodule.html#setup
 
         Args:
             stage: either ``'fit'``, ``'validate'``, ``'test'``, or ``'predict'``
@@ -107,25 +109,25 @@ class DataModule(pytorch_lightning.LightningDataModule):
         cleared (if needed).
 
         For more information, see:
-            https://pytorch-lightning.readthedocs.io/en/stable/extensions/datamodules.html#teardown
+            https://lightning.ai/docs/pytorch/stable/data/datamodule.html#teardown
 
         Args:
             stage: either ``'fit'``, ``'validate'``, ``'test'``, or ``'predict'``
         """
         pass
 
-    def train_dataloader(self) -> pytorch_lightning.utilities.types.TRAIN_DATALOADERS:
+    def train_dataloader(self) -> pl_types.TRAIN_DATALOADERS:
         """Instantiates one or more pytorch dataloaders for training based on the parsed dataset.
 
         For more information, see:
-            https://pytorch-lightning.readthedocs.io/en/stable/extensions/datamodules.html#train-dataloader
+            https://lightning.ai/docs/pytorch/stable/data/datamodule.html#train-dataloader
 
         Returns:
             A data loader (or a collection of them) that provides training samples.
         """
         raise NotImplementedError
 
-    def test_dataloader(self) -> pytorch_lightning.utilities.types.EVAL_DATALOADERS:
+    def test_dataloader(self) -> pl_types.EVAL_DATALOADERS:
         """Instantiates one or more pytorch dataloaders for testing based on the parsed dataset.
 
         Note:
@@ -133,14 +135,14 @@ class DataModule(pytorch_lightning.LightningDataModule):
             method will have an argument `dataloader_idx` which matches the order here.
 
         For more information, see:
-            https://pytorch-lightning.readthedocs.io/en/stable/extensions/datamodules.html#test-dataloader
+            https://lightning.ai/docs/pytorch/stable/data/datamodule.html#test-dataloader
 
         Returns:
             A data loader (or a collection of them) that provides testing samples.
         """
         raise NotImplementedError
 
-    def val_dataloader(self) -> pytorch_lightning.utilities.types.EVAL_DATALOADERS:
+    def val_dataloader(self) -> pl_types.EVAL_DATALOADERS:
         """Instantiates one or more pytorch dataloaders for validation based on the parsed dataset.
 
         Note:
@@ -152,14 +154,14 @@ class DataModule(pytorch_lightning.LightningDataModule):
             method will have an argument `dataloader_idx` which matches the order here.
 
         For more information, see:
-            https://pytorch-lightning.readthedocs.io/en/stable/extensions/datamodules.html#val-dataloader
+            https://lightning.ai/docs/pytorch/stable/data/datamodule.html#val-dataloader
 
         Returns:
             A data loader (or a collection of them) that provides validation samples.
         """
         raise NotImplementedError
 
-    def valid_dataloader(self) -> pytorch_lightning.utilities.types.EVAL_DATALOADERS:
+    def valid_dataloader(self) -> pl_types.EVAL_DATALOADERS:
         """Instantiates one or more pytorch dataloaders for validation based on the parsed dataset.
 
         This function simply redirects to the `val_dataloader` function. Why? Just because using
@@ -167,7 +169,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
         """
         return self.val_dataloader()
 
-    def predict_dataloader(self) -> pytorch_lightning.utilities.types.EVAL_DATALOADERS:
+    def predict_dataloader(self) -> pl_types.EVAL_DATALOADERS:
         """Instantiates one or more pytorch dataloaders for prediction runs.
 
         Note:
@@ -188,10 +190,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
     def get_dataloader(
         self,
         loader_type: typing.AnyStr,
-    ) -> typing.Union[
-        pytorch_lightning.utilities.types.TRAIN_DATALOADERS,
-        pytorch_lightning.utilities.types.EVAL_DATALOADERS,
-    ]:
+    ) -> typing.Union[pl_types.TRAIN_DATALOADERS, pl_types.EVAL_DATALOADERS]:
         """Returns a data loader object (or a collection of) for a given loader type.
 
         This function will verify that the specified loader type exists and is supported, and
@@ -203,13 +202,6 @@ class DataModule(pytorch_lightning.LightningDataModule):
         getter = getattr(self, expected_getter_name)
         assert callable(getter), f"invalid getter type: {type(getter)}"
         dataloader = getter()
-        assert isinstance(
-            dataloader,
-            typing.Union[
-                pytorch_lightning.utilities.types.TRAIN_DATALOADERS,
-                pytorch_lightning.utilities.types.EVAL_DATALOADERS,
-            ],
-        ), f"invalid dataloader type: {type(dataloader)}"
         return dataloader
 
     def _create_dataloader(
@@ -242,7 +234,7 @@ class DataModule(pytorch_lightning.LightningDataModule):
                     combined_settings.worker_init_fn = omegaconf.OmegaConf.create(
                         {
                             "_partial_": True,
-                            "_target_": "lightning_lite.utilities.seed.pl_worker_init_function",
+                            "_target_": "lightning_fabric.utilities.seed.pl_worker_init_function",
                         }
                     )
         if "_target_" not in combined_settings:

@@ -4,32 +4,35 @@ defaults:
   - _self_
 
 model_checkpoint:
-  _target_: pytorch_lightning.callbacks.ModelCheckpoint
-  # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.ModelCheckpoint.html
+  _target_: lightning.pytorch.callbacks.ModelCheckpoint
+  # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.ModelCheckpoint.html
+  # (parameters and defaults last checked on 2023/10/04 for Lightning 2.0.1)
   dirpath: ${utils.checkpoint_dir_path} # save all checkpoints in this particular directory
   filename: ${utils.checkpoint_name} # default filename pattern has zero-padded values for sorting
   monitor: ${target_metric} # name of the logged metric which determines when model is improving
   verbose: True # verbosity mode for the callback
   save_last: True # additionally always save model at the latest epoch
   save_top_k: 1 # save the k best models instead of just the best (if k > 1)
+  save_weights_only: False # we'll save the optimizer state + lr scheduler state (and possibly more)
   mode: ${target_metric_mode} # "max" means higher metric value is better (can be also "min")
   auto_insert_metric_name: False # do not put the metric name/value inside the checkpoints
-  save_weights_only: False # we'll save the optimizer state + lr scheduler state (and possibly more)
-  # every_n_train_steps: null  # we could set a number of steps between checkpoints if needed
-  # train_time_interval: null  # ...or set a time interval (same as above)
-  # every_n_epochs: null  # ...or set an epoch count (with all of these as null, this defaults to 1)
-  # save_on_train_epoch_end: null  # we might want to save the checkpoint before validation?
+  # every_n_train_steps: null # we could set a number of steps between checkpoints if needed
+  # train_time_interval: null # ...or set a time interval (same as above)
+  # every_n_epochs: null # ...or set an epoch count (with all of these as null, this defaults to 1)
+  # save_on_train_epoch_end: null # we might want to save the checkpoint before validation?
 
 early_stopping:
-  _target_: pytorch_lightning.callbacks.EarlyStopping
-  # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.EarlyStopping.html
+  _target_: lightning.pytorch.callbacks.EarlyStopping
+  # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.EarlyStopping.html
+  # (parameters and defaults last checked on 2023/10/04 for Lightning 2.0.1)
   monitor: ${target_metric} # name of the logged metric which determines when model is improving
-  # min_delta: 0.0  # minimum improvement in monitored value to consider it truly improved
+  # min_delta: 0.0 # minimum improvement in monitored value to consider it truly improved
   patience: 100 # number of failed checks (either steps or epochs, based on trainer) before stopping
   verbose: True # verbosity mode for the callback
   mode: ${target_metric_mode} # "max" means higher metric value is better (can be also "min")
   strict: True # whether to crash the training process if the metric is not found
   check_finite: True # whether to stop training if NaN or infinite value is found
-  # stopping_threshold: null  # stop training as soon as the metric becomes better than this
-  # divergence_threshold: null  # stop training as soon as the metric becomes worse than this
-  # check_on_train_epoch_end: null  # we might want to run early stopping before validation?
+  # stopping_threshold: null # stop training as soon as the metric becomes better than this
+  # divergence_threshold: null # stop training as soon as the metric becomes worse than this
+  # check_on_train_epoch_end: null # we might want to run early stopping before validation?
+  # log_rank_zero_only: False # toggles whether to log the callback status only on rank 0 process

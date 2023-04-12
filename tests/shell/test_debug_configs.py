@@ -21,7 +21,7 @@ def _get_base_command(tmpdir, test_name) -> typing.List[typing.AnyStr]:
 
 @pytest.mark.slow
 def test_debug_fast_dev_run(tmpdir):
-    # https://pytorch-lightning.readthedocs.io/en/stable/common/trainer.html#fast-dev-run
+    # https://lightning.ai/docs/pytorch/stable/common/trainer.html#fast-dev-run
     command = _get_base_command(tmpdir, "fast_dev_run")
     command.extend(["debug=fast_dev_run", "logger=csv"])
     output = module_runner.run(command)

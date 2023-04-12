@@ -22,6 +22,9 @@ base_cli_args = [
 ]
 
 
+import lightning.pytorch.utilities.seed
+
+
 @pytest.mark.slow
 def test_reprod_with_2nd_run(tmpdir):
     """Checks that training sessions can be fully reproduced under a 2nd run configuration."""

@@ -2,11 +2,14 @@
 # This config will be loaded in all debug sessions in order to simplify the debugging process!
 # (we'll run single-epoch training sessions with deterministic behavior and verbose settings)
 
-# disabled as of 2023-03-15 since it comes from pl_bolts which is just about ALWAYS BROKEN
 #callbacks:
 #  gradient_check:
+#    # disabled as of 2023-03-15 since it comes from pl_bolts which is just about ALWAYS BROKEN
 #    # https://lightning-bolts.readthedocs.io/en/latest/callbacks/monitor.html
 #    _target_: pl_bolts.callbacks.BatchGradientVerificationCallback
+#  save_ckpt_on_exception:
+#    # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.OnExceptionCheckpoint.html
+#    _target_: lightning.pytorch.callbacks.OnExceptionCheckpoint
 
 data:
   datamodule:
@@ -42,17 +45,22 @@ hydra:
 
 trainer:
   accelerator: cpu # run on CPU only (might be really slow, but change it if necessary)
-  benchmark: False # turn benchmark mode off, we don't need crazy performance here
-  deterministic: True # ... and of course, we'd like each session to behave the same as the last
+  strategy: auto # fallback to whatever is simple and supported on basic accelerators
+  devices: 1 # debuggers don't like multi-device setups, let's not use anything fancy here
+  num_nodes: 1 # debuggers don't like multi-device setups, let's not use anything fancy here
+  precision: 32-true # fallback to the default value that we know won't be funky
   max_epochs: 1 # run a single epoch by default (other debug configs might try overfit instead)
   limit_train_batches: 5 # run at most 5 batches per training epoch
   limit_val_batches: 5 # run at most 5 batches per validation epoch
   limit_test_batches: 5 # run at most 5 batches per testing epoch
+  limit_predict_batches: 5 # run at most 5 batches per predict epoch
   num_sanity_val_steps: 2 # run through two validation batches before training
-  devices: 1 # debuggers don't like multi-device setups, let's not use anything fancy here
+  accumulate_grad_batches: 1 # fallback to the simplest gradient accumulation case
+  # might want to add gradient_clip_val/gradient_clip_algorithm here?
+  deterministic: True # we'd like each session to behave the same as the last
+  benchmark: False # turn benchmark mode off, we don't need crazy performance here
+  inference_mode: True # not sure why this should ever be off, but let's make sure it's not
   detect_anomaly: True # raise an exception if NaN or +/-inf is detected in any tensor
-  track_grad_norm: 2 # track gradient norm with loggers
-  precision: 32
 
 utils:
   output_dir_prefix: ${utils.output_root_dir}/debug

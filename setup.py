@@ -15,6 +15,6 @@ setuptools.setup(
     author="plstcharles",
     author_email="pierreluc.stcharles@gmail.com",
     url="https://github.com/plstcharles/ssl4rs",
-    install_requires=["pytorch-lightning", "hydra-core"],
+    install_requires=["lightning", "hydra-core"],
     packages=setuptools.find_packages(),
 )

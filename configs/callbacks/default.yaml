@@ -1,17 +1,20 @@
-# For more information on available callbacks, see the PyTorch-Lightning documentation:
-# https://pytorch-lightning.readthedocs.io/en/stable/api_references.html?highlight=callbacks#callbacks-api
+# For more information on available callbacks, see the Lightning documentation:
+# https://lightning.ai/docs/pytorch/stable/api_references.html#callbacks
 
 model_summary:
-  _target_: pytorch_lightning.callbacks.RichModelSummary
-  # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.RichModelSummary.html
+  _target_: lightning.pytorch.callbacks.RichModelSummary
+  # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.RichModelSummary.html
   max_depth: -1 # maximum depth of layer nesting that the summary will include
 
 rich_progress_bar:
-  _target_: pytorch_lightning.callbacks.RichProgressBar
-  # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.RichProgressBar.html
+  _target_: lightning.pytorch.callbacks.RichProgressBar
+  # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.RichProgressBar.html
   refresh_rate: 1 # frequency (in batches) at which the progress bar gets updated
 
 device_monitor:
-  _target_: pytorch_lightning.callbacks.DeviceStatsMonitor
-  # https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.DeviceStatsMonitor.html
+  _target_: lightning.pytorch.callbacks.DeviceStatsMonitor
+  # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.DeviceStatsMonitor.html
   # NOTE: this callback requires at least one logger to be passed to the trainer!
+  cpu_stats: True # toggles whether to log CPU stats along other device stats, if not CPU-only
+
+# note: training sessions can also be limited to a wallclock time delta using the 'Timer' callback

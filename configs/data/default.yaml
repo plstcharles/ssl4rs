@@ -8,7 +8,7 @@ datamodule: # this corresponds to the main LightningDataModule we'll be getting 
       shuffle: False # the base default loader will not shuffle its data, but check overrides below!
       # sampler: null
       # batch_sampler: null
-      num_workers: 4 # all data loaders will run on a handful of threads by default
+      num_workers: ${utils.default_num_workers} # all loaders will run on a predefined thread count
       collate_fn: # by default, we use the DataModule base class's impl (it handles batch IDs)
         _partial_: True
         _target_: ssl4rs.data.default_collate

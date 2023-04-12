@@ -1,8 +1,9 @@
-# For more information on the following hyperparameters, see the PyTorch Lightning documentation:
-# https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.loggers.tensorboard.html
+# For more information on the following hyperparameters, see the Lightning documentation:
+# https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.loggers.tensorboard.html
+# (parameters and defaults last checked on 2023/10/04 for Lightning 2.0.1)
 
 tensorboard:
-  _target_: pytorch_lightning.loggers.tensorboard.TensorBoardLogger
+  _target_: lightning.pytorch.loggers.tensorboard.TensorBoardLogger
   save_dir: ${utils.output_dir_prefix}/tensorboard/ # root where all tensorboard data will be logged
   name: ${experiment_name} # experiment name; if not set, the subdirectories will be flattened
   version: ${utils.run_and_job_name} # experiment version (if multi-run/job); auto-set if needed

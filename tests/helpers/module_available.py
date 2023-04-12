@@ -1,7 +1,7 @@
 """Module/library/environment/tool availability evaluator.
 
 Adapted from:
-https://github.com/PyTorchLightning/pytorch-lightning/blob/master/pytorch_lightning/utilities/imports.py
+https://github.com/Lightning-AI/lightning/blob/master/src/lightning/pytorch/utilities/imports.py
 """
 
 import os
@@ -27,8 +27,7 @@ def _module_available(module_path: str) -> bool:
 
 _IS_WINDOWS = platform.system() == "Windows"
 _DEEPSPEED_AVAILABLE = not _IS_WINDOWS and _module_available("deepspeed")
-_FAIRSCALE_AVAILABLE = not _IS_WINDOWS and _module_available("fairscale.nn")
 _RPC_AVAILABLE = not _IS_WINDOWS and _module_available("torch.distributed.rpc")
-_IS_SLURM_AVAILABLE = pathlib.Path("/opt/slurm/bin/sinfo").is_file()
+_IS_SLURM_AVAILABLE = pathlib.Path("/opt/slurm/bin/sinfo").is_file() and "SLURM_NTASKS" not in os.environ
 _IS_LMOD_AVAILABLE = os.getenv("LMOD_ROOT", default=None)
 _IS_ON_MILA_CLUSTER = _IS_SLURM_AVAILABLE and _IS_LMOD_AVAILABLE and "mila.quebec" in os.getenv("LMOD_ROOT")

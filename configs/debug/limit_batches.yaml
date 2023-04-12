@@ -9,3 +9,4 @@ trainer:
   limit_train_batches: 3 # ... and using three batches in each stage
   limit_val_batches: 3
   limit_test_batches: 3
+  limit_predict_batches: 3

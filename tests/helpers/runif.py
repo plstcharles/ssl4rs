@@ -1,7 +1,7 @@
 """RunIf test configurator.
 
 Adapted from:
-https://github.com/PyTorchLightning/pytorch-lightning/blob/master/tests/helpers/runif.py
+https://github.com/Lightning-AI/lightning/blob/master/tests/tests_pytorch/helpers/runif.py
 """
 import os
 import sys
@@ -16,7 +16,6 @@ from pkg_resources import get_distribution
 import ssl4rs.utils.config
 from tests.helpers.module_available import (
     _DEEPSPEED_AVAILABLE,
-    _FAIRSCALE_AVAILABLE,
     _IS_ON_MILA_CLUSTER,
     _IS_WINDOWS,
     _RPC_AVAILABLE,
@@ -46,11 +45,11 @@ class RunIf:
         only_on_mila_cluster: bool = False,
         has_comet_api_key: bool = False,
         rpc: bool = False,
-        fairscale: bool = False,
         deepspeed: bool = False,
         **kwargs,
     ):
-        """
+        """Validates and checks the required platform/runtime settings for the test.
+
         Args:
             min_gpus: min number of gpus required to run test
             min_torch: minimum pytorch version to run test
@@ -58,8 +57,8 @@ class RunIf:
             min_python: minimum python version required to run test
             skip_windows: skip test for Windows platform
             only_on_mila_cluster: only run test on Mila cluster environment
+            has_comet_api_key: requires a comet api key env variable to run test
             rpc: requires Remote Procedure Call (RPC)
-            fairscale: if `fairscale` module is required to run the test
             deepspeed: if `deepspeed` module is required to run the test
             kwargs: native pytest.mark.skipif keyword arguments
         """
@@ -105,10 +104,6 @@ class RunIf:
         if rpc:
             conditions.append(not _RPC_AVAILABLE)
             reasons.append("RPC")
-
-        if fairscale:
-            conditions.append(not _FAIRSCALE_AVAILABLE)
-            reasons.append("Fairscale")
 
         if deepspeed:
             conditions.append(not _DEEPSPEED_AVAILABLE)

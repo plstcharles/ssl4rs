@@ -35,7 +35,7 @@ data:
         batch_size: 32
 
 trainer:
-  precision: 32
+  precision: 32-true
   max_epochs: 3
 
 target_metric: valid/accuracy # name of the metric we will be targeting for hparam optimization

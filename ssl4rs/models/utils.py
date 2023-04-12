@@ -4,11 +4,10 @@ import os
 import typing
 
 import cv2 as cv
+import lightning.pytorch as pl
+import lightning.pytorch.loggers as pl_loggers
+import lightning.pytorch.utilities.types as pl_types
 import numpy as np
-import pytorch_lightning as pl
-import pytorch_lightning.loggers
-import pytorch_lightning.trainer.supporters
-import pytorch_lightning.utilities.types as pl_types
 import torch
 import torch.utils.data
 import torchmetrics
@@ -16,53 +15,99 @@ import torchmetrics
 import ssl4rs
 
 logger = ssl4rs.utils.logging.get_logger(__name__)
-
-PLCallback = pytorch_lightning.callbacks.callback.Callback
+PLCallback = pl.callbacks.callback.Callback
 
 
 class BaseModel(pl.LightningModule):
-    """Base PyTorch-Lightning model interface.
+    """Base LightningModule (model) interface.
 
-    Using this interface is not mandatory for experiments in this framework, but it'll help you log
-    and debug some stuff. It also exposes a few of the useful (but rarely remembered) features
-    that the base LightningModule implementation supports.
+    Using this interface is not mandatory for experiments in this framework, but it will help log
+    and debug basic batch-related issues. It also exposes a few of the useful (but rarely remembered)
+    features that the base LightningModule implementation supports, such as metrics that can be
+    stored/reloaded inside checkpoints.
+
+    The main (not-mandatory-but-still-useful) feature offered here is the ability to 'render' the
+    same batches (with predictions) every epoch based on their IDs. The way this is done is by first
+    trying to find out the data loader batch size and the expected batch count. Given this, we pick
+    a random set samples based on the total expected number of samples (batch size x data loader
+    length) we will see. Each time we see one of these picked samples for the first time, we
+    memorize its real batch identifier, and render it. In subsequent epochs, we check for the batch
+    identifier directly, and re-render the same samples we saw in the past. This might break with
+    variable-length or iterator-based data loaders, and should be disabled in that case (by setting
+    `sample_count_to_render=0` in the constructor). With combined data loaders or data loaders that
+    work with varying batch lengths, it might not always be able to find/render as many samples
+    as the requested number, so see the `sample_count_to_render` as an optimistic upper bound.
 
     Note that regarding the usage of torchmetrics, there are some pitfalls to avoid e.g. when
     using multiple data loaders; refer to the following link for more information:
         https://torchmetrics.readthedocs.io/en/stable/pages/lightning.html#common-pitfalls
+
+    For more information on the role of the base LightningModule interface, see:
+        https://lightning.ai/docs/pytorch/stable/common/lightning_module.html
     """
 
     def __init__(
         self,
         log_train_metrics_each_step: bool = False,
         sample_count_to_render: int = 10,
+        log_metrics_in_loop_types: typing.Sequence[str] = ("train", "valid", "test"),
     ):
         """Initializes the base model interface and its attributes.
+
+        Note: we do NOT call `self.save_hyperparameters` in this base class constructor, but it
+        should be called in the derived classes in order to make checkpoint reloading work. See
+        this link for more information:
+            https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#save-hyperparameters
 
         Args:
             log_train_metrics_each_step: toggles whether the metrics should be computed and logged
                 each step in the training loop (true), or whether we should accumulate predictions
                 and targets and only compute/log the metrics at the end of the epoch (false) as in
-                the validation and testing loops. Defaults to true. When the predictions take a lot
+                the validation and testing loops. Defaults to false. When the predictions take a lot
                 of memory (e.g. when doing semantic image segmentation with many classes), it might
-                be best to turn this off to avoid out-of-memory errors when running long epochs.
+                be best to turn this off to avoid out-of-memory errors when running long epochs, or
+                drastic slowdowns when complex metrics are used.
             sample_count_to_render: number of samples that should (ideally) be rendered using the
-                internal rendering function (if any is defined). If the dataset is too small or if
-                we do not have a reliable way to get good persistent IDs for data samples, we might
-                be forced to render fewer samples.
+                internal rendering function (if any is defined). Note that if the dataset is too
+                small or if we do not have a reliable way to get good persistent IDs for data
+                samples, we might be forced to render fewer samples than the number specified here.
+            log_metrics_in_loop_types: defines the sequence of loop types (e.g. "train", "valid",
+                and "test") for which we should compute metrics. The default covers all loop types
+                where we can expect to have target labels.
         """
         super().__init__()
         logger.debug("Instantiating LightningModule base class...")
         self.log_train_metrics_each_step = log_train_metrics_each_step
-        assert sample_count_to_render == 1 or sample_count_to_render >= 0
+        assert sample_count_to_render >= 0, "invalid sample count to render (should be >= 0)"
         self.sample_count_to_render = sample_count_to_render
-        # remember to set the `example_input_array` attribute below if you ever want the base
+        # remember to override the `_create_example_input_array` function if you ever want the base
         # class to know how to e.g. convert the model to onnx/torchscript, trace it, or to give
         # users an idea of the input tensors that are typically used in the `forward(...)` function!
-        self.example_input_array: typing.Optional[typing.Any] = None  # should be e.g. B x C x ...
-        metrics = {f"metrics/{k}": v for k, v in self._configure_loop_metrics().items()}
-        self.metrics = torch.nn.ModuleDict(metrics)  # will be auto-updated+reset
+        self.example_input_array: typing.Optional[typing.Any] = None
+        self.metrics = self._instantiate_metrics(log_metrics_in_loop_types)  # auto-updated + reset
         self._ids_to_render: typing.Dict[str, typing.List[typing.Hashable]] = {}
+
+    def _instantiate_metrics(
+        self,
+        log_metrics_in_loop_types: typing.Sequence[str],
+    ) -> torch.nn.ModuleDict:
+        """Instantiates and returns the metrics collections to use for all loop types.
+
+        By default, this function will call the `configure_metrics` function in order to instantiate
+        the actual metric objects, and it will clone those objects for each of the loop types that
+        require metrics to be computed independently.
+
+        Note that we prefix the metric collections with the `metrics` keyword in order to cleanly
+        separate them from other weights inside the saved checkpoints.
+        """
+        assert not any(["/" in loop_type for loop_type in log_metrics_in_loop_types])
+        logger.debug(f"Instantiating metrics collections for loops: {log_metrics_in_loop_types}")
+        metrics = self.configure_metrics()
+        metrics.persistent(True)  # by default, all metrics WILL be saved to checkpoints with this
+        metrics = {  # below, we refer to the "metrics/loop_type" key as the metric group name
+            f"metrics/{loop_type}": metrics.clone(prefix=(loop_type + "/")) for loop_type in log_metrics_in_loop_types
+        }
+        return torch.nn.ModuleDict(metrics)
 
     def has_metric(self, metric_name: typing.AnyStr) -> bool:
         """Returns whether this model possesses a metric with a specific name.
@@ -70,7 +115,7 @@ class BaseModel(pl.LightningModule):
         The metric name is expected to be in `<loop_type>/<metric_name>` format. For example, it
         might be `valid/accuracy`. This metric name will be prefixed with `metric` internally.
         """
-        loop_type, metric_name = metric_name.split("/")
+        loop_type, metric_name = metric_name.split("/", maxsplit=1)
         metric_group_name = f"metrics/{loop_type}"
         return metric_group_name in self.metrics and metric_name in self.metrics[metric_group_name]
 
@@ -80,7 +125,7 @@ class BaseModel(pl.LightningModule):
         The metric name is expected to be in `<loop_type>/<metric_name>` format. For example, it
         might be `valid/accuracy`. This metric name will be prefixed with `metric` internally.
         """
-        loop_type, metric_name = metric_name.split("/")
+        loop_type, metric_name = metric_name.split("/", maxsplit=1)
         metric_group_name = f"metrics/{loop_type}"
         assert metric_group_name in self.metrics
         return self.metrics[metric_group_name][metric_name].compute()
@@ -95,35 +140,20 @@ class BaseModel(pl.LightningModule):
         different frequencies (if needed).
 
         In order to NOT use a particular metric in a loop type, or in order to NOT compute metrics
-        in a certain loop type at all, override the `configure_loop_metrics` function.
+        in a certain loop type at all, override the `_instantiate_metrics` function.
         """
         raise NotImplementedError
-
-    def _configure_loop_metrics(self) -> typing.Dict[str, torchmetrics.MetricCollection]:
-        """Configures and returns a collection of metrics where the top-level key is the loop type.
-
-        By default, this function will refer to the `configure_metrics` function in order to
-        instantiate the actual metric objects, and it will clone those objects for each of the loop
-        types that require metrics to be computed independently.
-        """
-        logger.debug("Instantiating generic metric collections...")
-        default_loop_types_with_metrics = ["train", "valid", "test"]
-        metrics = self.configure_metrics()
-        metrics.persistent(True)  # by default, all metrics WILL be saved to checkpoints with this
-        default_loop_metrics = {
-            loop_type: metrics.clone(prefix=(loop_type + "/")) for loop_type in default_loop_types_with_metrics
-        }
-        return default_loop_metrics
 
     def configure_callbacks(self) -> typing.Union[typing.Sequence[PLCallback], PLCallback]:
         """Configures and returns model-specific callbacks.
 
-        When the model gets attached, e.g., when ``.fit()`` or ``.test()`` gets called, the list or
-        a callback returned here will be merged with the list of callbacks passed to the Trainer's
+        No callbacks are used by default. When the model gets attached to a trainer, i.e. when the
+        trainer's ``.fit()`` or ``.test()`` gets called with thismodel, the list of callbacks
+        returned here will be merged with the list of callbacks passed to the Trainer's
         ``callbacks`` argument.
 
         For more information, see:
-            https://pytorch-lightning.readthedocs.io/en/latest/common/lightning_module.html#configure-callbacks
+            https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#configure-callbacks
         """
         return []
 
@@ -133,10 +163,19 @@ class BaseModel(pl.LightningModule):
 
         This function can return a pretty wild number of object combinations; refer to the docs
         for the full list and a bunch of examples:
-            https://pytorch-lightning.readthedocs.io/en/latest/common/lightning_module.html#configure-optimizers
+            https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#configure-optimizers
 
         For this particular framework, we favor the use of a dictionary that contains an ``optimizer``
-        key and a ``lr_scheduler`` key.
+        key and a ``lr_scheduler`` key. For example, the implementation of this function could be:
+            optimizer = torch.optim.Adam(self.parameters(), lr=0.001)
+            return {
+                "optimizer": optimizer,
+                "lr_scheduler": {
+                    "scheduler": ReduceLROnPlateau(optimizer, ...),
+                    "monitor": "valid/loss",
+                    "frequency": self.trainer.check_val_every_n_epoch * 4,
+                },
+            }
 
         If you need to use the estimated number of stepping batches during training (e.g. when using
         the `OneCycleLR` scheduler), use the `self.trainer.estimated_stepping_batches` value.
@@ -144,8 +183,11 @@ class BaseModel(pl.LightningModule):
         raise NotImplementedError
 
     def _create_example_input_array(self, **kwargs) -> typing.Dict[typing.AnyStr, typing.Any]:
-        """Wraps the given kwargs inside a fake 'batch' dictionary to be used as the example
-        input."""
+        """Wraps the given kwargs inside a fake batch dict to be used as the example input.
+
+        The `self.example_input_array` attribute is actually used by Lightning to offer lots of
+        small debugging/logging features, but remains optional.
+        """
         batch_data = dict(**kwargs)
         self.example_input_array = dict(batch=batch_data)
         return self.example_input_array
@@ -197,11 +239,11 @@ class BaseModel(pl.LightningModule):
         Returns:
             A dictionary of outputs (likely tensors) indexed using names. Typically, this would
             contain at least `loss`, `preds`, and `target` tensors so that we can easily update
-            the metrics and log the results (as needed).
+            the metrics, render predictions/errors images, and log the results (as needed).
         """
         raise NotImplementedError
 
-    def on_train_epoch_start(self):
+    def on_train_epoch_start(self) -> None:
         """Resets the metrics + render IDs before the start of a new epoch."""
         self._reset_metrics("train")
         if "train" not in self._ids_to_render:
@@ -213,69 +255,66 @@ class BaseModel(pl.LightningModule):
         self,
         batch: typing.Dict[typing.AnyStr, typing.Any],
         batch_idx: int,
-        optimizer_idx: int = 0,
     ) -> pl_types.STEP_OUTPUT:
         """Runs a forward + evaluation step for the training loop.
 
         Note that this step may be happening across multiple devices/nodes.
 
         Args:
-            batch: a dictionary of batch data loaded by a data loader object. This dictionary may
-                be modified and new attributes may be added into it by the LightningModule.
+            batch: a dictionary of batch data loaded by a data loader object.
             batch_idx: the index of the provided batch in the data loader's current loop.
-            optimizer_idx: the index of the optimizer that's being used (if more than one).
 
         Returns:
             The full outputs dictionary that should be reassembled across all potential devices
-            and nodes, and that might be further used in the `training_step_end` function.
+            and nodes, and that might be further used in the `on_train_batch_end` function.
         """
         outputs = self._generic_step(batch, batch_idx)
         assert "loss" in outputs, "loss tensor is NOT optional in training step implementation (needed for backprop!)"
-        self._check_and_render_batch(
-            loop_type="train",
-            batch=batch,
-            batch_idx=batch_idx,
-            outputs=outputs,
-            dataloader_idx=0,
-        )
         return outputs
 
-    def training_step_end(self, step_output: pl_types.STEP_OUTPUT) -> pl_types.STEP_OUTPUT:
+    def on_train_batch_end(
+        self, outputs: pl_types.STEP_OUTPUT, batch: typing.Dict[typing.AnyStr, typing.Any], batch_idx: int
+    ) -> None:
         """Completes the forward + evaluation step for the training loop.
 
         Args:
-            step_output: the reasssembled outputs from training steps that might have happened
-                on different devices and nodes.
+            outputs: the outputs of the `training_step` method that was just completed.
+            batch: a dictionary of batch data loaded by a data loader object.
+            batch_idx: the index of the provided batch in the data loader's current loop.
 
         Returns:
-            The loss tensor used for backpropagation (when `log_train_metrics_each_step=True`),
-            or the full outputs dictionary (when `log_train_metrics_each_step=False`).
+            Nothing.
         """
         assert (
-            "loss" in step_output
+            "loss" in outputs
         ), "loss tensor is NOT optional in training step end implementation (needed for backprop!)"
-        loss = step_output["loss"]
-        batch_size = step_output.get("batch_size", None)
+        loss = outputs["loss"]
+        batch_size = outputs.get("batch_size", None)
         # todo: figure out if we need to add sync_dist arg to self.log calls below?
         self.log("train/loss", loss.item(), prog_bar=True, batch_size=batch_size)
         self.log("train/epoch", float(self.current_epoch), batch_size=batch_size)
         metrics_val = self._update_metrics(
             loop_type="train",
-            outputs=step_output,
+            outputs=outputs,
             return_vals=self.log_train_metrics_each_step,
         )
         if self.log_train_metrics_each_step:
             assert metrics_val is not None and isinstance(metrics_val, dict)
             self.log_dict(metrics_val, batch_size=batch_size)
-        return loss  # no need to return anything apart from the loss to pytorch-lightning
+        self._check_and_render_batch(
+            loop_type="train",
+            batch=batch,
+            batch_idx=batch_idx,
+            outputs=outputs,
+        )
 
-    def on_train_epoch_end(self, *args, **kwargs) -> None:
+    def on_train_epoch_end(self) -> None:
         """Computes and logs the training metrics (if not always done at the step level)."""
         if not self.log_train_metrics_each_step:
             metrics_val = self.compute_metrics(loop_type="train")
             self.log_dict(metrics_val)
 
-    def on_validation_epoch_start(self):
+    def on_validation_epoch_start(self) -> None:
         """Resets the metrics + render IDs before the start of a new epoch."""
         self._reset_metrics("valid")
         if "valid" not in self._ids_to_render:
@@ -291,19 +330,48 @@ class BaseModel(pl.LightningModule):
     ) -> typing.Optional[pl_types.STEP_OUTPUT]:
         """Runs a forward + evaluation step for the validation loop.
 
-        Note that this step may be happening across multiple devices/nodes.
+        Note that this step may be happening across multiple devices/nodes. It is recommended to
+        evaluate on a single device to ensure each sample/batch gets evaluated exactly once. This
+        is helpful to make sure benchmarking for research papers is done the right way. Otherwise,
+        in a multi-device setting, samples could occur duplicated when DistributedSampler is used,
+        e.g. with strategy="ddp". It replicates some samples on some devices to make sure all
+        devices have the same batch size in case of uneven inputs.
 
         Args:
-            batch: a dictionary of batch data loaded by a data loader object. This dictionary may
-                be modified and new attributes may be added into it by the LightningModule.
+            batch: a dictionary of batch data loaded by a data loader object.
             batch_idx: the index of the provided batch in the data loader's current loop.
             dataloader_idx: the index of the dataloader that's being used (if more than one).
 
         Returns:
             The full outputs dictionary that should be reassembled across all potential devices
-            and nodes, and that might be further used in the `validation_epoch_end` function.
+            and nodes, and that might be further used in the `on_validation_batch_end` function.
         """
-        outputs = self._generic_step(batch, batch_idx)
+        return self._generic_step(batch, batch_idx)
+
+    def on_validation_batch_end(
+        self,
+        outputs: typing.Optional[pl_types.STEP_OUTPUT],
+        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> None:
+        """Completes the forward + evaluation step for the validation loop.
+
+        Args:
+            outputs: the outputs of the `validation_step` method that was just completed.
+            batch: a dictionary of batch data loaded by a data loader object.
+            batch_idx: the index of the provided batch in the data loader's current loop.
+            dataloader_idx: the index of the dataloader that's being used (if more than one).
+
+        Returns:
+            Nothing.
+        """
+        if "loss" in outputs:
+            loss = outputs["loss"]
+            batch_size = outputs.get("batch_size", None)
+            # todo: figure out if we need to add sync_dist arg to self.log calls below?
+            self.log("valid/loss", loss.item(), prog_bar=True, batch_size=batch_size)
+        self._update_metrics(loop_type="valid", outputs=outputs, return_vals=False)
         self._check_and_render_batch(
             loop_type="valid",
             batch=batch,
@@ -311,35 +379,17 @@ class BaseModel(pl.LightningModule):
             outputs=outputs,
             dataloader_idx=dataloader_idx,
         )
-        return outputs
 
-    def validation_step_end(self, step_output: pl_types.STEP_OUTPUT) -> None:
-        """Completes the forward + evaluation step for the validation loop.
-
-        Args:
-            step_output: the reasssembled outputs from validation steps that might have happened
-                on different devices and nodes.
-
-        Returns:
-            Nothing.
-        """
-        if "loss" in step_output:
-            loss = step_output["loss"]
-            batch_size = step_output.get("batch_size", None)
-            # todo: figure out if we need to add sync_dist arg to self.log calls below?
-            self.log("valid/loss", loss.item(), prog_bar=True, batch_size=batch_size)
-        self._update_metrics(loop_type="valid", outputs=step_output, return_vals=False)
-
-    def validation_epoch_end(self, *args, **kwargs) -> None:
+    def on_validation_epoch_end(self) -> None:
         """Completes the epoch by asking the evaluator to summarize its results."""
         metrics_val = self.compute_metrics(loop_type="valid")
         self.log_dict(metrics_val)
-        fit_state_fn = pytorch_lightning.trainer.trainer.TrainerFn.FITTING
+        fit_state_fn = pl.trainer.trainer.TrainerFn.FITTING
         if self.trainer is not None and self.trainer.state.fn == fit_state_fn:
             for metric_name, metric_val in metrics_val.items():
                 logger.debug(f"epoch#{self.current_epoch:03d} {metric_name}: {metric_val}")
 
-    def on_test_epoch_start(self):
+    def on_test_epoch_start(self) -> None:
         """Resets the metrics + render IDs before the start of a new epoch."""
         self._reset_metrics("test")
         if "test" not in self._ids_to_render:
@@ -355,19 +405,48 @@ class BaseModel(pl.LightningModule):
     ) -> typing.Optional[pl_types.STEP_OUTPUT]:
         """Runs a forward + evaluation step for the testing loop.
 
-        Note that this step may be happening across multiple devices/nodes.
+        Note that this step may be happening across multiple devices/nodes. It is recommended to
+        evaluate on a single device to ensure each sample/batch gets evaluated exactly once. This
+        is helpful to make sure benchmarking for research papers is done the right way. Otherwise,
+        in a multi-device setting, samples could occur duplicated when DistributedSampler is used,
+        e.g. with strategy="ddp". It replicates some samples on some devices to make sure all
+        devices have the same batch size in case of uneven inputs.
 
         Args:
-            batch: a dictionary of batch data loaded by a data loader object. This dictionary may
-                be modified and new attributes may be added into it by the LightningModule.
+            batch: a dictionary of batch data loaded by a data loader object.
             batch_idx: the index of the provided batch in the data loader's current loop.
             dataloader_idx: the index of the dataloader that's being used (if more than one).
 
         Returns:
             The full outputs dictionary that should be reassembled across all potential devices
-            and nodes, and that might be further used in the `test_step_end` function.
+            and nodes, and that might be further used in the `on_test_batch_end` function.
         """
-        outputs = self._generic_step(batch, batch_idx)
+        return self._generic_step(batch, batch_idx)
+
+    def on_test_batch_end(
+        self,
+        outputs: typing.Optional[pl_types.STEP_OUTPUT],
+        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> None:
+        """Completes the forward + evaluation step for the testing loop.
+
+        Args:
+            outputs: the outputs of the `test_step` method that was just completed.
+            batch: a dictionary of batch data loaded by a data loader object.
+            batch_idx: the index of the provided batch in the data loader's current loop.
+            dataloader_idx: the index of the dataloader that's being used (if more than one).
+
+        Returns:
+            Nothing.
+        """
+        if "loss" in outputs:
+            loss = outputs["loss"]
+            batch_size = outputs.get("batch_size", None)
+            # todo: figure out if we need to add sync_dist arg to self.log calls below?
+            self.log("test/loss", loss.item(), prog_bar=True, batch_size=batch_size)
+        self._update_metrics(loop_type="test", outputs=outputs, return_vals=False)
         self._check_and_render_batch(
             loop_type="test",
             batch=batch,
@@ -375,26 +454,8 @@ class BaseModel(pl.LightningModule):
             outputs=outputs,
             dataloader_idx=dataloader_idx,
         )
-        return outputs
 
-    def test_step_end(self, step_output: pl_types.STEP_OUTPUT) -> None:
-        """Completes the forward + evaluation step for the testing loop.
-
-        Args:
-            step_output: the reasssembled outputs from testing steps that might have happened
-                on different devices and nodes.
-
-        Returns:
-            Nothing.
-        """
-        if "loss" in step_output:
-            loss = step_output["loss"]
-            batch_size = step_output.get("batch_size", None)
-            # todo: figure out if we need to add sync_dist arg to self.log calls below?
-            self.log("test/loss", loss.item(), prog_bar=True, batch_size=batch_size)
-        self._update_metrics(loop_type="test", outputs=step_output, return_vals=False)
-
-    def test_epoch_end(self, *args, **kwargs) -> None:
+    def on_test_epoch_end(self) -> None:
         """Completes the epoch by asking the evaluator to summarize its results."""
         metrics_val = self.compute_metrics(loop_type="test")
         self.log_dict(metrics_val)
@@ -403,25 +464,37 @@ class BaseModel(pl.LightningModule):
         self,
         batch: typing.Dict[typing.AnyStr, typing.Any],
         batch_idx: int,
-        dataloader_idx: typing.Optional[int] = None,
+        dataloader_idx: int = 0,
     ) -> typing.Any:
         """Runs a prediction step on new data, returning only the predictions.
 
+        In comparison with the model's `forward()` implementation, this hook may be used to scale
+        inference on multi-node/device setups.
+
         Note: if you are interested in logging the predictions of the model to disk while computing
-        them, refer to the `pytorch_lightning.callbacks.BasePredictionWriter` callback:
-            https://pytorch-lightning.readthedocs.io/en/stable/api/pytorch_lightning.callbacks.BasePredictionWriter.html
+        them to avoid out-of-memory issues, refer to `pl.callbacks.BasePredictionWriter`:
+            https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.BasePredictionWriter.html
         """
         return self(batch)
 
     @staticmethod
     def _get_batch_size_from_data_loader(data_loader: typing.Any) -> int:
-        """Returns the batch size that will be (usually) used by a given data loader."""
+        """Returns the batch size that will be (usually) used by a given data loader.
+
+        This batch size should correspond to the 'max' batch size typically seen in all batches. It
+        is an optimistic prediction of the real batch size that will probably be seen at runtime.
+        """
         # note: with an extra flag, we could try to load the 1st batch from the loader and check it...
-        if isinstance(data_loader, pytorch_lightning.trainer.supporters.CombinedLoader):
-            assert hasattr(data_loader, "loaders")
-            assert isinstance(data_loader.loaders, torch.utils.data.DataLoader)
-            data_loader = data_loader.loaders
-        if hasattr(data_loader, "batch_sampler"):
+        if isinstance(data_loader, pl.utilities.combined_loader.CombinedLoader):
+            potential_batch_sizes = [
+                bs.batch_size if bs is not None else getattr(data_loader, "batch_size", None)
+                for bs in data_loader.batch_sampler
+            ]
+            assert any(
+                [bs is not None for bs in potential_batch_sizes]
+            ), "could not find any batch size hint in combined data loader!"
+            expected_batch_size = max(bs for bs in potential_batch_sizes if bs is not None)
+        elif hasattr(data_loader, "batch_sampler"):
             assert hasattr(data_loader.batch_sampler, "batch_size")
             # noinspection PyUnresolvedReferences
             expected_batch_size = data_loader.batch_sampler.batch_size
@@ -431,7 +504,6 @@ class BaseModel(pl.LightningModule):
         assert expected_batch_size > 0, "bad expected batch size found!"
         return expected_batch_size
 
-    @abc.abstractmethod
     def _get_data_id(
         self,
         loop_type: str,  # 'train', 'valid', or 'test'
@@ -442,17 +514,29 @@ class BaseModel(pl.LightningModule):
     ) -> typing.Hashable:
         """Returns a unique 'identifier' for a particular data sample in a specific batch.
 
-        By default, the approach to tag samples that's provided below is not robust to dataloader
-        shuffling, meaning that derived classes should implement one if they want persistent IDs. It
-        however does not require that we have the batch data yet, meaning this default approach can
-        run before the train/valid/test loops.
-
-        Derived versions should be robust to cases where batch data is also unavailable, and use
-        temporary IDs if necessary that will be replaced in the render+log function (or just
-        revert back to this base implementation when `batch=None`).
+        By default, the approach to tag samples without batch data that is provided below is not
+        robust to dataloader shuffling, meaning that derived classes should implement one if they
+        want always-persistent IDs (even before train/valid/test loops are ever invoked). If batch
+        data is available, we will assume that we can use an attribute called 'batch_id' directly
+        as the identifier for each batch sample. To generate such an attribute in all your batches,
+        refer to `todo @@@@@@@@@`.
         """
         assert batch is None or isinstance(batch, dict)
         assert batch_idx >= 0 and sample_idx >= 0 and dataloader_idx >= 0
+        if batch is not None:
+            assert (
+                "batch_id" in batch
+            ), "missing mandatory 'batch_id' field required to generate persistent data sample IDs!"
+            assert (
+                "batch_size" in batch
+            ), "missing mandatory 'batch_size' field required to validate persistent data sample IDs!"
+            batch_size, batch_ids = ssl4rs.data.get_batch_size(batch), batch["batch_id"]
+            assert len(batch_ids) == batch_size, "unexpected batch id/size mismatch?"
+            if sample_idx < batch_size:
+                batch_id = batch_ids[sample_idx]
+                assert isinstance(batch_id, typing.Hashable), f"bad batch id type: {type(batch_id)}"
+                return batch_id
+        # if we don't have batch ids or we requested an out-of-batch sample idx, return a generic id
         return f"{loop_type}_loader{dataloader_idx:02d}_batch{batch_idx:05d}_sample{sample_idx:05d}"
 
     def _get_data_ids_for_batch(
@@ -462,8 +546,10 @@ class BaseModel(pl.LightningModule):
         batch_idx: int,  # index of the batch itself inside the dataloader loop
         dataloader_idx: int = 0,  # index of the dataloader that the batch was loaded from
     ) -> typing.List[typing.Hashable]:
-        """Returns a list of 'identifiers' used to uniquely tag all data sample in a given
-        batch."""
+        """Returns a list of identifiers used to uniquely tag all data sample in a given batch.
+
+        This function  returns potentially temporary IDs provided by the `_get_data_id` function.
+        """
         assert loop_type in ["train", "valid", "test"]
         if batch is not None and "batch_size" in batch:
             batch_size = ssl4rs.data.get_batch_size(batch)
@@ -472,9 +558,9 @@ class BaseModel(pl.LightningModule):
                 assert dataloader_idx == 0
                 dataloader = self.trainer.train_dataloader
             elif loop_type == "valid":
-                dataloader = self.trainer.val_dataloaders[dataloader_idx]
+                dataloader = self.trainer.val_dataloaders
             elif loop_type == "test":
-                dataloader = self.trainer.test_dataloaders[dataloader_idx]
+                dataloader = self.trainer.test_dataloaders
             else:
                 raise NotImplementedError
             batch_size = self._get_batch_size_from_data_loader(dataloader)
@@ -583,7 +669,7 @@ class BaseModel(pl.LightningModule):
                             )
                         )
             else:
-                batch_size = self._get_batch_size_from_data_loader(dataloaders[0])
+                batch_size = self._get_batch_size_from_data_loader(dataloaders)
                 selected_batch_idxs = rng.choice(
                     num_batches[0],
                     size=min(self.sample_count_to_render, num_batches[0]),
@@ -619,8 +705,8 @@ class BaseModel(pl.LightningModule):
         rendering result.
         """
         if loop_type not in self._ids_to_render or not self._ids_to_render[loop_type]:
-            return  # quick exit if we don't actually want to render/log any predictions\
-        assert batch is not None, "it's render time, we need the batch data now for sure!"
+            return  # quick exit if we don't actually want to render/log any predictions
+        assert batch is not None, "it's rendering time, we need the batch data!"
         # first step is to check what sample IDs we have in front of us with the current batch
         # (we'll extract IDs with + without batch data, in case some need to be made persistent)
         persistent_ids, temporary_ids = (
@@ -692,29 +778,29 @@ class BaseModel(pl.LightningModule):
         """Logs an already-rendered image in OpenCV BGR format to TBX/MLFlow/Wandb."""
         logger.debug(f"Will try to log rendered image with key '{key}'")
         assert image.ndim == 3 and image.shape[-1] == 3 and image.dtype == np.uint8
-        image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+        image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)  # noqa
         assert len(key) > 0
         for loggr in self.loggers:
-            if isinstance(loggr, pytorch_lightning.loggers.TensorBoardLogger):
+            if isinstance(loggr, pl_loggers.TensorBoardLogger):
                 loggr.experiment.add_image(
                     tag=key,
                     img_tensor=image_rgb,
                     global_step=self.global_step,
                     dataformats="HWC",
                 )
-            elif isinstance(loggr, pytorch_lightning.loggers.MLFlowLogger):
+            elif isinstance(loggr, pl_loggers.MLFlowLogger):
                 assert loggr.run_id is not None
                 loggr.experiment.log_image(
                     run_id=loggr.run_id,
                     image=image_rgb,
                     artifact_file=f"renders/{key}.png",
                 )
-            elif isinstance(loggr, pytorch_lightning.loggers.CometLogger):
+            elif isinstance(loggr, pl_loggers.CometLogger):
                 loggr.experiment.log_image(
                     image_data=image_rgb,
                     name=key,
                 )
-            elif isinstance(loggr, pytorch_lightning.loggers.WandbLogger):
+            elif isinstance(loggr, pl_loggers.WandbLogger):
                 loggr.log_image(
                     key=key,
                     images=[image_rgb],
