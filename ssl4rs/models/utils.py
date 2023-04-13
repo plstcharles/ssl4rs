@@ -519,7 +519,7 @@ class BaseModel(pl.LightningModule):
         want always-persistent IDs (even before train/valid/test loops are ever invoked). If batch
         data is available, we will assume that we can use an attribute called 'batch_id' directly
         as the identifier for each batch sample. To generate such an attribute in all your batches,
-        refer to `todo @@@@@@@@@`.
+        refer to the `_get_batch_id_for_index` function of the `DataParser` base class.
         """
         assert batch is None or isinstance(batch, dict)
         assert batch_idx >= 0 and sample_idx >= 0 and dataloader_idx >= 0
