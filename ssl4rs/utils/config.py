@@ -64,6 +64,7 @@ def extra_inits(
 
     # we might reseed again elsewhere, but we'll at least do it here to make sure
     seed_everything(config)
+    torch.use_deterministic_algorithms(config.utils.use_deterministic_algorithms)
 
     # finally, set the global config reference
     if set_as_global_cfg:
@@ -89,11 +90,9 @@ def seed_everything(config: omegaconf.DictConfig) -> int:
     If the seed is not set (i.e. its value is `None`), a new seed will be picked randomly and set
     inside the config dictionary. In any case, the seed that is set is returned by the function.
     """
-    seed, seed_workers = config.get("seed", None), config.get("seed_workers")
-    assert isinstance(seed_workers, bool)
-    set_seed = pl.seed_everything(seed, workers=seed_workers)
-    if seed is None:
-        config["seed"] = set_seed
+    set_seed = pl.seed_everything(config.utils.seed, workers=config.utils.seed_workers)
+    if config.utils.seed is None:
+        config.utils.seed = set_seed
     return set_seed
 
 

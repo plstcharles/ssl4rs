@@ -25,5 +25,7 @@ experiment_name: default # defines the experiment name used in various output/lo
 run_type: test # should always remain as 'test' unless a derivation of the testing pipeline is used
 run_name: ${utils.curr_timestamp} # defines the run name used in various output/logging paths
 job_name: ${oc.select:hydra.job.num,0} # defines the job name used in various output/logging paths
-seed: 1 # seed for random number generators (null = auto-seed based e.g. on datetime)
-seed_workers: True # toggles whether to initialize workers with the above seed as well
+
+utils:
+  seed: 1 # run with a fixed seed (at least at first, might help find bugs)
+  seed_workers: True # also fix that seed across all data loader workers

@@ -33,7 +33,6 @@ class DeepLakeParser(DataParser):
         Note that due to the design of this class (and in contrast to the exporter class), all
         datasets should only ever be opened in read-only mode here.
         """
-        """Validates that the provided PyTorch-Dataset-compatible object can be wrapped."""
         super().__init__(batch_transforms=batch_transforms, batch_id_prefix=batch_id_prefix)
         if isinstance(dataset_path_or_object, deeplake.Dataset):
             assert not extra_deeplake_kwargs, "dataset is already opened, can't use extra kwargs"
