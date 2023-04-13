@@ -19,6 +19,7 @@ def test_resume_after_completion(tmpdir):
         "++trainer.max_epochs=2",
         "++trainer.limit_train_batches=5",
         "++trainer.limit_val_batches=5",
+        "++trainer.limit_test_batches=5",
     ]
     output = module_runner.run(command)
     if output.returncode != 0:
@@ -38,7 +39,7 @@ def test_resume_after_completion(tmpdir):
     os.remove(expected_csv_log)
     assert not os.path.isfile(expected_csv_log)
     # 2nd run with same args, plus the resume token:
-    command.append("++resume_from_latest_if_possible=True")
+    command.append("resume_from_latest_if_possible=True")
     output = module_runner.run(command)
     if output.returncode != 0:
         pytest.fail(output.stderr)
@@ -66,6 +67,7 @@ def test_resume_after_interruption(tmpdir):
         "++trainer.max_epochs=5",
         "++trainer.limit_train_batches=5",
         "++trainer.limit_val_batches=5",
+        "++trainer.limit_test_batches=5",
     ]
     output = module_runner.run(command)
     if output.returncode != 0:
@@ -84,7 +86,7 @@ def test_resume_after_interruption(tmpdir):
     assert os.path.isfile(expected_csv_log)
     old_csv_data = pd.read_csv(expected_csv_log)
     # 2nd run with same args, plus the resume token and increased step limits:
-    command.append("++resume_from_latest_if_possible=True")
+    command.append("resume_from_latest_if_possible=True")
     command.append("++trainer.max_steps=12")  # should get to 3rd epoch
     output = module_runner.run(command)
     if output.returncode != 0:

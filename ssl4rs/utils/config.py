@@ -445,9 +445,9 @@ def init_hydra_and_compose_config(
     # setup overrides based on provided args
     overrides = [] if overrides is None else [o for o in overrides]
     if data_root_dir is not None:
-        overrides.append(f"++utils.data_root_dir={str(data_root_dir)}")
+        overrides.append(f"utils.data_root_dir={str(data_root_dir)}")
     if output_root_dir is not None:
-        overrides.append(f"++utils.output_root_dir={str(output_root_dir)}")
+        overrides.append(f"utils.output_root_dir={str(output_root_dir)}")
     # initialize hydra and return the resulting config
     with hydra.initialize(version_base=version_base, config_path=str(configs_dir), caller_stack_depth=2):
         config = hydra.compose(config_name=config_name, overrides=overrides)

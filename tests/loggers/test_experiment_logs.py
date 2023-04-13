@@ -36,6 +36,7 @@ def _launch_experiment_and_return_out_dir(tmpdir, run_suffix, *extra_cmd_args):
     return expected_out_dir
 
 
+@pytest.mark.slow
 def test_tboard_and_csv(tmpdir):
     """Test tboard+csv logger outputs after running 2 epoch on CPU with the fast config."""
     out_dir = _launch_experiment_and_return_out_dir(tmpdir, run_suffix="tboard_and_csv")
@@ -122,6 +123,7 @@ def test_mlflow(tmpdir):
     assert len(mlflow_run_dirs2) == 2
 
 
+@tests.helpers.runif.RunIf(has_comet_api_key=True)
 @pytest.mark.slow
 def test_comet_offline(tmpdir):
     """Test Comet ML offline logger outputs after running 2 epoch on CPU with the fast config."""
