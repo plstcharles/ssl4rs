@@ -1,7 +1,61 @@
+import pathlib
+
 import numpy as np
+import PIL.Image
+import pytest
 
 import ssl4rs.utils.imgproc as imgproc
 import ssl4rs.utils.patch_coord as patches
+
+
+def test_get_image_shape_from_file(tmpdir):
+    img_dir = pathlib.Path(tmpdir) / "dummy_images_for_shape_getter"
+    img_dir.mkdir(exist_ok=True)
+    np.random.seed(0)
+    for img_idx in range(50):
+        img_h, img_w = np.random.randint(8, 1000), np.random.randint(8, 1000)
+        img = np.random.randint(0, 256, size=(img_h, img_w, 3), dtype=np.uint8)
+        img_path = img_dir / f"{img_idx}.jpg"
+        PIL.Image.fromarray(img).save(img_path)
+        found_h, found_w = imgproc.get_image_shape_from_file(img_path)
+        assert found_h == img_h and found_w == img_w
+
+
+def test_decode_jpg_without_rescale(tmpdir):
+    img_dir = pathlib.Path(tmpdir) / "dummy_images_for_decoder_without_rescale"
+    img_dir.mkdir(exist_ok=True)
+    np.random.seed(0)
+    for img_idx in range(50):
+        img_h, img_w = np.random.randint(8, 1000), np.random.randint(8, 1000)
+        img = np.random.randint(0, 256, size=(img_h, img_w, 3), dtype=np.uint8)
+        img_path = img_dir / f"{img_idx}.jpg"
+        PIL.Image.fromarray(img).save(img_path)
+        decoded_img = imgproc.decode_jpg(image=img_path)
+        assert decoded_img.ndim == 3 and decoded_img.shape[-1] == 3
+        assert decoded_img.shape == img.shape
+
+
+@pytest.mark.parametrize("downscale_ratio", [2, 4, 8])
+def test_decode_jpg_with_rescale(tmpdir, downscale_ratio):
+    # note: scales 1:2 + 1:4 are SIMD-enabled, 1:8 is not (according to libjpeg-turbo docs)
+    img_dir = pathlib.Path(tmpdir) / "dummy_images_for_decoder_with_rescale"
+    img_dir.mkdir(exist_ok=True)
+    np.random.seed(0)
+    for img_idx in range(50):
+        img_h, img_w = np.random.randint(8, 1000), np.random.randint(8, 1000)
+        img = np.random.randint(0, 256, size=(img_h, img_w, 3), dtype=np.uint8)
+        img_path = img_dir / f"{img_idx}.jpg"
+        PIL.Image.fromarray(img).save(img_path)
+        decoded_img = imgproc.decode_jpg(
+            image=img_path,
+            to_bgr_format=False,
+            use_fast_upsample=True,
+            use_fast_dct=True,
+            scaling_factor=(1, downscale_ratio),
+        )
+        assert decoded_img.ndim == 3 and decoded_img.shape[-1] == 3
+        expected_shape = tuple(int(round(z * (1 / downscale_ratio))) for z in img.shape[:2])
+        assert np.isclose(decoded_img.shape[:2], expected_shape, atol=1).all()
 
 
 def test_flex_crop_regular_tensor():

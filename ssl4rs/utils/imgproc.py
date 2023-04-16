@@ -2,26 +2,159 @@
 
 import pathlib
 import typing
+from unittest import mock
 
-import imagesize
 import numpy as np
 import torch
 
 import ssl4rs.utils.patch_coord
 
+_turbojpeg_handler = None
+
+try:
+    import turbojpeg
+except ImportError:
+    turbojpeg = mock.Mock()
+
+
+def _get_turbojpeg_handler() -> "turbojpeg.TurboJPEG":
+    """Returns the global handler used to interact with the turbojpeg library."""
+    global _turbojpeg_handler
+    if _turbojpeg_handler is None:
+        assert not isinstance(turbojpeg, mock.Mock), "missing package: PyTurboJPEG"
+        _turbojpeg_handler = turbojpeg.TurboJPEG()
+    return _turbojpeg_handler
+
 
 def get_image_shape_from_file(
     file_path: typing.Union[typing.AnyStr, pathlib.Path],
+    with_turbojpeg: bool = True,
 ) -> typing.Tuple[int, int]:
     """Returns the (height, width) of an image stored on disk.
 
     This function will parse the file header and try to deduct the image size without actually
     opening the image. This should make it much faster to quickly parse datasets to validate their
     contents without opening each image directly.
+
+    This can be done via libjpeg-turbo (`with_turbojpeg=True`), or via the imagesize package.
     """
-    width, height = imagesize.get(str(file_path))
-    assert width > 0 and height > 0, "invalid image shape!"
+    if with_turbojpeg:
+        turbojpeg_handler = _get_turbojpeg_handler()
+        jpeg_header = _read_jpeg_header_only(file_path)
+        header = turbojpeg_handler.decode_header(jpeg_header)
+        width, height, jpeg_subsample, jpeg_colorspace = header
+    else:
+        import imagesize
+
+        width, height = imagesize.get(str(file_path))
+    assert width > 0 and height > 0, "invalid image!"
     return height, width
+
+
+def _read_jpeg_header_only(
+    image: typing.Union[typing.AnyStr, pathlib.Path],
+    chunk_size: int = 1024,
+    body_padding_size: int = 32,
+) -> bytes:
+    """Reads and returns the header of a jpeg file using turbojpeg without reading the image data.
+
+    If the file is not a valid JPEG, an exception will be thrown. For more information on the
+    header markers, see:
+        https://docs.fileformat.com/image/jpeg/
+
+    Args:
+        image: the path to the file to be parsed for a JPEG header.
+        chunk_size: the size of the memory block to read in each iteration.
+        body_padding_size: the size of the raw data to retain in the image body.
+
+    Returns:
+        The raw bytes representing the encoded header of the JPEG image. Every marker up to the
+        start-of-signal (SOS) will be included; after the SOS, we will add some dummy body padding,
+        and end the byte array with the end-of-image (EOI) marker.
+    """
+    image = pathlib.Path(image)
+    assert image.is_file(), f"invalid image path: {image}"
+    assert body_padding_size < chunk_size - 1
+    with open(image, "rb") as fd:
+        # read the first two bytes to check if it's a valid jpeg file
+        first_two_bytes = fd.read(2)
+        if first_two_bytes != b"\xFF\xD8":
+            raise RuntimeError("Invalid jpeg file (unexpected header encoding)")
+        header_data = [first_two_bytes]
+        while True:  # while we have not reached the image data, keep ingesting...
+            memblock = fd.read(chunk_size)
+            if not memblock:
+                raise RuntimeError("Invalid jpeg file (unexpected end-of-file in header)")
+            # if found a fragmented SOS marker, just add the missing fragment
+            if header_data[-1][-1] == b"\xFF" and memblock[0] == b"\xDA":
+                header_data.append(memblock[: body_padding_size + 1])
+                break
+            # otherwise, if we hit the full SOS marker, add what's needed
+            found_start_of_scan = memblock.find(b"\xFF\xDA")
+            if found_start_of_scan != -1:
+                if found_start_of_scan + 2 + body_padding_size > len(memblock):
+                    header_data.append(memblock)
+                    extra_to_read = (found_start_of_scan + 2 + body_padding_size) - len(memblock)
+                    header_data.append(fd.read(extra_to_read))
+                else:
+                    header_data.append(memblock[: found_start_of_scan + 2 + body_padding_size])
+                break
+    header_data = b"".join(header_data + [b"\xFF\xD9"])
+    return header_data
+
+
+def decode_jpg(
+    image: typing.Union[typing.AnyStr, pathlib.Path, bytes],
+    to_bgr_format: bool = True,
+    use_fast_upsample: bool = False,
+    use_fast_dct: bool = False,
+    scaling_factor: typing.Optional[typing.Tuple[int, int]] = None,
+):
+    """Decodes a JPEG from its (encoded) bytes data into an image.
+
+    Note: when using the scaling factor, the expected image size might be off-by-one compared to
+    when using a rounded or floored shape estimate; do not rely on those too much...
+
+    Args:
+        image: the path to the jpeg file to be parsed, or the encoded jpeg file data directly.
+        to_bgr_format: defines whether to keep the image data in BGR format, or decode it to RGB.
+        use_fast_upsample: allows faster decoding by skipping chrominance sample smoothing; see
+            https://jpeg-turbo.dpldocs.info/libjpeg.turbojpeg.TJFLAG_FASTUPSAMPLE.html
+        use_fast_dct: allows the use of the fastest DCT/IDCT algorithm available; see
+            https://jpeg-turbo.dpldocs.info/libjpeg.turbojpeg.TJFLAG_FASTDCT.html
+        scaling_factor: optional scaling factor that can be applied to resample the image as it is
+            being decoded. Derived from IDCT scaling extensions in libjpeg-turbo decompressor.
+            Only a handful of factors are supported, and only `(1, 2)` and `(1, 4)` are
+            SIMD-enabled.
+
+    Returns:
+        The decoded jpeg image.
+    """
+    assert isinstance(image, (bytes, str, pathlib.Path)), f"invalid data type: {type(image)}"
+    if isinstance(image, (str, pathlib.Path)):
+        image = pathlib.Path(image)
+        assert image.is_file(), f"missing jpeg image: {image}"
+        with open(image, "rb") as fd:
+            image = fd.read()
+    assert isinstance(image, bytes)
+    turbojpeg_handler = _get_turbojpeg_handler()
+    flags = 0
+    if use_fast_upsample:
+        flags = flags | turbojpeg.TJFLAG_FASTUPSAMPLE
+    if use_fast_dct:
+        flags = flags | turbojpeg.TJFLAG_FASTDCT
+    output = turbojpeg_handler.decode(
+        image,
+        pixel_format=turbojpeg.TJPF_BGR if to_bgr_format else turbojpeg.TJPF_RGB,
+        scaling_factor=scaling_factor,
+        flags=flags,
+    )
+    assert output.ndim == 3 and output.shape[-1] == 3
+    return output
+
+
+# check crop_multiple from turbojpeg @@@@@@
+# also check regular crop and transform ops (flips, rotations)
 
 
 def flex_crop(
