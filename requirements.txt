@@ -15,7 +15,8 @@ hydra-core~=1.3  # configuration/logging
 imagesize  # generic imgproc utility
 isort  # code formatting
 jupyter  # for data exploration notebooks
-lightning-bolts==0.6.0.post1  # for extra lightning goodies
+lightning~=2.0  # pytorch training helper
+# lightning-bolts==0.6.0.post1  # @@@@ todo: bump!
 lz4  # data compression
 matplotlib  # visualization/logging
 mlflow  # visualization/logging
@@ -29,7 +30,7 @@ pre-commit # code formatting and static analysis
 pyrootutils # tooling for python proj
 pytest  # testing
 python-dotenv  # loads env variables from .env
-lightning~=2.0  # pytorch training helper
+PyTurboJPEG @ git+https://github.com/plstcharles/PyTurboJPEG@master
 pyyaml  # configuration/logging
 rich  # better text formatting
 segmentation-models-pytorch  # model architectures
