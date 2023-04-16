@@ -97,8 +97,8 @@ class DeepLakeParser(DataParser):
         """Prints a summary of the deeplake dataset using the default logger."""
         # note: this code is derived from the original deeplake dataset's "summary" implementation
         pretty_print = deeplake.util.pretty_print.summary_dataset(self.dataset)
-        logger.info(self)
         logger.info(self.dataset)
+        logger.info(self.dataset.info)
         logger.info(pretty_print)
 
     def visualize(self, *args, **kwargs):
