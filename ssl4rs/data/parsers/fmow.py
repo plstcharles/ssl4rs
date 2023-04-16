@@ -8,6 +8,8 @@ https://spacenet.ai/iarpa-functional-map-of-the-world-fmow/
 
 import typing
 
+import deeplake
+
 import ssl4rs.data.parsers.utils
 import ssl4rs.data.repackagers.fmow
 
@@ -16,6 +18,31 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
     """FMoW requires a bit of special handling on top of the base deeplake parser."""
 
     metadata = ssl4rs.data.metadata.fmow
+
+    def __init__(
+        self,
+        dataset_path_or_object: typing.Union[typing.AnyStr, deeplake.Dataset],
+        batch_transforms: "ssl4rs.data.BatchTransformType" = None,
+        batch_id_prefix: typing.Optional[typing.AnyStr] = None,
+        **extra_deeplake_kwargs,
+    ):
+        """Parses a FMoW deeplake archive or wraps an already-opened object.
+
+        Note that due to the design of this class (and in contrast to the exporter class), all
+        datasets should only ever be opened in read-only mode here.
+        """
+        super().__init__(
+            dataset_path_or_object=dataset_path_or_object,
+            batch_transforms=batch_transforms,
+            batch_id_prefix=batch_id_prefix,
+            **extra_deeplake_kwargs,
+        )
+        # TODO @@@@@: add ignore metadata, ignore imgidxs, ... (to avoid batching those?)
+        # TODO 2 @@@@@@@: add flags to change jpeg loading strategy (deeplake vs manual decoding)
+
+    def __len__(self) -> int:
+        """Returns the total size (in terms of instance count) of the dataset."""
+        return len(self.dataset.instances)
 
     def _get_raw_batch(
         self,
@@ -28,19 +55,17 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
         This is a custom reimplementation of the base class version that processes sequences of data
         so that they can be batched properly.
         """
-        data = self.dataset[index]  # noqa
-        assert all([name in data for name in self.tensor_names])
-        batch = dict(
-            bboxes=data["bboxes"].numpy(),  # shape = (N, 4) where N is the view count
-            instance=data["instance"].text(),  # str with instance name
-            label_idx=int(data["label"].numpy()),  # 0-based class index
-            metadata=data["metadata"].dict(),  # list of N (= view count) metadata dicts
-            subset_idx=int(data["subset"].numpy()),  # 0-based subset index
-            views=data["views"],  # return the deeplake dataset/tensor view as-is for more preproc
-        )
-        assert len(batch["bboxes"]) == len(batch["metadata"])
-        assert len(batch["bboxes"]) == batch["views"].shape[0]
-        batch["view_count"] = batch["views"].shape[0]
-        batch["label"] = self.metadata.class_names[batch["label_idx"]]
-        batch["subset"] = self.metadata.subset_types[batch["subset_idx"]]
+        instance_data = self.dataset.instances[index]
+        image_idxs = instance_data.image_idxs.list()
+        image_data = [self.dataset.images[img_idx] for img_idx in image_idxs]
+        batch = {
+            "images/rgb/jpg": [img_data.rgb.jpg for img_data in image_data],
+            "images/rgb/bbox": [img_data.rgb.bbox.numpy() for img_data in image_data],
+            "images/rgb/metadata": [img_data.rgb.metadata.dict() for img_data in image_data],
+            "instance/image_idxs": image_idxs,
+            "instance/label": instance_data.label.numpy(),
+            "instance/subset": instance_data.subset.numpy(),
+            "instance/id": instance_data.id.text(),
+        }
         return batch
+        # @@@@@@@@@@ get images with .tobytes() and decompress manually w/ libjpeg-turbo? (maybe in wrapper?)
