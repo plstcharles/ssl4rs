@@ -39,13 +39,13 @@ class DeepLakeRepackager:
 
     @property
     def tensor_names(self) -> typing.List[str]:
-        """Names of the tensors that will be exported in the hub dataset object."""
+        """Names of the tensors that will be exported in the dataset object."""
         return list(self.tensor_info.keys())
 
     @property
     @abc.abstractmethod
     def dataset_info(self) -> typing.Dict[str, typing.Any]:
-        """Returns metadata information that will be exported in the hub dataset object.
+        """Returns metadata information that will be exported in the dataset object.
 
         Note: the values provided in the dictionary should be compatible with the values that
         can be exported in the `deeplake.Dataset.info` object; see
@@ -77,15 +77,25 @@ class DeepLakeRepackager:
         """
         raise NotImplementedError
 
+    def _export_sample_data(self, sample_index, sample_out):
+        """Fetches a data sample from the getitem implementation and appends it to the output."""
+        # this default implementation assumes all tensor datasets have the same length; override this
+        # function if this is not the case, as exportation will fail otherwise!
+        sample_data = self[sample_index]  # this is where the __getitem__ is called...
+        assert isinstance(sample_data, dict) and all([tn in sample_data for tn in self.tensor_names])
+        sample_out.append(sample_data)  # this should add all the tensors at once...
+        return sample_out
+
     @staticmethod
     @deeplake.compute
     def _data_sample_exporter(sample_index, sample_out, exporter):
-        """Fetches a data sample from a derived class getitem implementation for hub
-        exportation."""
-        sample_data = exporter[sample_index]  # this is where the __getitem__ is called...
-        assert isinstance(sample_data, dict) and all([tn in sample_data for tn in exporter.tensor_names])
-        sample_out.append(sample_data)  # this should add all the tensors at once...
-        return sample_out
+        """Fetches a data sample from a derived getitem implementation for exportation."""
+        exporter._export_sample_data(sample_index, sample_out)  # noqa
+
+    def _finalize_dataset_export(self, dataset: deeplake.Dataset) -> None:
+        """Finalizes the exportation of the deeplake dataset, adding extra info as needed."""
+        # by default, we do nothing here, as the default implementation has nothing to add
+        pass
 
     def export(
         self,
@@ -97,15 +107,15 @@ class DeepLakeRepackager:
         progressbar: bool = True,
         **extra_deeplake_kwargs,
     ) -> None:
-        """Exports the dataset to a hub file at the specified location.
+        """Exports the dataset to the specified location.
 
         By default, if a file exists at the specified path, we will not be overwriting it; we will
         instead verify that it is the same dataset with the same content, and throw an exception
         otherwise.
 
-        Note that with hub, the output path can be a local path or a remote (server) path under the
-        form `PROTOCOL://SERVERNAME/DATASETNAME`. Hub will take care of exporting the data during
-        the dataset creation.
+        Note that with deeplake, the output path can be a local path or a remote (server) path
+        under the form `PROTOCOL://SERVERNAME/DATASETNAME`. Deeplake will take care of exporting
+        the data during the dataset creation.
         """
         output_path = str(output_path)
         # first, figure out if the dataset exists and whether we need to validate it...
@@ -159,8 +169,8 @@ class DeepLakeRepackager:
                 if progressbar:
                     sample_idxs = tqdm.tqdm(sample_idxs, desc=f"exporting {self.dataset_name}")
                 for sample_idx in sample_idxs:
-                    data_sample = self[sample_idx]
-                    dataset.append(data_sample)
+                    self._export_sample_data(sample_idx, dataset)
+            self._finalize_dataset_export(dataset)
         # all done!
         size_approx_mb = dataset.size_approx() // (1024 * 1024)
         logger.debug(f"export complete, approx size = {size_approx_mb} MB")
