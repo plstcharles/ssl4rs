@@ -9,6 +9,7 @@ import bz2
 import io
 import json
 import pathlib
+import pickle
 import re
 import tarfile
 import typing
@@ -30,12 +31,13 @@ logger = ssl4rs.utils.logging.get_logger(__name__)
 class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
     """Repackages the Functional Map of the World (FMoW) dataset into a deeplake format.
 
-    Each class instance will be stored as a group with all its views as single samples in order to
-    help do cross-view sampling. Each view (image) will be stored in its original binary format
-    with its associated GSD and metadata as extra attributes.
+    Each class instance will be stored as a group with all its metadata in one place, and it will
+    point (using indices) to the images that belong to it in a separate dataset. Each image will be
+    stored in its original format so that they can be manually decoded if needed.
 
     Note: running this repackager requires 16GB+ of RAM, as many JSON configs will be preloaded to
-    memory to simplify/speed up mappings.
+    memory to simplify/speed up mappings. When processing the RGB dataset with all subsets and JPEG
+    compression, the resulting deeplake archive will be roughly 180GB (as of FMoW v1.2.1).
     """
 
     metadata = ssl4rs.data.metadata.fmow
@@ -44,14 +46,26 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
     def tensor_info(self) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
         """Returns the dictionary of tensor info (declaration) arguments used during creation."""
         assert self.image_type == "rgb", "other dataset types not supported yet! @@@@"
-        return dict(
-            views=dict(htype="sequence[image.rgb]", dtype=np.uint8, sample_compression="jpg"),
-            metadata=dict(htype="sequence[json]", sample_compression=None),
-            bboxes=dict(htype="sequence[bbox]", dtype=np.int32, coords=dict(type="pixel", mode="LTWH")),
-            label=dict(htype="class_label", dtype=np.int16, class_names=self.metadata.class_names),
-            subset=dict(htype="class_label", dtype=np.int8, class_names=self.metadata.subset_types),
-            instance=dict(htype="text", dtype=str, sample_compression=None),
+        images_prefix = f"images/{self.image_type}"
+        images_dataset_dict = dict(
+            htype="image.rgb" if self.image_type == "rgb" else "generic",
+            dtype=np.uint8 if self.image_type == "rgb" else np.int16,  # TODO: make sure int16 is OK?
+            sample_compression=self.image_compression_type,
         )
+        return {
+            # note: the 'images' tensor datasets share the same length among themselves;
+            # they contain the concatenated image data of ALL instances, and a handful of these
+            # should be returned for each instance, based on the `image_idxs` values provided below
+            f"{images_prefix}/{self.image_compression_type}": images_dataset_dict,
+            f"{images_prefix}/bbox": dict(htype="bbox", dtype=np.int32, coords=dict(type="pixel", mode="LTWH")),
+            f"{images_prefix}/metadata": dict(htype="json", sample_compression=None),
+            # the 'instances' tensor datasets share the same length, and each sample should
+            # correspond to a single instance in the original FMoW dataset (i.e. one real "object")
+            "instances/image_idxs": dict(htype="list", sample_compression=None),  # list of image indices
+            "instances/label": dict(htype="class_label", dtype=np.int16, class_names=self.metadata.class_names),
+            "instances/subset": dict(htype="class_label", dtype=np.int8, class_names=self.metadata.subset_types),
+            "instances/id": dict(htype="text", dtype=str, sample_compression=None),
+        }
 
     @property  # we need to provide this for the base class!
     def dataset_info(self) -> typing.Dict[str, typing.Any]:
@@ -60,6 +74,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             name=self.dataset_name,
             class_names=self.metadata.class_names,
             image_type=self.image_type,
+            image_compression=self.image_compression_type,
             subset_types=self.subset_types,
             version=self.version,
         )
@@ -119,6 +134,11 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         """Loads the `groundtruth.tar.bz2` file contents to memory."""
         groundtruth_path = self.data_root_path / "groundtruth.tar.bz2"
         assert groundtruth_path.is_file(), f"invalid gt file: {groundtruth_path}"
+        groundtruth_cache_path = self.data_root_path / "groundtruth.cache.pkl"
+        if groundtruth_cache_path.is_file() and self._use_cache:
+            with open(groundtruth_cache_path, "rb") as fd:
+                gt_mappings, gt_data = pickle.load(fd)
+            return gt_mappings, gt_data
         logger.info(f"parsing FMoW file: {groundtruth_path}")
         with open(groundtruth_path, mode="rb") as fd:
             tar_data = io.BytesIO(fd.read())
@@ -150,10 +170,18 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                             overwrite_if_needed=False,
                         )
                     pbar.update(1)
+        if self._use_cache:
+            with open(groundtruth_cache_path, "wb") as fd:
+                pickle.dump((gt_mappings, gt_data), fd)
         return gt_mappings, gt_data
 
     def _parse_metadata(self) -> typing.Dict:
         """Parses the metadata of all instances using the groundtruth json data."""
+        metadata_cache_path = self.data_root_path / "metadata.cache.pkl"
+        if metadata_cache_path.is_file() and self._use_cache:
+            with open(metadata_cache_path, "rb") as fd:
+                metadata = pickle.load(fd)
+            return metadata
         metadata = dict()
         assert self._gt_mappings and self._gt_data, "gt data must be loaded first"
         wanted_prefixes = [subset_id + "/" for subset_id in self.subset_types]
@@ -188,61 +216,66 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                 assert class_id in self.metadata.class_names
                 instance_metadata = self._gt_data[subset_id][class_id][instance_id]
             assert isinstance(instance_metadata, dict)
-            for curr_view_meta in instance_metadata.values():
-                assert "bounding_boxes" in curr_view_meta
-                assert isinstance(curr_view_meta["bounding_boxes"], list)
-                # there should only be one groundtruth bbox per entire view/image
-                assert sum(bbox["ID"] == -1 for bbox in curr_view_meta["bounding_boxes"]) == 1
+            for curr_img_meta in instance_metadata.values():
+                assert "bounding_boxes" in curr_img_meta
+                assert isinstance(curr_img_meta["bounding_boxes"], list)
+                # there should only be one groundtruth bbox per entire image
+                assert sum(bbox["ID"] == -1 for bbox in curr_img_meta["bounding_boxes"]) == 1
                 # ... and it should be the first in the list
-                assert curr_view_meta["bounding_boxes"][0]["ID"] == -1
+                assert curr_img_meta["bounding_boxes"][0]["ID"] == -1
             assert instance_id.startswith(class_id)
             assert file_id.count("_") >= 2
-            view_id = file_id.rsplit("_", maxsplit=2)[-2]
-            assert int(view_id) >= 0
-            view_metadata_key = f"{instance_id}_{view_id}_{self.image_type}.json"
-            view_metadata = instance_metadata[view_metadata_key]
+            img_id = file_id.rsplit("_", maxsplit=2)[-2]
+            assert int(img_id) >= 0
+            img_metadata_key = f"{instance_id}_{img_id}_{self.image_type}.json"
+            img_metadata = instance_metadata[img_metadata_key]
             assert isinstance(instance_metadata, dict)
             assert not file_path.endswith(".json")
             file_abs_path = self.data_root_path / file_path
             assert file_abs_path.is_file(), f"missing file: {file_path}"
             self._insert_with_recursive_key(
                 out_dict=metadata,
-                key=subset_id + "/" + instance_id + f"/view_{view_id}",
+                key=subset_id + "/" + instance_id + f"/img_{img_id}",
                 data=dict(
                     file_abs_path=file_abs_path,
-                    metadata=view_metadata,
+                    metadata=img_metadata,
                     subset_id=subset_id,
                     class_id=class_id,
                     instance_id=instance_id,
                     file_id=file_id,
-                    view_id=view_id,
+                    img_id=img_id,
                 ),
                 overwrite_if_needed=False,
             )
+        if self._use_cache:
+            with open(metadata_cache_path, "wb") as fd:
+                pickle.dump(metadata, fd)
         return metadata
 
     def _prepare_maps(self) -> None:
         """Prepares the sample index and instance ID maps used to fetch specific data."""
-        assert self._total_samples == 0, "should only call once!"
+        assert self._total_instances == 0, "should only call once!"
         for subset_id, instance_ids in self._metadata.items():
-            for instance_id, view_ids in self._metadata[subset_id].items():
-                assert len(list(view_ids)) > 0
-                views = [self._metadata[subset_id][instance_id][view_id] for view_id in view_ids]
-                assert len({v["class_id"] for v in views}) == 1
-                class_id = views[0]["class_id"]
-                ids_tuple = (subset_id, class_id, instance_id, tuple(view_ids))
+            for instance_id, img_ids in self._metadata[subset_id].items():
+                assert len(list(img_ids)) > 0
+                imgs = [self._metadata[subset_id][instance_id][img_id] for img_id in img_ids]
+                assert len({v["class_id"] for v in imgs}) == 1
+                class_id = imgs[0]["class_id"]
+                ids_tuple = (subset_id, class_id, instance_id, tuple(img_ids))
                 assert ids_tuple not in self._ids_to_idx_map
-                self._ids_to_idx_map[ids_tuple] = self._total_samples
-                self._idx_to_ids_map[self._total_samples] = ids_tuple
-                self._total_samples += 1
-                self._total_views += len(view_ids)
-        assert self._total_samples > 0, "something went wrong..."
+                self._ids_to_idx_map[ids_tuple] = self._total_instances
+                self._idx_to_ids_map[self._total_instances] = ids_tuple
+                self._total_instances += 1
+                self._total_images += len(img_ids)
+        assert self._total_instances > 0, "something went wrong..."
 
     def __init__(
         self,
         dataset_root_path: typing.Union[typing.AnyStr, pathlib.Path],
         image_type: typing.AnyStr = "rgb",
+        image_compression_type: typing.AnyStr = "jpg",
         subset_type: typing.Union[typing.AnyStr, typing.List] = "all",
+        use_cache: bool = False,
     ):
         """Parses the dataset structure and makes sure all the data is present.
 
@@ -250,11 +283,15 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             dataset_root_path: path to the directory containing all the FMoW data.
             image_type: image type to extract; should be either 'rgb' for the RGB-only images,
                 or 'full' for the multispectral images.
+            image_compression_type: image compression type to use in repackaged dataset.
             subset_type: subset type to extract; should be train/val/test/seq, or 'all' for their
                 combination.
+            use_cache: toggles whether to cache the groundtruth and metadata attributes.
         """
         assert image_type in self.metadata.image_types
         self.image_type = image_type
+        assert image_compression_type in ["jpg"], f"unsupported compression type: {image_compression_type}"
+        self.image_compression_type = image_compression_type
         if not isinstance(subset_type, list):
             assert subset_type in self.metadata.subset_types, f"unsupported FMoW subset type: {subset_type}"
             if subset_type == "all":
@@ -266,6 +303,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                 [s in self.metadata.subset_types for s in subset_type]
             ), f"bad FMoW subset type(s): {subset_type}"
             self.subset_types = list(set(subset_type))
+        self._use_cache = use_cache
         dataset_root_path = pathlib.Path(dataset_root_path)
         self.data_root_path = dataset_root_path / f"fmow-{self.image_type}"
         assert self.data_root_path.exists(), f"invalid dataset path: {self.data_root_path}"
@@ -278,57 +316,98 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         # free up some memory right away
         del self._gt_mappings
         del self._gt_data
-        self._idx_to_ids_map = dict()  # sample idx (int) -> subset, class, instance, views
-        self._ids_to_idx_map = dict()  # subset, class, instance, views -> sample idx (int)
-        self._total_samples = 0
-        self._total_views = 0
+        self._idx_to_ids_map = dict()  # sample idx (int) -> subset, class, instance, images
+        self._ids_to_idx_map = dict()  # subset, class, instance, images -> sample idx (int)
+        self._total_instances = 0
+        self._total_images = 0
         self._prepare_maps()
         # once we get here, we're ready to repackage the dataset!
 
     def __len__(self) -> int:
         """Returns the total number of instances defined in this dataset.
 
-        Note: each instance may have more than one view, meaning more than one image!
+        Note: each instance may have more than one image!
         """
-        return self._total_samples
+        return self._total_instances
 
     def __getitem__(self, item: int) -> typing.Dict[str, typing.Any]:
         """Fetches and returns a data sample for this dataset.
 
         In this implementation, a 'data sample' is actually an instance of a class inside the
-        dataset. It may therefore have more than one temporal view (image), and each view
-        will be linked with their own metadata (which includes groundtruth info).
+        dataset. It may therefore have more than one image (each image is captured at a different
+        time). Each image is linked with its own metadata (which includes groundtruth info).
 
         Note that this code will likely be slower than the deeplake fetching implementation, thus
         why this is a "repackager" object, and not a dataset parser (although it could be used as
         one...).
         """
         assert 0 <= item < len(self), f"invalid data sample index being queried: {item}"
-        (subset_id, class_id, instance_id, view_ids) = self._idx_to_ids_map[item]
+        (subset_id, class_id, instance_id, img_ids) = self._idx_to_ids_map[item]
         assert subset_id in self.subset_types
         assert class_id in self.metadata.class_names
-        view_dicts = list(self._metadata[subset_id][instance_id].values())
+        img_dicts = list(self._metadata[subset_id][instance_id].values())
         # using deeplake.read will defer loading the full image data if possible/needed
-        views = [deeplake.read(str(view["file_abs_path"])) for view in view_dicts]
-        metadata = [view["metadata"] for view in view_dicts]
+        imgs = [deeplake.read(str(img["file_abs_path"])) for img in img_dicts]
+        metadata = [img["metadata"] for img in img_dicts]
         gt_bboxes = [m["bounding_boxes"][0] for m in metadata]
         assert all([bbox["ID"] == -1 for bbox in gt_bboxes])  # meaning the 'ground truth' bbox
         bboxes = [np.asarray(bbox["box"], dtype=np.int32) for bbox in gt_bboxes]
-        return dict(  # note: the tensor names here must match with the ones in `tensor_info`!
-            views=views,
-            metadata=metadata,
-            bboxes=bboxes,
-            label=self.metadata.class_names.index(class_id),
-            subset=self.metadata.subset_types.index(subset_id),
-            instance=instance_id,
-        )
+        images_prefix = f"images/{self.image_type}"
+        images_dataset_name = f"{images_prefix}/{self.image_compression_type}"
+        return {  # note: the tensor names here must match with the ones in `tensor_info`!
+            # the first three entries should be lists with the same length (i.e. the image count)
+            images_dataset_name: imgs,
+            f"{images_prefix}/bbox": bboxes,
+            f"{images_prefix}/metadata": metadata,
+            # the 'instances/image_idxs' tensors will be populated while finalizing the dataset
+            "img_count": len(imgs),
+            # ...and the remaining entries should be raw data samples to be appended directly
+            "instances/label": self.metadata.class_names.index(class_id),
+            "instances/subset": self.metadata.subset_types.index(subset_id),
+            "instances/id": instance_id,
+        }
+
+    def _export_sample_data(self, sample_index, sample_out):
+        """Fetches a data sample from the getitem implementation and appends it to the output."""
+        # we override the default handling since our tensor datasets dont all have the same length
+        sample_data = self[sample_index]  # this is where the __getitem__ is called...
+        assert "instances/image_idxs" not in sample_data
+        image_tensors = {k: v for k, v in sample_data.items() if k.startswith("images/")}
+        assert all([isinstance(d, list) and len(d) == sample_data["img_count"] for d in image_tensors.values()])
+        # as of 2023-04-15, deeplake does not like parallel processing non-uniform-length datasets
+        # (if you get a strange crash below, do the deeplake export with `num_workers=0`)
+        sample_out.extend(image_tensors, skip_ok=True)
+        instance_tensors = {k: v for k, v in sample_data.items() if k.startswith("instances/")}
+        sample_out.append(instance_tensors, skip_ok=True)  # now, append all instance data (same length)
+        return sample_out
+
+    def _finalize_dataset_export(self, dataset: deeplake.Dataset) -> None:
+        """Finalizes the exportation of the deeplake dataset, adding extra info as needed."""
+        # in this case, we'll do a final pass to fill the "instances/image_idxs" tensor dataset
+        global_img_counter = 0
+        image_idxs = []
+        for instance_idx in range(len(self)):
+            instance_img_ids = self._idx_to_ids_map[instance_idx][-1]
+            instance_img_count = len(instance_img_ids)
+            image_idxs.append([global_img_counter + offset for offset in range(instance_img_count)])
+            global_img_counter += instance_img_count
+        images_dataset_name = f"images/{self.image_type}/{self.image_compression_type}"
+        assert global_img_counter == len(dataset[images_dataset_name])
+        dataset["instances/image_idxs"].extend(image_idxs)
 
 
 def _repackage_fmow_rgb(dataset_root_path: pathlib.Path):
     assert dataset_root_path.is_dir(), f"missing dataset root directory: {dataset_root_path}"
-    repackager = DeepLakeRepackager(dataset_root_path, image_type="rgb")
+    repackager = DeepLakeRepackager(
+        dataset_root_path,
+        image_type="rgb",
+        image_compression_type="jpg",
+        use_cache=True,
+    )
     output_path = dataset_root_path / "fmow-rgb" / ".deeplake"
-    repackager.export(output_path)
+    # as of 2023-04-15, deeplake does not like parallel processing non-uniform-length datasets
+    # (we use `num_workers=0` to fix this issue; repackaging with this takes ~5h though...)
+    repackager.export(output_path, num_workers=0)
     assert pathlib.Path(output_path).exists()
 
 
