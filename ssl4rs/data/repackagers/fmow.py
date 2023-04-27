@@ -1,4 +1,4 @@
-"""Implements a deeplake data repackager for the Functional Map of the World (FMoW) dataset.
+"""Implements a deeplake data repackager for the Functional Map of the World (fMoW) dataset.
 
 See the following URLs for more info on this dataset:
 https://arxiv.org/abs/1711.07846
@@ -29,7 +29,7 @@ logger = ssl4rs.utils.logging.get_logger(__name__)
 
 
 class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
-    """Repackages the Functional Map of the World (FMoW) dataset into a deeplake format.
+    """Repackages the Functional Map of the World (fMoW) dataset into a deeplake format.
 
     Each class instance will be stored as a group with all its metadata in one place, and it will
     point (using indices) to the images that belong to it in a separate dataset. Each image will be
@@ -37,7 +37,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
 
     Note: running this repackager requires 16GB+ of RAM, as many JSON configs will be preloaded to
     memory to simplify/speed up mappings. When processing the RGB dataset with all subsets and JPEG
-    compression, the resulting deeplake archive will be roughly 180GB (as of FMoW v1.2.1).
+    compression, the resulting deeplake archive will be roughly 180GB (as of fMoW v1.2.1).
     """
 
     metadata = ssl4rs.data.metadata.fmow
@@ -60,7 +60,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             f"{images_prefix}/bbox": dict(htype="bbox", dtype=np.int32, coords=dict(type="pixel", mode="LTWH")),
             f"{images_prefix}/metadata": dict(htype="json", sample_compression=None),
             # the 'instances' tensor datasets share the same length, and each sample should
-            # correspond to a single instance in the original FMoW dataset (i.e. one real "object")
+            # correspond to a single instance in the original fMoW dataset (i.e. one real "object")
             "instances/image_idxs": dict(htype="list", sample_compression=None),  # list of image indices
             "instances/label": dict(htype="class_label", dtype=np.int16, class_names=self.metadata.class_names),
             "instances/subset": dict(htype="class_label", dtype=np.int8, class_names=self.metadata.subset_types),
@@ -82,7 +82,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
     @property  # we need to provide this for the base class!
     def dataset_name(self) -> str:
         """Returns the dataset name used to identify this particular dataset."""
-        return f"FMoW-{self.image_type}"
+        return f"fMoW-{self.image_type}"
 
     @staticmethod
     def _insert_with_recursive_key(
@@ -105,7 +105,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         out_dict[final_key] = data
 
     def _load_version(self) -> typing.AnyStr:
-        """Loads the content of FMoW's CHANGELOG.md and reads the latest version from it."""
+        """Loads the content of fMoW's CHANGELOG.md and reads the latest version from it."""
         changelog_path = self.data_root_path / "CHANGELOG.md"
         assert changelog_path.is_file(), f"invalid changelog file: {changelog_path}"
         latest_version_number = None
@@ -117,14 +117,14 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                     break
         assert latest_version_number is not None, "could not find a version number from changelog"
         version = latest_version_number
-        logger.info(f"will load FMoW v{version}")
+        logger.info(f"will load fMoW v{version}")
         return version
 
     def _load_manifest(self) -> typing.List:
         """Loads the `manifest.json.bz2` file contents to memory."""
         manifest_path = self.data_root_path / "manifest.json.bz2"
         assert manifest_path.is_file(), f"invalid manifest file: {manifest_path}"
-        logger.info(f"parsing FMoW file: {manifest_path}")
+        logger.info(f"parsing fMoW file: {manifest_path}")
         with bz2.open(manifest_path, "rt") as fd:
             manifest_data = json.load(fd)
         assert isinstance(manifest_data, list), "invalid manifest"
@@ -139,12 +139,12 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             with open(groundtruth_cache_path, "rb") as fd:
                 gt_mappings, gt_data = pickle.load(fd)
             return gt_mappings, gt_data
-        logger.info(f"parsing FMoW file: {groundtruth_path}")
+        logger.info(f"parsing fMoW file: {groundtruth_path}")
         with open(groundtruth_path, mode="rb") as fd:
             tar_data = io.BytesIO(fd.read())
         gt_mappings, gt_data = dict(), dict()
         with tarfile.open(fileobj=tar_data, mode="r:bz2") as tar_fd:
-            expected_total_members = 1047693  # seems OK as of FMoW v1.2.1 (tested on 2023-03-26)
+            expected_total_members = 1047693  # seems OK as of fMoW v1.2.1 (tested on 2023-03-26)
             with tqdm.tqdm(total=expected_total_members, desc="loading groundtruth archive") as pbar:
                 while True:
                     curr_member = tar_fd.next()
@@ -280,7 +280,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         """Parses the dataset structure and makes sure all the data is present.
 
         Args:
-            dataset_root_path: path to the directory containing all the FMoW data.
+            dataset_root_path: path to the directory containing all the fMoW data.
             image_type: image type to extract; should be either 'rgb' for the RGB-only images,
                 or 'full' for the multispectral images.
             image_compression_type: image compression type to use in repackaged dataset.
@@ -293,7 +293,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         assert image_compression_type in ["jpg"], f"unsupported compression type: {image_compression_type}"
         self.image_compression_type = image_compression_type
         if not isinstance(subset_type, list):
-            assert subset_type in self.metadata.subset_types, f"unsupported FMoW subset type: {subset_type}"
+            assert subset_type in self.metadata.subset_types, f"unsupported fMoW subset type: {subset_type}"
             if subset_type == "all":
                 self.subset_types = [s for s in self.metadata.subset_types if s != "all"]
             else:
@@ -301,7 +301,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         else:
             assert all(
                 [s in self.metadata.subset_types for s in subset_type]
-            ), f"bad FMoW subset type(s): {subset_type}"
+            ), f"bad fMoW subset type(s): {subset_type}"
             self.subset_types = list(set(subset_type))
         self._use_cache = use_cache
         dataset_root_path = pathlib.Path(dataset_root_path)

@@ -1,4 +1,4 @@
-"""Implements a data parser for the Functional Map of the World (FMoW) dataset.
+"""Implements a data parser for the Functional Map of the World (fMoW) dataset.
 
 See the following URLs for more info on this dataset:
 https://arxiv.org/abs/1711.07846
@@ -15,7 +15,7 @@ import ssl4rs.data.repackagers.fmow
 
 
 class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
-    """FMoW requires a bit of special handling on top of the base deeplake parser."""
+    """fMoW requires a bit of special handling on top of the base deeplake parser."""
 
     metadata = ssl4rs.data.metadata.fmow
 
@@ -26,7 +26,7 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
         batch_id_prefix: typing.Optional[typing.AnyStr] = None,
         **extra_deeplake_kwargs,
     ):
-        """Parses a FMoW deeplake archive or wraps an already-opened object.
+        """Parses a fMoW deeplake archive or wraps an already-opened object.
 
         Note that due to the design of this class (and in contrast to the exporter class), all
         datasets should only ever be opened in read-only mode here.

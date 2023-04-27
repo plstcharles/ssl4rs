@@ -1,4 +1,4 @@
-"""Defines static metadata for the Functional Map of the World (FMoW) dataset.
+"""Defines static metadata for the Functional Map of the World (fMoW) dataset.
 
 See the following URLs for more info on this dataset:
 https://arxiv.org/abs/1711.07846
@@ -70,23 +70,23 @@ class_names = [
     "wind_farm",
     "zoo",
 ]
-"""List of class names used in the FMoW dataset (still using a capital 1st letter for each noun)."""
+"""List of class names used in the fMoW dataset (still using a capital 1st letter for each noun)."""
 
 subset_types = ["train", "val", "test", "seq", "all"]
-"""List of supported FMoW split subsets that can be repackaged/parsed in this framework."""
+"""List of supported fMoW split subsets that can be repackaged/parsed in this framework."""
 
 image_types = ["rgb", "full"]
-"""List of supported FMoW image types.
+"""List of supported fMoW image types.
 
 The 'RGB' dataset corresponds to multispectral or panchromatic-based RGB images. The 'full'
 dataset corresponds to the 4-band or 8-band multispectral images.
 """
 
 min_image_shape = (162, 245)
-"""Minimum image height/width across all images in the FMoW dataset."""
+"""Minimum image height/width across all images in the fMoW dataset."""
 
 max_image_shape = (16288, 16291)
-"""Maximum image height/width across all images in the FMoW dataset."""
+"""Maximum image height/width across all images in the fMoW dataset."""
 
 expected_max_pixels_per_image = max_image_shape[0] * max_image_shape[1]
 """Optimistic maximum pixel count per image (for preallocations & to disable PIL warnings)."""
