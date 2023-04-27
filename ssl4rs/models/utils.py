@@ -1,13 +1,16 @@
 """Contains utility functions and a base interface for LightningModules-derived objects."""
 import abc
+import copy
 import os
 import typing
 
 import cv2 as cv
+import hydra
 import lightning.pytorch as pl
 import lightning.pytorch.loggers as pl_loggers
 import lightning.pytorch.utilities.types as pl_types
 import numpy as np
+import omegaconf
 import torch
 import torch.utils.data
 import torchmetrics
@@ -157,7 +160,6 @@ class BaseModel(pl.LightningModule):
         """
         return []
 
-    @abc.abstractmethod
     def configure_optimizers(self) -> typing.Any:
         """Configures and returns model-specific optimizers and schedulers to use during training.
 
@@ -180,7 +182,37 @@ class BaseModel(pl.LightningModule):
         If you need to use the estimated number of stepping batches during training (e.g. when using
         the `OneCycleLR` scheduler), use the `self.trainer.estimated_stepping_batches` value.
         """
-        raise NotImplementedError
+        logger.debug("Configuring module optimizer and scheduler...")
+        assert self.optim_config is not None, "we're about to train, we need an optimization cfg!"
+        optim_config = copy.deepcopy(self.optim_config)  # we'll fully resolve + convert it below
+        omegaconf.OmegaConf.resolve(optim_config)
+        assert "optimizer" in optim_config, "missing mandatory 'optimizer' field in optim cfg!"
+        assert isinstance(optim_config.optimizer, (dict, omegaconf.DictConfig))
+        if optim_config.get("freeze_no_grad_params", True):
+            model_params = [p for p in self.parameters() if p.requires_grad]
+            assert len(model_params) > 0, "no model parameters left to train??"
+        else:
+            model_params = self.parameters()
+        optimizer = hydra.utils.instantiate(optim_config.optimizer, model_params)
+        scheduler = None
+        if "lr_scheduler" in optim_config:
+            assert isinstance(optim_config.lr_scheduler, (dict, omegaconf.DictConfig))
+            assert "scheduler" in optim_config.lr_scheduler, "missing mandatory 'scheduler' field!"
+            scheduler = hydra.utils.instantiate(
+                config=optim_config.lr_scheduler.scheduler,
+                optimizer=optimizer,
+            )
+        output = omegaconf.OmegaConf.to_container(
+            cfg=optim_config,
+            resolve=True,
+            throw_on_missing=True,
+        )
+        output["optimizer"] = optimizer
+        if scheduler is not None:
+            output["lr_scheduler"]["scheduler"] = scheduler
+        if "freeze_no_grad_params" in output:
+            del output["freeze_no_grad_params"]
+        return output
 
     def _create_example_input_array(self, **kwargs) -> typing.Dict[typing.AnyStr, typing.Any]:
         """Wraps the given kwargs inside a fake batch dict to be used as the example input.
