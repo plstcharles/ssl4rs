@@ -22,6 +22,7 @@ class ParserWrapper(DataParser):
         batch_id_prefix: typing.Optional[typing.AnyStr] = None,
     ):
         """Validates that the provided PyTorch-Dataset-compatible object can be wrapped."""
+        self.save_hyperparameters(ignore="dataset", logger=False)
         super().__init__(batch_transforms=batch_transforms, batch_id_prefix=batch_id_prefix)
         assert hasattr(dataset, "__len__"), "missing mandatory dataset length attribute!"
         assert hasattr(dataset, "__getitem__"), "missing mandatory dataset item getter!"
@@ -37,7 +38,7 @@ class ParserWrapper(DataParser):
 
         It might be called fairly often to validate indexing ranges, so in order to avoid issues
         with dataset implementations that re-iterate over their entire data in order to figure out
-        the batch count each time this function is called, we cache that value.
+        the batch count each time this function is called, we cache the returned length.
         """
         if self._dataset_size is None:
             self._dataset_size = len(self.dataset)  # cached in case it takes a while to get it

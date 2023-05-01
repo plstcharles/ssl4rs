@@ -60,12 +60,12 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             train_val_test_split: split proportions to use when separating the data.
             deeplake_kwargs: extra arguments forwarded to the deeplake dataset parser.
         """
+        self.save_hyperparameters(logger=False)
         super().__init__(dataloader_fn_map=dataloader_fn_map)
         assert data_dir is not None
         data_dir = pathlib.Path(data_dir)  # it might not exist, in which case we'll do a download
         logger.debug(f"UC Merced Land Use dataset root: {data_dir}")
         assert len(train_val_test_split) == 3 and sum(train_val_test_split) == 1.0
-        self.save_hyperparameters(logger=False)
         self.data_train: typing.Optional[ssl4rs.data.parsers.ucmerced.DeepLakeParser] = None
         self.data_valid: typing.Optional[ssl4rs.data.parsers.ucmerced.DeepLakeParser] = None
         self.data_test: typing.Optional[ssl4rs.data.parsers.ucmerced.DeepLakeParser] = None

@@ -49,11 +49,11 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
                 settings are assumed.
             train_val_test_split: sample split counts to use when separating the data.
         """
+        self.save_hyperparameters(logger=False)
         super().__init__(dataloader_fn_map=dataloader_fn_map)
         assert data_dir is not None
         pathlib.Path(data_dir).mkdir(parents=True, exist_ok=True)
         assert len(train_val_test_split) == 3 and sum(train_val_test_split) == 70_000
-        self.save_hyperparameters(logger=False)
         self.data_transforms = [
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize((0.1307,), (0.3081,)),

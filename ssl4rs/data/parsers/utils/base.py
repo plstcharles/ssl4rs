@@ -2,18 +2,24 @@
 import abc
 import typing
 
+import lightning.pytorch.core.mixins as pl_mixins
 import numpy as np
 import torch.utils.data.dataset
 
 import ssl4rs.data.transforms
 
 
-class DataParser(torch.utils.data.dataset.Dataset):
+class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixin):
     """Base interface used to provide common definitions for all index-based dataset formats.
 
     Since this interface is based on PyTorch's Dataset interface, it requires that `__len__` and
     `__getitem__` are implemented. On top of that, we add a few generic functions to be defined in
     other classes below (see the functions with `raise NotImplementedError`).
+
+    Note that we make this class inherit from Lightning's `HyperparametersMixin` interface in order
+    to save/restore constructor parameters. This allows us to build and return new data parser
+    instances constructed with the original hyperparameters whenever we e.g. create a "filtered"
+    version of this object.
     """
 
     # TODO @@@@@@: add metadata getter, transform map, filter, select, cache, tensor names, ...
@@ -27,6 +33,7 @@ class DataParser(torch.utils.data.dataset.Dataset):
         batch_id_prefix: typing.Optional[typing.AnyStr] = None,
     ):
         """Base class constructor that validates batch transforms and batch id settings."""
+        super().__init__()
         self.batch_transforms = ssl4rs.data.transforms.validate_or_convert_transform(batch_transforms)
         if batch_id_prefix is None:
             batch_id_prefix = ""

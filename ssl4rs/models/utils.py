@@ -59,8 +59,9 @@ class BaseModel(pl.LightningModule):
 
         Note: we do NOT call `self.save_hyperparameters` in this base class constructor, but it
         should be called in the derived classes in order to make checkpoint reloading work. See
-        this link for more information:
+        these links for more information:
             https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#save-hyperparameters
+            https://github.com/Lightning-AI/lightning/issues/16206
 
         Args:
             log_train_metrics_each_step: toggles whether the metrics should be computed and logged

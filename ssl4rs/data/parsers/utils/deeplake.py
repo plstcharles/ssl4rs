@@ -19,6 +19,13 @@ class DeepLakeParser(DataParser):
     sufficient to load the data directly. Other datasets that need to preprocess/unpack sample data
     in a specific fashion before it can be used should rely on their own derived class. See the
     `_get_raw_batch()` function specifically for more info.
+
+    Note: we should NOT call `self.save_hyperparameters` in this class constructor if it is not
+    intended to be used as the FINAL derivation before being instantiated into an object; in other
+    words, if you intend on using this class as an interface, turn `save_hyperparams` OFF! See
+    these links for more information:
+        https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#save-hyperparameters
+        https://github.com/Lightning-AI/lightning/issues/16206
     """
 
     def __init__(
@@ -26,6 +33,7 @@ class DeepLakeParser(DataParser):
         dataset_path_or_object: typing.Union[typing.AnyStr, deeplake.Dataset],
         batch_transforms: "ssl4rs.data.BatchTransformType" = None,
         batch_id_prefix: typing.Optional[typing.AnyStr] = None,
+        save_hyperparams: bool = True,  # turn this off in derived classes
         **extra_deeplake_kwargs,
     ):
         """Parses a deeplake archive or wraps an already-opened object.
@@ -33,12 +41,18 @@ class DeepLakeParser(DataParser):
         Note that due to the design of this class (and in contrast to the exporter class), all
         datasets should only ever be opened in read-only mode here.
         """
+        if save_hyperparams:
+            self.save_hyperparameters(
+                ignore=["dataset_path_or_object", "extra_deeplake_kwargs"],
+                logger=False,
+            )
         super().__init__(batch_transforms=batch_transforms, batch_id_prefix=batch_id_prefix)
         if isinstance(dataset_path_or_object, deeplake.Dataset):
             assert not extra_deeplake_kwargs, "dataset is already opened, can't use extra kwargs"
             self.dataset = dataset_path_or_object
         else:
             self.dataset = deeplake.load(dataset_path_or_object, read_only=True, **extra_deeplake_kwargs)
+        self.dataset.read_only = True
         assert (
             hasattr(self.dataset, "info") and "name" in self.dataset.info
         ), "dataset info should at least contain a 'name' field!"
@@ -103,25 +117,49 @@ class DeepLakeParser(DataParser):
 
     def visualize(self, *args, **kwargs):
         """Forwards the call to show the dataset content (notebook-only)"""
+        if self.dataset.min_len != self.dataset.max_len:
+            raise NotImplementedError("cannot visualize variable length datasets")
         return self.dataset.visualize(*args, **kwargs)
 
+    def query(self, query_str: str) -> "DeepLakeParser":
+        """Returns a sliced deeplake dataset with given query results.
 
-def get_deeplake_parser_subset(
-    parser: DeepLakeParserDerived,
-    indices: typing.Sequence[int],
-) -> DeepLakeParserDerived:
-    """Returns a parser for a subset of a deeplake."""
+        See `deeplake.core.dataset.Dataset.query` for more information.
+        """
+        if self.dataset.min_len != self.dataset.max_len:
+            raise NotImplementedError("cannot query variable length datasets")
+        query_result = self.dataset.query(query_str)
+        return self.__class__(dataset_path_or_object=query_result, **self.hparams)
 
-    assert isinstance(parser, DeepLakeParser), "need to derive from DeepLakeParser!"
-    assert hasattr(parser, "dataset") and isinstance(parser.dataset, deeplake.Dataset)
-    assert all([idx < len(parser) for idx in indices]), "some indices are out-of-range!"
-    TODO  # @@@@@@@@@@ TODO IMPL ME! (might be much faster than regular) # noqa: F821
-    # OR REPLACE EXISTING SPLIT LOGIC w/ deeplake.core.dataset.random_split @@@@@@ !
-    # ... and then save splits as 'views' (save_view) that can be reloaded easily
+    def sample_by(
+        self,
+        weights: typing.Union[str, list, tuple],
+        replace: typing.Optional[bool] = True,
+        size: typing.Optional[int] = None,
+    ) -> "DeepLakeParser":
+        """Returns a sliced deeplake dataset with given weighted sampler applied.
 
-    # @deeplake.compute
-    def filter_indices(sample_in) -> bool:
-        return todo  # noqa: F821
+        See `deeplake.core.dataset.Dataset.sample_by` for more information.
+        """
+        if self.dataset.min_len != self.dataset.max_len:
+            raise NotImplementedError("cannot sample variable length datasets")
+        sampler_wrapped_dataset = self.dataset.sample_by(
+            weights=weights,
+            replace=replace,
+            size=size,
+        )
+        return self.__class__(dataset_path_or_object=sampler_wrapped_dataset, **self.hparams)
 
-    subset_parser = parser.dataset.filter(filter_indices)
-    return type(parser)(subset_parser)
+    def filter(
+        self,
+        function: typing.Union[typing.Callable, str],
+        **filter_kwargs,
+    ):
+        """Filters the dataset in accordance of filter function `f(x: sample) -> bool`.
+
+        See `deeplake.core.dataset.Dataset.filter` for more information.
+        """
+        if self.dataset.min_len != self.dataset.max_len:
+            raise NotImplementedError("cannot filter variable length datasets")
+        filtered_dataset = self.dataset.filter(function=function, **filter_kwargs)
+        return self.__class__(dataset_path_or_object=filtered_dataset, **self.hparams)

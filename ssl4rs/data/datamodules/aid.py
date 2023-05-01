@@ -56,6 +56,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             train_val_test_split: split proportions to use when separating the data.
             deeplake_kwargs: extra arguments forwarded to the deeplake dataset parser.
         """
+        self.save_hyperparameters(logger=False)
         super().__init__(dataloader_fn_map=dataloader_fn_map)
         data_dir = pathlib.Path(data_dir)
         assert data_dir.is_dir(), f"invalid AID dataset directory: {data_dir}"
@@ -67,7 +68,6 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             ), "dataset directory should contain .deeplake folder or a folder for each data class"
         logger.debug(f"AID dataset root: {data_dir}")
         assert len(train_val_test_split) == 3 and sum(train_val_test_split) == 1.0
-        self.save_hyperparameters(logger=False)
         self.data_train: typing.Optional[ssl4rs.data.parsers.aid.DeepLakeParser] = None
         self.data_valid: typing.Optional[ssl4rs.data.parsers.aid.DeepLakeParser] = None
         self.data_test: typing.Optional[ssl4rs.data.parsers.aid.DeepLakeParser] = None

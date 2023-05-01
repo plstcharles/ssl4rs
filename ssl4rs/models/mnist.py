@@ -38,6 +38,8 @@ class MNISTClassifier(ssl4rs.models.classif.base.GenericClassifier):
         as this seems to be the 'cleanest' way to log everything needed to reinstantiate the model
         from scratch without having to serialize the modules directly...
         """
+        # this line allows us to access hparams with `self.hparams` + auto-stores them in checkpoints
+        self.save_hyperparameters(logger=False)  # logger=False since we don't need duplicated logs
         super().__init__(
             encoder=encoder_config,
             head=head_config,
@@ -47,8 +49,6 @@ class MNISTClassifier(ssl4rs.models.classif.base.GenericClassifier):
             input_key="data",
             label_key="target",
         )
-        # this line allows us to access hparams with `self.hparams` + auto-stores them in checkpoints
-        self.save_hyperparameters(logger=False)  # logger=False since we don't need duplicated logs
         self._create_example_input_array(  # for easier tracing/profiling; fake tensors for 'forward'
             data=torch.randn(4, 1, 28, 28),
             batch_size=4,
