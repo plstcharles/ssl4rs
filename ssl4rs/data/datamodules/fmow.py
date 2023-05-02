@@ -86,7 +86,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         """Sets up fMoW data parsing across the global ('all') set."""
         if "all" not in self.data_parsers:
             deeplake_kwargs = self.hparams.deeplake_kwargs or {}
-            root_data_dir = self.hparams.data_dir
+            root_data_dir = pathlib.Path(self.hparams.data_dir)
             if root_data_dir.name != ".deeplake":
                 root_data_dir = root_data_dir / ".deeplake"
             assert root_data_dir.is_dir()

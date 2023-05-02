@@ -1,5 +1,5 @@
 """Implements parsing utilities for the ActiveLoop DeepLake format."""
-
+import pathlib
 import typing
 
 import deeplake
@@ -30,7 +30,7 @@ class DeepLakeParser(DataParser):
 
     def __init__(
         self,
-        dataset_path_or_object: typing.Union[typing.AnyStr, deeplake.Dataset],
+        dataset_path_or_object: typing.Union[typing.AnyStr, pathlib.Path, deeplake.Dataset],
         batch_transforms: "ssl4rs.data.BatchTransformType" = None,
         batch_id_prefix: typing.Optional[typing.AnyStr] = None,
         save_hyperparams: bool = True,  # turn this off in derived classes

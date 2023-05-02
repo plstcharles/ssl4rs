@@ -6,6 +6,7 @@ https://github.com/fMoW/dataset
 https://spacenet.ai/iarpa-functional-map-of-the-world-fmow/
 """
 
+import pathlib
 import typing
 
 import cv2 as cv
@@ -44,7 +45,7 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
 
     def __init__(
         self,
-        dataset_path_or_object: typing.Union[typing.AnyStr, deeplake.Dataset],
+        dataset_path_or_object: typing.Union[typing.AnyStr, pathlib.Path, deeplake.Dataset],
         decompression_strategy: str = "deeplake",
         batch_transforms: "ssl4rs.data.BatchTransformType" = None,
         batch_id_prefix: typing.Optional[typing.AnyStr] = None,
