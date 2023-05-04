@@ -196,7 +196,7 @@ class _DeepLakeSubsetParser(ssl4rs.data.parsers.utils.DeepLakeParser):
         """
         instance_data = self.instance_subset[index]  # noqa
         image_idxs = [self.image_idx_map[idx] for idx in instance_data.image_idxs.list()]
-        image_data = [self.image_subset[img_idx] for img_idx in image_idxs]
+        image_data = self.image_subset[image_idxs]
         batch = _get_batch_from_sample_data(instance_data, image_data, self.decompression_strategy)
         return batch
 
