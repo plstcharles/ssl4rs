@@ -5,6 +5,7 @@ import omegaconf
 import torchvision.transforms
 
 import ssl4rs.data.transforms.batch_sizer
+import ssl4rs.data.transforms.geo
 import ssl4rs.data.transforms.identity
 import ssl4rs.data.transforms.patchify
 import ssl4rs.data.transforms.tuple_mapper
