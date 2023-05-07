@@ -429,3 +429,15 @@ class Patchify:
         if mask is None:
             self._patch_coords_cache[cache_key] = output
         return output
+
+    def __repr__(self) -> str:
+        out_str = self.__class__.__name__ + "("
+        out_str += f"patch_shape={self.patch_shape}"
+        out_str += f", patch_overlap={self.patch_overlap}"
+        out_str += f", min_mask_iou={self.min_mask_iou}"
+        out_str += f", offset_overlap={self.offset_overlap}"
+        out_str += f", padding_val={self.padding_val}"
+        out_str += f", make_contiguous={self.make_contiguous}"
+        out_str += f", jittered_subcrop_shape={self.jittered_subcrop_shape}"
+        out_str += ")"
+        return out_str

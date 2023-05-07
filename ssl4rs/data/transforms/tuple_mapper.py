@@ -2,6 +2,9 @@ import typing
 
 import numpy as np
 
+if typing.TYPE_CHECKING:
+    from ssl4rs.data import BatchDictType
+
 
 class TupleMapper:
     """Maps the elements of a tuple-based batch object back into a dictionary-based batch object.
@@ -38,7 +41,7 @@ class TupleMapper:
     def __call__(
         self,
         batch: typing.Sequence,
-    ) -> typing.Dict[typing.AnyStr, typing.Any]:
+    ) -> "BatchDictType":
         """Converts the given batch data tuple into a batch data dictionary using the key map.
 
         Args:
@@ -55,3 +58,6 @@ class TupleMapper:
             [idx in self.key_map for idx in range(len(batch))]
         ), f"batch contains unexpected input keys! (got {len(batch)} total elements)"
         return {self.key_map[idx]: batch[idx] for idx in range(len(batch))}
+
+    def __repr__(self) -> str:
+        return self.__class__.__name__ + f"(key_map={self.key_map})"

@@ -109,7 +109,7 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
             assert self.gsd_key is not None, "missing 'gsd_key' attribute for batch dicts!"
             gsd = data[self.gsd_key]
         assert isinstance(gsd, float), f"invalid input gsd type: {type(gsd)}"
-        (target_top_idx, target_left_idx, target_height, target_width, output_gsd) = self.get_params(
+        (crop_top_idx, crop_left_idx, crop_height, crop_width, output_gsd) = self.get_params(
             input_array=input_array,
             gsd=gsd,
             size=self.size,
@@ -117,11 +117,12 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
         )
         resized_crop = self.get_resized_crop(
             input_array=input_array,
-            target_top_idx=target_top_idx,
-            target_left_idx=target_left_idx,
-            target_height=target_height,
-            target_width=target_width,
-            size=self.size,
+            crop_top_idx=crop_top_idx,
+            crop_left_idx=crop_left_idx,
+            crop_height=crop_height,
+            crop_width=crop_width,
+            output_height=self.size[0],
+            output_width=self.size[1],
             interpolation=self.interpolation,
             antialias=self.antialias,
         )
@@ -179,26 +180,35 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
         # we compute the scale factor we'll have to use for the interpolation of the crop
         expected_scale = expected_output_gsd / gsd
         # ...and the size of the crop we'll be carving out of the input array
-        target_size = (int(round(size[0] * expected_scale)), int(round(size[1] * expected_scale)))
-        assert target_size[0] <= input_height and target_size[1] <= input_width
+        crop_aspect_ratio = size[0] / size[1]
+        crop_height = int(round(size[0] * expected_scale))
+        crop_width = int(round(crop_height / crop_aspect_ratio))
+        assert crop_height <= input_height and crop_width <= input_width
         # now that we have the target crop size (pre-interpolation), we need to decide where to place it
-        target_top_left_coords = (
-            torch.randint(0, input_height - target_size[0] + 1, size=(1,)).item(),
-            torch.randint(0, input_width - target_size[1] + 1, size=(1,)).item(),
+        top_left_coords = (
+            torch.randint(0, input_height - crop_height + 1, size=(1,)).item(),
+            torch.randint(0, input_width - crop_width + 1, size=(1,)).item(),
         )
-        # finally, for the given target size, compute the real output gsd
-        final_scale = target_size[0] / size[0]
-        output_gsd = final_scale * gsd
-        return (target_top_left_coords[0], target_top_left_coords[1], target_size[0], target_size[1], output_gsd)
+        # finally, for the given target size, compute the (approx, wrt rounding errors) output gsd
+        final_scale = ((crop_height / size[0]) + (crop_width / size[1])) / 2
+        output_gsd = final_scale * gsd  # with non-square crops, this might be imperfect
+        return (
+            top_left_coords[0],
+            top_left_coords[1],
+            crop_height,
+            crop_width,
+            output_gsd,
+        )
 
     @staticmethod
     def get_resized_crop(
         input_array: torch.Tensor,
-        target_top_idx: int,
-        target_left_idx: int,
-        target_height: int,
-        target_width: int,
-        size: typing.Tuple[int, int],
+        crop_top_idx: int,
+        crop_left_idx: int,
+        crop_height: int,
+        crop_width: int,
+        output_height: int,
+        output_width: int,
         interpolation: InterpolationMode = InterpolationMode.BILINEAR,
         antialias: bool = True,
     ) -> torch.Tensor:
@@ -209,12 +219,12 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
 
         Args:
             input_array: the input array from which a crop should be generated.
-            target_top_idx: the index of the row that matches the crop's top left corner.
-            target_left_idx: the index of the column that matches the crop's top left corner.
-            target_height: the total height of the crop in the input array (in pixels).
-            target_width: the total width of the crop in the input array (in pixels).
-            size: expected output size of the crop, for each edge, after resizing. This is expected
-                to be height first, width second, and pixel values.
+            crop_top_idx: the index of the row that matches the crop's top left corner.
+            crop_left_idx: the index of the column that matches the crop's top left corner.
+            crop_height: the total height of the crop in the input array (in pixels).
+            crop_width: the total width of the crop in the input array (in pixels).
+            output_height: the expected height of the output (post-resize) array (in pixels).
+            output_width: the expected width of the output (post-resize) array (in pixels).
             interpolation: Desired interpolation enum defined by
                 `torchvision.transforms.InterpolationMode`. Default is bilinear.
             antialias: defines whether to apply antialiasing. It only affects tensors when the
@@ -226,11 +236,11 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
         """
         resized_crop = torchvision.transforms.functional.resized_crop(
             img=input_array,
-            top=target_top_idx,
-            left=target_left_idx,
-            height=target_height,
-            width=target_width,
-            size=size,  # noqa
+            top=crop_top_idx,
+            left=crop_left_idx,
+            height=crop_height,
+            width=crop_width,
+            size=(output_height, output_width),  # noqa
             interpolation=interpolation,
             antialias=antialias,
         )
@@ -246,3 +256,8 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
         out_str += f", antialias={self.antialias}"
         out_str += ")"
         return out_str
+
+
+# @@@@ TODO: GroundSamplingDistanceAwareJPEGDecoderWithRandomResizedCrop
+# @@@@ TODO: GroundSamplingDistanceAwareCenterResizedCrop
+# @@@@ TODO: GroundSamplingDistanceAwareJPEGDecoderWithCenterResizedCrop

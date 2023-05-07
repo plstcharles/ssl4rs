@@ -83,6 +83,13 @@ class BatchSizer:
             batch["batch_size"] = batch_size
         return batch
 
+    def __repr__(self) -> str:
+        out_str = self.__class__.__name__ + "("
+        out_str += f"batch_size_hint={self.batch_size_hint}"
+        out_str += f", throw_if_smaller={self.throw_if_smaller}"
+        out_str += ")"
+        return out_str
+
 
 def get_batch_size(batch: "BatchDictType") -> int:
     """Checks the provided batch dictionary and attempts to return the batch size.
