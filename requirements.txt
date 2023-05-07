@@ -20,7 +20,6 @@ lightning~=2.0  # pytorch training helper
 lz4  # data compression
 matplotlib  # visualization/logging
 mlflow  # visualization/logging
-mock  # testing
 nbstripout  # code formatting
 numpy  # generic data processing utility
 opencv-python  # generic image processing utility
