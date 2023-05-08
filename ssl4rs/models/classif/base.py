@@ -13,7 +13,7 @@ import ssl4rs.models
 import ssl4rs.utils
 
 logger = ssl4rs.utils.logging.get_logger(__name__)
-TorchModuleOrDictConfig = typing.Union[torch.nn.Module, ssl4rs.utils.config.DictConfig]
+TorchModuleOrDictConfig = typing.Union[torch.nn.Module, ssl4rs.utils.DictConfig]
 
 
 class GenericClassifier(ssl4rs.models.BaseModel):
@@ -38,7 +38,7 @@ class GenericClassifier(ssl4rs.models.BaseModel):
         head: typing.Optional[TorchModuleOrDictConfig],
         loss_fn: TorchModuleOrDictConfig,
         num_classes: int,
-        optimization: typing.Optional[ssl4rs.utils.config.DictConfig] = None,
+        optimization: typing.Optional[ssl4rs.utils.DictConfig] = None,
         input_key: typing.AnyStr = "input",
         label_key: typing.AnyStr = "label",
         **kwargs,

@@ -53,9 +53,10 @@ def _get_dataloader(
     """
     assert "profiler" in config, "missing mandatory 'profiler' (sub)config!"
     target_dataloader_type = config.profiler.get("dataloader_type", "train")
-    assert target_dataloader_type in datamodule.dataloader_types, (
-        f"invalid target dataloader type: {target_dataloader_type}" f" (should be in {datamodule.dataloader_types})"
-    )
+    avail_dataloader_types = datamodule.dataloader_types
+    assert (
+        target_dataloader_type in avail_dataloader_types
+    ), f"invalid dataloader type: {target_dataloader_type}\n\t(should be in {avail_dataloader_types})"
 
     dataloader = datamodule.get_dataloader(target_dataloader_type)
     assert isinstance(

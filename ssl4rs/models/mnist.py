@@ -27,10 +27,10 @@ class MNISTClassifier(ssl4rs.models.classif.base.GenericClassifier):
 
     def __init__(
         self,
-        encoder_config: ssl4rs.utils.config.DictConfig,
-        head_config: ssl4rs.utils.config.DictConfig,
-        loss_config: ssl4rs.utils.config.DictConfig,
-        optimization: typing.Optional[ssl4rs.utils.config.DictConfig] = None,
+        encoder_config: ssl4rs.utils.DictConfig,
+        head_config: ssl4rs.utils.DictConfig,
+        loss_config: ssl4rs.utils.DictConfig,
+        optimization: typing.Optional[ssl4rs.utils.DictConfig] = None,
     ):
         """Initializes the LightningModule and its submodules, loss, metrics, and optimizer.
 
