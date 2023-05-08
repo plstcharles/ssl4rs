@@ -42,6 +42,7 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
         gsd_key: typing.Optional[typing.AnyStr] = None,
         interpolation: InterpolationMode = InterpolationMode.BILINEAR,
         antialias: bool = True,
+        add_params_to_batch_dict: bool = True,
     ):
         """Validates cropping settings.
 
@@ -63,6 +64,8 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
                 `torchvision.transforms.InterpolationMode`. Default is bilinear.
             antialias: defines whether to apply antialiasing. It only affects tensors when the
                 bilinear or bicubic interpolation modes are selected, and is ignored otherwise.
+            add_params_to_batch_dict: toggles whether crop parameters should be also added to the
+                batch dictionary when one is provided. These parameters will be stored
         """
         super().__init__()
         assert len(size) == 2 and all(
@@ -80,6 +83,7 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
         self.gsd_key = gsd_key
         self.interpolation = interpolation
         self.antialias = antialias
+        self.add_params_to_batch_dict = add_params_to_batch_dict
 
     def forward(
         self,
@@ -107,19 +111,20 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
             input_array = data
         if isinstance(data, torch.Tensor):
             input_array = data
-        assert isinstance(input_array, torch.Tensor), f"invalid input data type: {type(data)}"
+        assert isinstance(input_array, torch.Tensor), f"invalid input array type: {type(input_array)}"
         assert input_array.ndim >= 2, f"invalid input array ndim: {input_array.ndim}"
         if gsd is None:
             assert isinstance(data, dict), "must provide gsd as arg or provide it through batch dict!"
             assert self.gsd_key is not None, "missing 'gsd_key' attribute for batch dicts!"
             gsd = data[self.gsd_key]
         assert isinstance(gsd, float), f"invalid input gsd type: {type(gsd)}"
-        (crop_top_idx, crop_left_idx, crop_height, crop_width, output_gsd) = self.get_params(
+        crop_params = self.get_params(
             input_array=input_array,
             gsd=gsd,
             size=self.size,
             gsd_ratios=self.gsd_ratios,
         )
+        (crop_top_idx, crop_left_idx, crop_height, crop_width, output_gsd) = crop_params
         resized_crop = self.get_resized_crop(
             input_array=input_array,
             crop_top_idx=crop_top_idx,
@@ -134,6 +139,8 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
         if isinstance(data, dict):
             data[self.target_key] = resized_crop
             data[self.gsd_key] = output_gsd
+            if self.add_params_to_batch_dict:
+                data[self.target_key + "/crop_params"] = crop_params
             return data
         else:
             return resized_crop, output_gsd
@@ -292,6 +299,7 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
         allow_auto_padding: bool = False,
         interpolation: InterpolationMode = InterpolationMode.BILINEAR,
         antialias: bool = True,
+        add_params_to_batch_dict: bool = True,
     ):
         """Validates cropping settings.
 
@@ -316,6 +324,8 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
                 `torchvision.transforms.InterpolationMode`. Default is bilinear.
             antialias: defines whether to apply antialiasing. It only affects tensors when the
                 bilinear or bicubic interpolation modes are selected, and is ignored otherwise.
+            add_params_to_batch_dict: toggles whether crop parameters should be also added to the
+                batch dictionary when one is provided. These parameters will be stored
         """
         super().__init__()
         assert len(size) == 2 and all(
@@ -332,6 +342,7 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
         self.allow_auto_padding = allow_auto_padding
         self.interpolation = interpolation
         self.antialias = antialias
+        self.add_params_to_batch_dict = add_params_to_batch_dict
 
     def forward(
         self,
@@ -362,20 +373,21 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
             input_array = data
         if isinstance(data, torch.Tensor):
             input_array = data
-        assert isinstance(input_array, torch.Tensor), f"invalid input data type: {type(data)}"
+        assert isinstance(input_array, torch.Tensor), f"invalid input array type: {type(input_array)}"
         assert input_array.ndim >= 2, f"invalid input array ndim: {input_array.ndim}"
         if gsd is None:
             assert isinstance(data, dict), "must provide gsd as arg or provide it through batch dict!"
             assert self.gsd_key is not None, "missing 'gsd_key' attribute for batch dicts!"
             gsd = data[self.gsd_key]
         assert isinstance(gsd, float), f"invalid input gsd type: {type(gsd)}"
-        (crop_top_idx, crop_left_idx, crop_height, crop_width, output_gsd) = self.get_params(
+        crop_params = self.get_params(
             input_array=input_array,
             gsd=gsd,
             size=self.size,
             output_gsd=self.output_gsd,
             allow_auto_padding=self.allow_auto_padding,
         )
+        (crop_top_idx, crop_left_idx, crop_height, crop_width, output_gsd) = crop_params
         center_crop = self.get_center_crop(
             input_array=input_array,
             crop_top_idx=crop_top_idx,
@@ -391,6 +403,8 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
         if isinstance(data, dict):
             data[self.target_key] = center_crop
             data[self.gsd_key] = output_gsd
+            if self.add_params_to_batch_dict:
+                data[self.target_key + "/crop_params"] = crop_params
             return data
         else:
             return center_crop, output_gsd
@@ -543,3 +557,6 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
 
 # @@@@ TODO: GroundSamplingDistanceAwareJPEGDecoderWithRandomResizedCrop
 # @@@@ TODO: GroundSamplingDistanceAwareJPEGDecoderWithCenterResizedCrop
+
+GSDAwareRandomResizedCrop = GroundSamplingDistanceAwareRandomResizedCrop
+GSDAwareCenterFixedCrop = GroundSamplingDistanceAwareCenterFixedCrop
