@@ -67,7 +67,15 @@ def setup_logging_for_analysis_script(level: int = logging.DEBUG) -> logging.Log
     stream_handler = logging.StreamHandler(stream=sys.stdout)
     stream_handler.setFormatter(formatter)
     root.addHandler(stream_handler)
-    return get_logger("ssl4rs")
+    logger_ = get_logger("ssl4rs")
+
+    import ssl4rs.utils.config
+
+    logger_.info("Logging set up for analysis script; runtime info:")
+    for key, value in ssl4rs.utils.config.get_runtime_tags(with_gpu_info=True).items():
+        logger_.info(f"{key}: {value}")
+
+    return logger_
 
 
 @pl_utils.rank_zero_only

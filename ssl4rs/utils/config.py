@@ -182,6 +182,7 @@ def get_runtime_tags(
         "framework_version": ssl4rs.__version__,
         "framework_dir": str(ssl4rs.utils.filesystem.get_framework_root_dir()),
         "package_dir": str(ssl4rs.utils.filesystem.get_package_root_dir()),
+        "curr_work_dir": os.getcwd(),
         "platform_name": get_platform_name(),
         "git_hash": get_git_revision_hash(),
         "timestamp": time.strftime("%Y-%m-%d_%H-%M-%S"),
