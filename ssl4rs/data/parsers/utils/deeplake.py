@@ -40,6 +40,18 @@ class DeepLakeParser(DataParser):
 
         Note that due to the design of this class (and in contrast to the exporter class), all
         datasets should only ever be opened in read-only mode here.
+
+        Args:
+            dataset_path_or_object: path to the deeplake dataset to be read, or deeplake dataset
+                object to be wrapped by this reader. Will be set to READ-ONLY if it is not already.
+            batch_transforms: configuration dictionary or list of transformation operations that
+                will be applied to the "raw" batch data read by this class. These should be
+                callable objects that expect to receive a batch dictionary, and that also return
+                a batch dictionary.
+            batch_id_prefix: string used as a prefix in the batch identifiers generated for the
+                data samples read by this parser.
+            extra_deeplake_kwargs: extra parameters sent to the deeplake dataset constructor.
+                Should not be used if an already-opened dataset is provided.
         """
         if save_hyperparams:
             self.save_hyperparameters(

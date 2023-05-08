@@ -32,7 +32,16 @@ class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixi
         batch_transforms: "ssl4rs.data.BatchTransformType" = None,
         batch_id_prefix: typing.Optional[typing.AnyStr] = None,
     ):
-        """Base class constructor that validates batch transforms and batch id settings."""
+        """Base class constructor that validates batch transforms and batch id settings.
+
+        Args:
+            batch_transforms: configuration dictionary or list of transformation operations that
+                will be applied to the "raw" batch data read by this class. These should be
+                callable objects that expect to receive a batch dictionary, and that also return
+                a batch dictionary.
+            batch_id_prefix: string used as a prefix in the batch identifiers generated for the
+                data samples read by this parser.
+        """
         super().__init__()
         self.batch_transforms = ssl4rs.data.transforms.validate_or_convert_transform(batch_transforms)
         if batch_id_prefix is None:
