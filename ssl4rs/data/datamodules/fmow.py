@@ -89,8 +89,16 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         base_dataparser_configs = {
             "_default_": {
                 "batch_transforms": {  # to enable batching, by default, we need to crop the images
-                    "_target_": "TODO",
+                    "_target_": "ssl4rs.data.transforms.geo.crop.GSDAwareCenterFixedCrop",
+                    "size": (512, 512),
+                    "output_gsd": None,  # keep intact, do not resize
+                    "target_key": "image/rgb/jpg",
+                    "gsd_key": "image/rgb/gsd",
+                    "allow_auto_padding": True,
                 },
+                "parsing_strategy": "images",
+                "decompression_strategy": "deeplake",
+                "keep_metadata_dict": False,
             },
             "train": {"batch_id_prefix": "train"},
             "val": {"batch_id_prefix": "val"},
@@ -128,8 +136,13 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             assert root_data_dir.is_dir()
             logger.debug(f"fMoW deeplake dataset root: {root_data_dir}")
             parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "all")
-            parser = hydra.utils.instantiate(parser_config, root_data_dir, **deeplake_kwargs)
-            logger.debug(f"ready to parse {len(parser)} fMoW instances")
+            parser = hydra.utils.instantiate(
+                parser_config,
+                root_data_dir,
+                _recursive_=False,
+                **deeplake_kwargs,
+            )
+            logger.debug(f"ready to parse {len(parser)} fMoW samples")
             self.data_parsers["all"] = parser
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
