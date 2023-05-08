@@ -52,7 +52,8 @@ class DeepLakeParser(DataParser):
             self.dataset = dataset_path_or_object
         else:
             self.dataset = deeplake.load(dataset_path_or_object, read_only=True, **extra_deeplake_kwargs)
-        self.dataset.read_only = True
+        if not self.dataset.read_only:
+            self.dataset.read_only = True
         assert (
             hasattr(self.dataset, "info") and "name" in self.dataset.info
         ), "dataset info should at least contain a 'name' field!"

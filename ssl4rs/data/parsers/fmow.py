@@ -96,6 +96,7 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
     def _get_subset(
         self,
         subset: str,
+        hparams_override: typing.Optional[ssl4rs.utils.DictConfig] = None,
     ) -> "_DeepLakeSubsetParser":
         """Returns a subset data parser for a specific intersection of dataset instances."""
         assert subset in self.metadata.subset_types, f"unsupported subset: {subset}"
@@ -115,30 +116,43 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
         instance_tensor_keys = set(instances_parser.tensors.keys())
         image_tensor_keys = set(images_parser.tensors.keys())
         assert not instance_tensor_keys.intersection(image_tensor_keys)
+        subset_hparams = self.hparams if hparams_override is None else hparams_override
         return _DeepLakeSubsetParser(
             parent_dataset=self.dataset,
             instance_subset=instances_parser,
             image_subset=images_parser,
             image_idx_map=image_idx_map,
             subset=subset,
-            **self.hparams,
+            **subset_hparams,
         )
 
-    def get_train_subset(self):
+    def get_train_subset(
+        self,
+        hparams_override: typing.Optional[ssl4rs.utils.DictConfig] = None,
+    ) -> ssl4rs.data.parsers.utils.DeepLakeParser:
         """Returns a `DeepLakeParser`-compatible parser for the fMoW training set."""
-        return self._get_subset("train")
+        return self._get_subset("train", hparams_override)
 
-    def get_val_subset(self):
+    def get_val_subset(
+        self,
+        hparams_override: typing.Optional[ssl4rs.utils.DictConfig] = None,
+    ) -> ssl4rs.data.parsers.utils.DeepLakeParser:
         """Returns a `DeepLakeParser`-compatible parser for the fMoW validation set."""
-        return self._get_subset("val")
+        return self._get_subset("val", hparams_override)
 
-    def get_test_subset(self):
+    def get_test_subset(
+        self,
+        hparams_override: typing.Optional[ssl4rs.utils.DictConfig] = None,
+    ) -> ssl4rs.data.parsers.utils.DeepLakeParser:
         """Returns a `DeepLakeParser`-compatible parser for the fMoW testing set."""
-        return self._get_subset("test")
+        return self._get_subset("test", hparams_override)
 
-    def get_seq_subset(self):
+    def get_seq_subset(
+        self,
+        hparams_override: typing.Optional[ssl4rs.utils.DictConfig] = None,
+    ) -> ssl4rs.data.parsers.utils.DeepLakeParser:
         """Returns a `DeepLakeParser`-compatible parser for the fMoW seq set."""
-        return self._get_subset("seq")
+        return self._get_subset("seq", hparams_override)
 
 
 class _DeepLakeSubsetParser(ssl4rs.data.parsers.utils.DeepLakeParser):

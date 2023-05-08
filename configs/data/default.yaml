@@ -1,7 +1,7 @@
 datamodule: # this corresponds to the main LightningDataModule we'll be getting dataloaders from
   _recursive_: False # we actually defer the full instantiation of params to the datamodule itself
   _target_: ??? # MANDATORY class to be instantiated (should be derived from a pl.DataModule)
-  dataloader_fn_map: # note: subgroups here correspond to different loader types
+  dataloader_configs: # note: subgroups here correspond to different loader types
     _default_: # this group provides shared (but overridable) settings for all data loader types
       _target_: torch.utils.data.DataLoader # by default, we will be using the pytorch data loader
       batch_size: 1 # sets the default batch size for all data loaders to 1

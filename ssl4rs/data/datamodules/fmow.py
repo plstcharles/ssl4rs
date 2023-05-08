@@ -9,7 +9,8 @@ https://spacenet.ai/iarpa-functional-map-of-the-world-fmow/
 import pathlib
 import typing
 
-import torch
+import hydra
+import omegaconf
 import torch.utils.data
 
 import ssl4rs.data.datamodules.utils
@@ -35,16 +36,21 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     disk at runtime. Since the repackaging of the raw data into a deeplake format also takes a
     significant amount of time (probably 6-12 hours), this data module will not perform any
     automatic repackaging.
+
+    Under the default implementation, the training images will be loaded while applying a random
+    resized crop augmentation in order to enable batching. Non-training image sets will instead
+    rely on a center crop located on the object of interest.
+     TODO @@@@@@
     """
 
     metadata = ssl4rs.data.metadata.fmow
-    split_seed: int = 42  # should not really vary, ever...
 
     # noinspection PyUnusedLocal
     def __init__(
         self,
         data_dir: typing.Union[typing.AnyStr, pathlib.Path],
-        dataloader_fn_map: typing.Optional[ssl4rs.data.datamodules.utils.DataLoaderFnMap] = None,
+        dataparser_configs: typing.Optional[ssl4rs.utils.DictConfig] = None,
+        dataloader_configs: typing.Optional[ssl4rs.utils.DictConfig] = None,
         deeplake_kwargs: typing.Optional[typing.Dict[typing.AnyStr, typing.Any]] = None,
     ):
         """Initializes the fMoW data module.
@@ -55,13 +61,15 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
 
         Args:
             data_dir: directory where the fMoW dataset is located.
-            dataloader_fn_map: dictionary of data loader creation settings. See the base class
-                implementation for more information. When empty/null, the default data loader
-                settings are assumed.
+            dataparser_configs: configuration dictionary of data parser settings, separated by
+                data subset type, which may contain for example definitions for data transforms.
+            dataloader_configs: configuration dictionary of data loader settings, separated by data
+                subset type, which may contain for example batch sizes and worker counts.
             deeplake_kwargs: extra arguments forwarded to the deeplake dataset parser.
         """
         self.save_hyperparameters(logger=False)
-        super().__init__(dataloader_fn_map=dataloader_fn_map)
+        dataparser_configs = self._init_dataparser_configs(dataparser_configs)
+        super().__init__(dataparser_configs=dataparser_configs, dataloader_configs=dataloader_configs)
         data_dir = pathlib.Path(data_dir)
         assert data_dir.is_dir(), f"invalid fMoW dataset directory: {data_dir}"
         if data_dir.name != ".deeplake":
@@ -69,6 +77,34 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         assert data_dir.is_dir(), f"dataset directory should contain .deeplake folder at: {data_dir}"
         logger.debug(f"fMoW dataset root: {data_dir}")
         self.data_parsers: typing.Dict[str, ssl4rs.data.parsers.fmow.DeepLakeParser] = {}
+
+    @staticmethod
+    def _init_dataparser_configs(configs: ssl4rs.utils.DictConfig) -> omegaconf.DictConfig:
+        """Updates the dataparser configs before they are passed to the base class w/ defaults."""
+        # we'll add in the required defaults for the data parser configs based on our expected use
+        if configs is None:
+            configs = omegaconf.OmegaConf.create()
+        elif isinstance(configs, dict):
+            configs = omegaconf.OmegaConf.create(configs)
+        base_dataparser_configs = {
+            "_default_": {
+                "batch_transforms": {  # to enable batching, by default, we need to crop the images
+                    "_target_": "TODO",
+                },
+            },
+            "train": {"batch_id_prefix": "train"},
+            "val": {"batch_id_prefix": "val"},
+            "test": {"batch_id_prefix": "test"},
+            "seq": {"batch_id_prefix": "seq"},
+            "all": {
+                "_target_": "ssl4rs.data.parsers.fmow.DeepLakeParser",
+            },
+        }
+        configs = omegaconf.OmegaConf.merge(
+            omegaconf.OmegaConf.create(base_dataparser_configs),
+            configs,
+        )
+        return configs
 
     @property
     def num_classes(self) -> int:
@@ -91,45 +127,50 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
                 root_data_dir = root_data_dir / ".deeplake"
             assert root_data_dir.is_dir()
             logger.debug(f"fMoW deeplake dataset root: {root_data_dir}")
-            dataset = ssl4rs.data.parsers.fmow.DeepLakeParser(root_data_dir, **deeplake_kwargs)
-            logger.debug(f"ready to parse {len(dataset)} fMoW instances")
-            self.data_parsers["all"] = dataset
+            parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "all")
+            parser = hydra.utils.instantiate(parser_config, root_data_dir, **deeplake_kwargs)
+            logger.debug(f"ready to parse {len(parser)} fMoW instances")
+            self.data_parsers["all"] = parser
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
         """Returns the fMoW training set data loader."""
         if "train" not in self.data_parsers:
             assert "all" in self.data_parsers, "global parser unavailable, call `setup()` first!"
-            train_data_parser = self.data_parsers["all"].get_train_subset()
+            train_parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "train")
+            train_data_parser = self.data_parsers["all"].get_train_subset(train_parser_config)
             # @@@@@ todo: optimize (rechunk) for better speed?
             self.data_parsers["train"] = train_data_parser
-        return self._create_dataloader(self.data_parsers["train"], loader_type="train")
+        return self._create_dataloader(self.data_parsers["train"], subset_type="train")
 
     def val_dataloader(self) -> torch.utils.data.DataLoader:
         """Returns the fMoW validation set data loader."""
         if "val" not in self.data_parsers:
             assert "all" in self.data_parsers, "global parser unavailable, call `setup()` first!"
-            val_data_parser = self.data_parsers["all"].get_val_subset()
+            val_parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "val")
+            val_data_parser = self.data_parsers["all"].get_val_subset(val_parser_config)
             self.data_parsers["val"] = val_data_parser
-        return self._create_dataloader(self.data_parsers["val"], loader_type="val")
+        return self._create_dataloader(self.data_parsers["val"], subset_type="val")
 
     def test_dataloader(self) -> torch.utils.data.DataLoader:
         """Returns the fMoW testing set data loader."""
         if "test" not in self.data_parsers:
             assert "all" in self.data_parsers, "global parser unavailable, call `setup()` first!"
-            test_data_parser = self.data_parsers["all"].get_test_subset()
+            test_parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "test")
+            test_data_parser = self.data_parsers["all"].get_test_subset(test_parser_config)
             self.data_parsers["test"] = test_data_parser
-        return self._create_dataloader(self.data_parsers["test"], loader_type="test")
+        return self._create_dataloader(self.data_parsers["test"], subset_type="test")
 
     def seq_dataloader(self) -> torch.utils.data.DataLoader:
         if "seq" not in self.data_parsers:
             assert "all" in self.data_parsers, "global parser unavailable, call `setup()` first!"
-            seq_data_parser = self.data_parsers["all"].get_seq_subset()
+            seq_parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "seq")
+            seq_data_parser = self.data_parsers["all"].get_seq_subset(seq_parser_config)
             self.data_parsers["seq"] = seq_data_parser
-        return self._create_dataloader(self.data_parsers["seq"], loader_type="seq")
+        return self._create_dataloader(self.data_parsers["seq"], subset_type="seq")
 
-    def global_dataloader(self) -> torch.utils.data.DataLoader:
+    def all_dataloader(self) -> torch.utils.data.DataLoader:
         assert "all" in self.data_parsers, "global parser unavailable, call `setup()` first!"
-        return self._create_dataloader(self.data_parsers["all"], loader_type="all")
+        return self._create_dataloader(self.data_parsers["all"], subset_type="all")
 
 
 def _local_main(data_root_dir: pathlib.Path) -> None:
@@ -145,7 +186,7 @@ def _local_main(data_root_dir: pathlib.Path) -> None:
     test_dataloader = datamodule.test_dataloader()
     minibatch = next(iter(test_dataloader))
     assert isinstance(minibatch, dict)
-    global_dataloader = datamodule.global_dataloader()
+    global_dataloader = datamodule.all_dataloader()
     minibatch = next(iter(global_dataloader))
     assert isinstance(minibatch, dict)
     logger.info("all done")

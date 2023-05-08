@@ -15,66 +15,111 @@ import ssl4rs.utils.logging
 if typing.TYPE_CHECKING:
     import ssl4rs
 
-DataLoaderFnMap = typing.Mapping[typing.AnyStr, typing.Optional[omegaconf.DictConfig]]
-
 logger = ssl4rs.utils.logging.get_logger(__name__)
 
 
 class DataModule(pl.LightningDataModule):
     """Wraps the standard LightningDataModule interface to combine it with Hydra.
 
-    Each derived data module will likely correspond to the combination of one data source and one
-    target task. This interface provides common definitions regarding dataloader creation, and helps
-    document what functions should have an override in the derived classes and why.
+    Each derived data module will likely correspond to the combination of one dataset and one
+    target task. This interface provides common definitions regarding data parser and loader
+    creation, and helps document what functions should have an override in the derived classes
+    and why. The reason to use it is to simplify the creation of data parsers and loaders with
+    shared (and externally configurable) settings (e.g. data transformations).
 
-    For more information, see:
+    For more information on generic data modules, see:
         https://lightning.ai/docs/pytorch/stable/data/datamodule.html
     """
 
-    default_dataloader_types = tuple(["train", "valid", "test", "predict"])
-    """Types of dataloaders that the base class supports; derived impls can support more/fewer."""
+    _default_subset_types = tuple(["train", "valid", "test"])
+    """Types of data subsets that the module supports; derived impls can support more/fewer."""
+
+    split_seed: int = 42
+    """Static seed used to initialize internal RNGs for dataset splits; should never change!"""
 
     def __init__(
         self,
-        dataloader_fn_map: typing.Optional[DataLoaderFnMap] = None,
+        dataparser_configs: typing.Optional[ssl4rs.utils.DictConfig] = None,
+        dataloader_configs: typing.Optional[ssl4rs.utils.DictConfig] = None,
     ):
-        """Initializes the base class interface using the map of loader-type-to-function pairs.
+        """Initializes the base class interface using the expected configs of parsers/loaders.
 
-        The map should contain an entry for each data loader type that may be instantiated; usually,
-        these include "train", "valid", and "test" data loaders. A special "_default_" entry can be
-        used to specify default data loader settings shared (but still overridable) by all data
-        loaders. The "_default_" entry or all other entries should specify a "_target_" class name
-        to be instantiated via `hydra.utils.instantiate`. The suggested default is the classic
-        PyTorch DataLoader class, i.e. `torch.utils.data.DataLoader`.
+        Args:
+            dataparser_configs: configuration dictionary of data parser settings, separated by
+                data subset type, which may contain for example definitions for data transforms.
+                These settings are not used directly in this base class interface, and are instead
+                expected to be used by the derived DataModule classes.
+            dataloader_configs: configuration dictionary of data loader settings, separated by data
+                subset type, which may contain for example batch sizes and worker counts. These
+                settings will be used directly in this base class interface via the
+                `_create_dataloader` function.
 
-        Example with a default batch size for all loaders (64) and a smaller one (32) for training:
+        The provided configuration dictionaries may be empty if default data parsing/loading
+        settings are fine. When settings are provided, each data subset (e.g. `train`, or `valid`)
+        should have its own section in the configuration. In other words, the given configuration
+        dictionary should contain subdictionaries, with one for each data subset. If a subset
+        is left unspecified, default settings will be used. To override default settings across
+        all data subsets, define new settings in a special `_default_` section. For example, the
+        data loader config can be provided as:
+
             _default_:
                 _target_: torch.utils.data.DataLoader
                 batch_size: 64
             train:
                 batch_size: 32
+                shuffle: True
 
-        If any of the functions for the specified/supported loader types is null or missing, it
+        In that case, all data loaders will be instantiated from the `torch.utils.data.DataLoader`
+        target class, and they will all have a batch size of 64 by default. The training data
+        loader will have a batch size of 32, and it will shuffle its data.
+
+        If any of the settings for the specified/supported subsets is null or missing, it
         will be set as the default from the _default_ section if a match exists, otherwise it will
-        use the default value from the DataLoader's constructor. For more info on these values,
-        see: https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader
+        use the default value from the default data loader/parser constructor. For data loaders,
+        a default target class is always assumed (`torch.utils.data.DataLoader`). For more info on
+        the default values for that class, see:
+        https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader
         """
         super().__init__()
-        if dataloader_fn_map is None:
-            dataloader_fn_map = dict()
-        assert all(
-            [isinstance(k, str) for k in dataloader_fn_map.keys()]
-        ), "dataloader function map should have string keys that correspond to loader/loop types"
-        assert all(
-            [isinstance(v, (dict, omegaconf.DictConfig)) for v in dataloader_fn_map.values()]
-        ), "dataloader function map values should be subconfigs (no partial functions or objs yet!)"
-        self.dataloader_fn_map = {
-            loader_type: dataloader_fn_map.get(loader_type, None)
-            for loader_type in set(list(dataloader_fn_map.keys()) + list(self.default_dataloader_types))
-        }
+        if dataparser_configs is None:
+            dataparser_configs = omegaconf.OmegaConf.create()
+        if dataloader_configs is None:
+            dataloader_configs = omegaconf.OmegaConf.create()
+        assert len(self.subset_types) > 0, f"invalid data subset types: {self.subset_types}"
+        combined_parser_subsets = set(list(dataparser_configs.keys()) + list(self.subset_types))
+        self.dataparser_configs = omegaconf.OmegaConf.create(
+            {subset: dataparser_configs.get(subset, omegaconf.OmegaConf.create()) for subset in combined_parser_subsets}
+        )
+        combined_loader_subsets = set(list(dataloader_configs.keys()) + list(self.subset_types))
+        self.dataloader_configs = omegaconf.OmegaConf.create(
+            {subset: dataloader_configs.get(subset, omegaconf.OmegaConf.create()) for subset in combined_loader_subsets}
+        )
+
+    @property
+    def subset_types(self) -> typing.Sequence[str]:
+        """Returns the data subsets supported by the datamodule.
+
+        By default, if no hint is available, we will use the list of commonly used subsets:
+        "train", "valid", and "test". If metadata is available, we will look for a `subset_types`
+        attribute, make sure it's a list, and return it.
+        """
+        if hasattr(self, "_subset_types"):
+            output = self._subset_types
+        elif hasattr(self, "metadata"):
+            if isinstance(self.metadata, dict) and "subset_types" in self.metadata:
+                output = self.metadata["subset_types"]
+            elif hasattr(self.metadata, "subset_types"):
+                output = self.metadata.subset_types  # noqa
+            else:
+                output = self._default_subset_types
+        else:
+            output = self._default_subset_types
+        assert all([isinstance(s, str) for s in output])
+        subset_types = [s for s in output]
+        return subset_types
 
     def prepare_data(self) -> None:
-        """Use this to download and prepare data.
+        """Override this function to download and prepare data for the dataloaders.
 
         Downloading and saving data with multiple processes (distributed settings) will result in
         corrupted data. Lightning ensures this method is called only within a single process, so
@@ -172,6 +217,9 @@ class DataModule(pl.LightningDataModule):
     def predict_dataloader(self) -> pl_types.EVAL_DATALOADERS:
         """Instantiates one or more pytorch dataloaders for prediction runs.
 
+        Note: in contrast with typical validation or test data loaders, this loader is typically
+        assumed NOT to load groundtruth (target) annotations along with data samples.
+
         Note:
             In the case where this returns multiple dataloaders, the LightningModule `predict_step`
             method will have an argument `dataloader_idx` which matches the order here.
@@ -179,13 +227,15 @@ class DataModule(pl.LightningDataModule):
         Return:
             A data loader (or a collection of them) that provides prediction samples.
         """
-        # note: most datasets do not offer a 'predict' dataloader; we'll make one w/ valid+test
-        return [self.val_dataloader(), self.test_dataloader()]
+        raise NotImplementedError
 
     @property
     def dataloader_types(self) -> typing.List[typing.AnyStr]:
-        """Types of dataloaders that this particular implementation supports."""
-        return [t for t in self.dataloader_fn_map.keys() if not t.startswith("_")]
+        """Types of dataloaders that this particular implementation supports.
+
+        Note: by default, we assume that these 'types' are linked with the data subsets.
+        """
+        return [t for t in self.dataloader_configs.keys() if not t.startswith("_")]
 
     def get_dataloader(
         self,
@@ -194,7 +244,8 @@ class DataModule(pl.LightningDataModule):
         """Returns a data loader object (or a collection of) for a given loader type.
 
         This function will verify that the specified loader type exists and is supported, and
-        redirect the getter to the correct function that prepares the dataloader(s).
+        redirect the getter to the correct function that prepares the dataloader(s). By default, we
+        assume that dataloader types are linked to data subsets.
         """
         assert loader_type in self.dataloader_types, f"invalid loader type: {loader_type}"
         expected_getter_name = f"{loader_type}_dataloader"
@@ -204,49 +255,90 @@ class DataModule(pl.LightningDataModule):
         dataloader = getter()
         return dataloader
 
+    @classmethod
+    def _get_subset_idxs_with_stratified_sampling(
+        cls,
+        labels: np.ndarray,  # should be 1d label index array (0-based)
+        class_idx_to_count_map: typing.Dict[int, int],
+        split_ratios: typing.Tuple[float, ...],
+    ) -> typing.Tuple[typing.List[int], ...]:
+        """Returns the sample idxs to use in train/valid/test sets with stratified sampling."""
+        assert sum(class_idx_to_count_map.values()) == len(labels)
+        rng = torch.Generator()
+        rng.manual_seed(cls.split_seed)
+        output_sample_idxs = [[] for _ in range(len(split_ratios))]
+        for class_idx, sample_count in class_idx_to_count_map.items():
+            split_sample_idxs = torch.utils.data.random_split(
+                np.nonzero(labels == class_idx)[0],
+                lengths=split_ratios,
+                generator=rng,
+            )
+            for subset_idx, sample_idxs in enumerate(split_sample_idxs):
+                output_sample_idxs[subset_idx].extend([idx for idx in sample_idxs])
+        assert sum(len(s) for s in output_sample_idxs) == len(labels)
+        assert len(np.unique(np.concatenate(output_sample_idxs))) == len(labels)
+        output_sample_idxs = [np.sort(s).tolist() for s in output_sample_idxs]
+        return tuple(output_sample_idxs)  # noqa
+
+    @staticmethod
+    def _get_subconfig_for_subset(
+        configs: omegaconf.DictConfig,
+        subset_type: str,
+    ) -> omegaconf.DictConfig:
+        """Returns an omegaconf DictConfig object for the given subset type.
+
+        This function will use defaults if available, and then override with specific values.
+        """
+        default_settings = configs.get("_default_", omegaconf.OmegaConf.create())
+        if default_settings is None:  # in case it was specified as an empty group, same as default
+            default_settings = omegaconf.OmegaConf.create()
+        target_settings = configs.get(subset_type, omegaconf.OmegaConf.create())
+        if target_settings is None:  # in case it was specified as an empty group, same as default
+            target_settings = omegaconf.OmegaConf.create()
+        combined_settings = omegaconf.OmegaConf.merge(default_settings, target_settings)
+        return combined_settings
+
     def _create_dataloader(
         self,
         parser: torch.utils.data.Dataset,
-        loader_type: typing.AnyStr,
+        subset_type: typing.AnyStr,
     ) -> torch.utils.data.DataLoader:
-        """Returns a data loader object for a given parser and loader type.
+        """Creates and returns a new data loader object for a particular data subset.
 
         This wrapper allows us to redirect the data loader creation function to a fully-initialized
         partial function config that is likely provided via Hydra.
 
         The provided parser is forwarded directly to the dataloader creation function.
         """
-        logger.debug(f"Instantiating a new '{loader_type}' dataloader...")
-        default_settings = self.dataloader_fn_map.get("_default_", omegaconf.OmegaConf.create())
-        target_settings = self.dataloader_fn_map.get(loader_type, omegaconf.OmegaConf.create())
-        if target_settings is None:  # in case it was specified as an empty group, same as default
-            target_settings = omegaconf.OmegaConf.create()
-        combined_settings = omegaconf.OmegaConf.merge(default_settings, target_settings)
+        logger.debug(f"Instantiating a new '{subset_type}' dataloader...")
+        config = self._get_subconfig_for_subset(self.dataloader_configs, subset_type)
         if os.getenv("PL_SEED_WORKERS"):
-            if combined_settings.get("worker_init_fn", None) is not None:
+            if config.get("worker_init_fn", None) is not None:
                 logger.warning(
                     "Using a custom worker init function with `seed_workers=True`! "
                     "(cannot use the lightning seed function here, make sure you use/call it yourself!)"
                 )
             else:
-                with omegaconf.open_dict(combined_settings):
-                    # open_dict allows us to write thru hydra's omegaconf struct
-                    combined_settings.worker_init_fn = omegaconf.OmegaConf.create(
+                with omegaconf.open_dict(config):
+                    # open_dict allows us to write through hydra's omegaconf struct
+                    config.worker_init_fn = omegaconf.OmegaConf.create(
                         {
                             "_partial_": True,
                             "_target_": "lightning_fabric.utilities.seed.pl_worker_init_function",
                         }
                     )
-        if "_target_" not in combined_settings:
-            # if the type of dataloader is not specified, use PyTorch's
-            with omegaconf.open_dict(combined_settings):
-                # open_dict allows us to write thru hydra's omegaconf struct
-                combined_settings._target_ = "torch.utils.data.DataLoader"
-        assert not combined_settings.get(
+        if "_target_" not in config:
+            # if the type of dataloader is not specified, use PyTorch's DataLoader class
+            with omegaconf.open_dict(config):
+                # open_dict allows us to write through hydra's omegaconf struct
+                config._target_ = "torch.utils.data.DataLoader"
+        assert not config.get(
             "_partial_", False
         ), "this function should not return a partial function, it's time to create the loader!"
-        dataloader = hydra.utils.instantiate(combined_settings, parser)
-        assert isinstance(dataloader, torch.utils.data.DataLoader), "invalid dataloader type!"
+        dataloader = hydra.utils.instantiate(config, parser)
+        assert isinstance(
+            dataloader, torch.utils.data.DataLoader
+        ), f"invalid dataloader type: {type(dataloader)} (...should be DataLoader-derived)"
         return dataloader
 
 

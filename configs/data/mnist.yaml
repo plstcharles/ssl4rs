@@ -5,7 +5,7 @@ defaults:
 datamodule: # the mnist dataset comes with its own custom data module for classification tasks
   _target_: ssl4rs.data.datamodules.mnist.DataModule
   data_dir: ${utils.data_root_dir}/mnist/
-  train_val_test_split: [55_000, 5_000, 10_000]
-  dataloader_fn_map:
+  train_val_split: [55_000, 5_000]
+  dataloader_configs:
     _default_: # this group provides shared (but overridable) settings for all data loader types
       batch_size: 32 # bump up the default batch size for all data loaders

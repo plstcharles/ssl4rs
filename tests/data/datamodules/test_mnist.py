@@ -41,19 +41,29 @@ def test_mnist_datamodule_via_hydra(tmpdir, global_cfg_cleaner):
 
 @pytest.mark.parametrize("batch_size", [32, 64])
 def test_mnist_datamodule(batch_size):
-    dataloader_fn_map = dict(
+    dataparser_configs = dict(
+        valid=dict(
+            dataset_name="potato",
+        ),
+    )
+    dataloader_configs = dict(
         _default_=dict(
             _target_="torch.utils.data.DataLoader",
             batch_size=batch_size,
         )
     )
     mnist_data_dir = ssl4rs.utils.config.get_data_root_dir() / "mnist"
-    datamodule = MNISTDataModule(data_dir=mnist_data_dir, dataloader_fn_map=dataloader_fn_map)
+    datamodule = MNISTDataModule(
+        data_dir=mnist_data_dir,
+        dataparser_configs=dataparser_configs,
+        dataloader_configs=dataloader_configs,
+    )
     datamodule.prepare_data()
     assert not datamodule.data_train and not datamodule.data_valid and not datamodule.data_test
     datamodule.setup()
     assert datamodule.data_train and datamodule.data_valid and datamodule.data_test
     assert len(datamodule.data_train) + len(datamodule.data_valid) + len(datamodule.data_test) == 70_000
+    assert datamodule.data_valid.dataset_name == "potato"
     assert datamodule.train_dataloader()
     assert datamodule.val_dataloader()
     assert datamodule.test_dataloader()

@@ -30,7 +30,7 @@ model: # specified which LightningModule-derived implementation provides the tra
 
 data:
   datamodule:
-    dataloader_fn_map:
+    dataloader_configs:
       _default_: # this group provides shared (but overridable) settings for all data loader types
         batch_size: 32
 

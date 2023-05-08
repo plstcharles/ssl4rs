@@ -7,6 +7,8 @@ https://pytorch.org/vision/stable/generated/torchvision.datasets.MNIST.html
 import pathlib
 import typing
 
+import hydra.utils
+import omegaconf
 import torch
 import torch.utils.data
 import torchvision
@@ -33,8 +35,9 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     def __init__(
         self,
         data_dir: typing.Union[typing.AnyStr, pathlib.Path],
-        dataloader_fn_map: typing.Optional[ssl4rs.data.datamodules.utils.DataLoaderFnMap] = None,
-        train_val_test_split: typing.Tuple[int, int, int] = (55_000, 5_000, 10_000),
+        dataparser_configs: typing.Optional[ssl4rs.utils.DictConfig] = None,
+        dataloader_configs: typing.Optional[ssl4rs.utils.DictConfig] = None,
+        train_val_split: typing.Tuple[int, int] = (55_000, 5_000),
     ):
         """Initializes the MNIST data module.
 
@@ -44,27 +47,60 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
 
         Args:
             data_dir: directory where the MNIST dataset is located (or where it will be downloaded).
-            dataloader_fn_map: dictionary of data loader creation settings. See the base class
-                implementation for more information. When empty/null, the default data loader
-                settings are assumed.
-            train_val_test_split: sample split counts to use when separating the data.
+            dataparser_configs: configuration dictionary of data parser settings, separated by
+                data subset type, which may contain for example definitions for data transforms.
+            dataloader_configs: configuration dictionary of data loader settings, separated by data
+                subset type, which may contain for example batch sizes and worker counts.
+            train_val_split: sample split counts to use when separating the train/valid data.
         """
         self.save_hyperparameters(logger=False)
-        super().__init__(dataloader_fn_map=dataloader_fn_map)
-        assert data_dir is not None
+        dataparser_configs = self._init_dataparser_configs(dataparser_configs)
+        super().__init__(dataparser_configs=dataparser_configs, dataloader_configs=dataloader_configs)
+        assert data_dir is not None, "invalid data dir (must be specified, will download if needed)"
         pathlib.Path(data_dir).mkdir(parents=True, exist_ok=True)
-        assert len(train_val_test_split) == 3 and sum(train_val_test_split) == 70_000
-        self.data_transforms = [
+        assert len(train_val_split) == 2 and sum(train_val_split) == 60_000
+        self._internal_data_transforms = [  # we'll apply these to all tensors from the orig parser
             torchvision.transforms.ToTensor(),
             torchvision.transforms.Normalize((0.1307,), (0.3081,)),
-        ]
-        self.batch_transforms = [
-            ssl4rs.data.transforms.TupleMapper({0: "data", 1: "target"}),
-            ssl4rs.data.transforms.BatchSizer("data"),
         ]
         self.data_train: typing.Optional[torch.utils.data.Dataset] = None
         self.data_valid: typing.Optional[torch.utils.data.Dataset] = None
         self.data_test: typing.Optional[torch.utils.data.Dataset] = None
+
+    @staticmethod
+    def _init_dataparser_configs(configs: ssl4rs.utils.DictConfig) -> omegaconf.DictConfig:
+        """Updates the dataparser configs before they are passed to the base class w/ defaults."""
+        # we'll add in the required defaults for the data parser configs based on our expected use
+        if configs is None:
+            configs = omegaconf.OmegaConf.create()
+        elif isinstance(configs, dict):
+            configs = omegaconf.OmegaConf.create(configs)
+        base_dataparser_configs = {
+            "_default_": {  # all data parsers will wrap the torchvision mnist dataset parser
+                "_target_": "ssl4rs.data.parsers.ParserWrapper",
+                "batch_transforms": [  # we'll set up all the parsers with these two transforms
+                    {
+                        # this will map the loaded tuples with actual attribute names
+                        "_target_": "ssl4rs.data.transforms.TupleMapper",
+                        "key_map": {0: "data", 1: "target"},
+                    },
+                    {
+                        # this will add a batch size to the batch based on the data tensor shape
+                        "_target_": "ssl4rs.data.transforms.BatchSizer",
+                        "batch_size_hint": "data",
+                    },
+                ],
+            },
+            # bonus: we will also give all parsers have a nice prefix
+            "train": {"batch_id_prefix": "train"},
+            "valid": {"batch_id_prefix": "valid"},
+            "test": {"batch_id_prefix": "test"},
+        }
+        configs = omegaconf.OmegaConf.merge(
+            omegaconf.OmegaConf.create(base_dataparser_configs),
+            configs,
+        )
+        return configs
 
     @property
     def num_classes(self) -> int:
@@ -87,43 +123,41 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         whether it's called before `trainer.fit()` or `trainer.test()`.
         """
         # load datasets only if they're not loaded already
-        if not self.data_train and not self.data_valid and not self.data_test:
-            trainset = ssl4rs.data.parsers.ParserWrapper(
-                dataset=torchvision.datasets.MNIST(
-                    root=self.hparams.data_dir,
-                    train=True,
-                    transform=torchvision.transforms.Compose(self.data_transforms),
-                ),
-                batch_transforms=self.batch_transforms,
-                batch_id_prefix="train",
+        if self.data_train is None:
+            orig_train_parser = torchvision.datasets.MNIST(
+                root=self.hparams.data_dir,
+                train=True,
+                transform=torchvision.transforms.Compose(self._internal_data_transforms),
             )
-            testset = ssl4rs.data.parsers.ParserWrapper(
-                dataset=torchvision.datasets.MNIST(
-                    root=self.hparams.data_dir,
-                    train=False,
-                    transform=torchvision.transforms.Compose(self.data_transforms),
-                ),
-                batch_transforms=self.batch_transforms,
-                batch_id_prefix="test",
+            # NOTE: we regenerate a split here using the original mnist train set for train+valid
+            train_parser, valid_parser = torch.utils.data.random_split(
+                dataset=orig_train_parser,
+                lengths=self.hparams.train_val_split,
+                generator=torch.Generator().manual_seed(self.split_seed),
             )
-            dataset = trainset + testset
-            self.data_train, self.data_valid, self.data_test = torch.utils.data.random_split(
-                dataset=dataset,
-                lengths=self.hparams.train_val_test_split,
-                generator=torch.Generator().manual_seed(42),
+            train_parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "train")
+            self.data_train = hydra.utils.instantiate(train_parser_config, train_parser)
+            valid_parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "valid")
+            self.data_valid = hydra.utils.instantiate(valid_parser_config, valid_parser)
+            orig_test_parser = torchvision.datasets.MNIST(
+                root=self.hparams.data_dir,
+                train=False,
+                transform=torchvision.transforms.Compose(self._internal_data_transforms),
             )
+            test_parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "test")
+            self.data_test = hydra.utils.instantiate(test_parser_config, orig_test_parser)
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
         """Returns the MNIST training set data loader."""
         assert self.data_train is not None, "parser unavailable, call `setup()` first!"
-        return self._create_dataloader(self.data_train, loader_type="train")
+        return self._create_dataloader(self.data_train, subset_type="train")
 
     def val_dataloader(self) -> torch.utils.data.DataLoader:
         """Returns the MNIST validation set data loader."""
         assert self.data_valid is not None, "parser unavailable, call `setup()` first!"
-        return self._create_dataloader(self.data_valid, loader_type="valid")
+        return self._create_dataloader(self.data_valid, subset_type="valid")
 
     def test_dataloader(self) -> torch.utils.data.DataLoader:
         """Returns the MNIST testing set data loader."""
         assert self.data_test is not None, "parser unavailable, call `setup()` first!"
-        return self._create_dataloader(self.data_test, loader_type="test")
+        return self._create_dataloader(self.data_test, subset_type="test")

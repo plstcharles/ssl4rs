@@ -13,7 +13,7 @@
 
 data:
   datamodule:
-    dataloader_fn_map:
+    dataloader_configs:
       _default_: # this group provides shared (but overridable) settings for all data loader types
         num_workers: 0 # debuggers don't like multiprocessing, let's run everything on the main thread
         pin_memory: False # disable gpu memory pin (no pre-allocation on the GPU at all might help)
