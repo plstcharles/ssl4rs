@@ -123,6 +123,7 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
             gsd=gsd,
             size=self.size,
             gsd_ratios=self.gsd_ratios,
+            batch_dict=data if isinstance(data, dict) else None,
         )
         (crop_top_idx, crop_left_idx, crop_height, crop_width, output_gsd) = crop_params
         resized_crop = self.get_resized_crop(
@@ -135,6 +136,7 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
             output_width=self.size[1],
             interpolation=self.interpolation,
             antialias=self.antialias,
+            batch_dict=data if isinstance(data, dict) else None,
         )
         if isinstance(data, dict):
             data[self.target_key] = resized_crop
@@ -151,6 +153,7 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
         gsd: float,
         size: typing.Tuple[int, int],
         gsd_ratios: typing.Tuple[float, float],
+        batch_dict: typing.Optional["BatchDictType"] = None,
     ) -> typing.Tuple[int, int, int, int, float]:
         """Returns the parameters for a crop-and-resize operation on the input array.
 
@@ -161,6 +164,8 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
                 to be height first, width second, and pixel values.
             gsd_ratios: expected min/max ratios to use when selecting a new ground sampling
                 distance value. See constructor for more info.
+            batch_dict: input batch dictionary provided to the transform op; might be used in
+                derived classes to process other batch attributes simultaneously.
 
         Returns:
             A tuple of parameters (top-idx, left-idx, height, width) to be passed to a crop
@@ -221,8 +226,9 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
         crop_width: int,
         output_height: int,
         output_width: int,
-        interpolation: InterpolationMode = InterpolationMode.BILINEAR,
-        antialias: bool = True,
+        interpolation: InterpolationMode,
+        antialias: bool,
+        batch_dict: typing.Optional["BatchDictType"] = None,
     ) -> torch.Tensor:
         """Crops the given input array with the specified parameters.
 
@@ -241,6 +247,8 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
                 `torchvision.transforms.InterpolationMode`. Default is bilinear.
             antialias: defines whether to apply antialiasing. It only affects tensors when the
                 bilinear or bicubic interpolation modes are selected, and is ignored otherwise.
+            batch_dict: input batch dictionary provided to the transform op; might be used in
+                derived classes to process other batch attributes simultaneously.
 
         Returns:
             The tensor that corresponds to the specified cropped and resized (with a predetermined
@@ -386,6 +394,7 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
             size=self.size,
             output_gsd=self.output_gsd,
             allow_auto_padding=self.allow_auto_padding,
+            batch_dict=data if isinstance(data, dict) else None,
         )
         (crop_top_idx, crop_left_idx, crop_height, crop_width, output_gsd) = crop_params
         center_crop = self.get_center_crop(
@@ -399,6 +408,7 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
             allow_auto_padding=self.allow_auto_padding,
             interpolation=self.interpolation,
             antialias=self.antialias,
+            batch_dict=data if isinstance(data, dict) else None,
         )
         if isinstance(data, dict):
             data[self.target_key] = center_crop
@@ -416,8 +426,9 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
         size: typing.Tuple[int, int],
         output_gsd: typing.Optional[float],
         allow_auto_padding: bool,
+        batch_dict: typing.Optional["BatchDictType"] = None,
     ) -> typing.Tuple[int, int, int, int, float]:
-        """Returns the parameters for a crop-and-resize operation on the input array.
+        """Returns the parameters for a center crop operation on the input array.
 
         Args:
             input_array: the input array from which a crop should be generated.
@@ -428,6 +439,8 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
                 occur, and the `size` corresponds to the crop area in the original array directly.
             allow_auto_padding: defines to auto-pad input arrays when they are too small for the
                 specified crop size/GSD values.
+            batch_dict: input batch dictionary provided to the transform op; might be used in
+                derived classes to process other batch attributes simultaneously.
 
         Returns:
             A tuple of parameters (top-idx, left-idx, height, width) to be passed to a crop
@@ -483,6 +496,7 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
         allow_auto_padding: bool,
         interpolation: InterpolationMode,
         antialias: bool,
+        batch_dict: typing.Optional["BatchDictType"] = None,
     ) -> torch.Tensor:
         """Crops the given input array with the specified parameters.
 
@@ -503,6 +517,8 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
                 `torchvision.transforms.InterpolationMode`. Default is bilinear.
             antialias: defines whether to apply antialiasing. It only affects tensors when the
                 bilinear or bicubic interpolation modes are selected, and is ignored otherwise.
+            batch_dict: input batch dictionary provided to the transform op; might be used in
+                derived classes to process other batch attributes simultaneously.
 
         Returns:
             The tensor that corresponds to the specified cropped and resized (with a predetermined

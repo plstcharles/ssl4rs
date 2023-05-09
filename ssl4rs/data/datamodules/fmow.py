@@ -40,7 +40,6 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     Under the default implementation, the training images will be loaded while applying a random
     resized crop augmentation in order to enable batching. Non-training image sets will instead
     rely on a center crop located on the object of interest.
-     TODO @@@@@@
     """
 
     metadata = ssl4rs.data.metadata.fmow
@@ -89,18 +88,25 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         base_dataparser_configs = {
             "_default_": {
                 "batch_transforms": {  # to enable batching, by default, we need to crop the images
-                    "_target_": "ssl4rs.data.transforms.geo.crop.GSDAwareCenterFixedCrop",
+                    "_target_": "ssl4rs.data.transforms.geo.fmow.InstanceCenterCrop",
                     "size": (512, 512),
                     "output_gsd": None,  # keep intact, do not resize
-                    "target_key": "image/rgb/jpg",
-                    "gsd_key": "image/rgb/gsd",
                     "allow_auto_padding": True,
                 },
                 "parsing_strategy": "images",
                 "decompression_strategy": "deeplake",
                 "keep_metadata_dict": False,
             },
-            "train": {"batch_id_prefix": "train"},
+            "train": {
+                "batch_id_prefix": "train",
+                "batch_transforms": {  # to enable batching, by default, we need to crop the images
+                    "_target_": "ssl4rs.data.transforms.geo.crop.GSDAwareRandomResizedCrop",
+                    "size": (512, 512),
+                    "gsd_ratios": (0.8, 1.5),  # scale from 80% to 150% of original GSD
+                    "target_key": "image/rgb/jpg",
+                    "gsd_key": "image/rgb/gsd",
+                },
+            },
             "val": {"batch_id_prefix": "val"},
             "test": {"batch_id_prefix": "test"},
             "seq": {"batch_id_prefix": "seq"},
@@ -134,7 +140,6 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             if root_data_dir.name != ".deeplake":
                 root_data_dir = root_data_dir / ".deeplake"
             assert root_data_dir.is_dir()
-            logger.debug(f"fMoW deeplake dataset root: {root_data_dir}")
             parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "all")
             parser = hydra.utils.instantiate(
                 parser_config,
@@ -142,6 +147,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
                 _recursive_=False,
                 **deeplake_kwargs,
             )
+            parser.summary()
             logger.debug(f"ready to parse {len(parser)} fMoW samples")
             self.data_parsers["all"] = parser
 
