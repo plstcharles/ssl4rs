@@ -54,7 +54,6 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             train_val_split: sample split counts to use when separating the train/valid data.
         """
         self.save_hyperparameters(logger=False)
-        dataparser_configs = self._init_dataparser_configs(dataparser_configs)
         super().__init__(dataparser_configs=dataparser_configs, dataloader_configs=dataloader_configs)
         assert data_dir is not None, "invalid data dir (must be specified, will download if needed)"
         pathlib.Path(data_dir).mkdir(parents=True, exist_ok=True)
@@ -67,15 +66,10 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         self.data_valid: typing.Optional[torch.utils.data.Dataset] = None
         self.data_test: typing.Optional[torch.utils.data.Dataset] = None
 
-    @staticmethod
-    def _init_dataparser_configs(configs: ssl4rs.utils.DictConfig) -> omegaconf.DictConfig:
-        """Updates the dataparser configs before they are passed to the base class w/ defaults."""
-        # we'll add in the required defaults for the data parser configs based on our expected use
-        if configs is None:
-            configs = omegaconf.OmegaConf.create()
-        elif isinstance(configs, dict):
-            configs = omegaconf.OmegaConf.create(configs)
-        base_dataparser_configs = {
+    @property
+    def _base_dataparser_configs(self) -> ssl4rs.utils.DictConfig:
+        """Returns the 'base' (class-specific-default) configs for the data parsers."""
+        return {
             "_default_": {  # all data parsers will wrap the torchvision mnist dataset parser
                 "_target_": "ssl4rs.data.parsers.ParserWrapper",
                 "batch_transforms": [  # we'll set up all the parsers with these two transforms
@@ -96,11 +90,6 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             "valid": {"batch_id_prefix": "valid"},
             "test": {"batch_id_prefix": "test"},
         }
-        configs = omegaconf.OmegaConf.merge(
-            omegaconf.OmegaConf.create(base_dataparser_configs),
-            configs,
-        )
-        return configs
 
     @property
     def num_classes(self) -> int:

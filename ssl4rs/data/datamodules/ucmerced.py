@@ -64,7 +64,6 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             deeplake_kwargs: extra arguments forwarded to the deeplake dataset parser.
         """
         self.save_hyperparameters(logger=False)
-        dataparser_configs = self._init_dataparser_configs(dataparser_configs)
         super().__init__(dataparser_configs=dataparser_configs, dataloader_configs=dataloader_configs)
         assert data_dir is not None
         data_dir = pathlib.Path(data_dir)  # it might not exist, in which case we'll do a download
@@ -74,15 +73,10 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         self.data_valid: typing.Optional[ssl4rs.data.parsers.ucmerced.DeepLakeParser] = None
         self.data_test: typing.Optional[ssl4rs.data.parsers.ucmerced.DeepLakeParser] = None
 
-    @staticmethod
-    def _init_dataparser_configs(configs: ssl4rs.utils.DictConfig) -> omegaconf.DictConfig:
-        """Updates the dataparser configs before they are passed to the base class w/ defaults."""
-        # we'll add in the required defaults for the data parser configs based on our expected use
-        if configs is None:
-            configs = omegaconf.OmegaConf.create()
-        elif isinstance(configs, dict):
-            configs = omegaconf.OmegaConf.create(configs)
-        base_dataparser_configs = {
+    @property
+    def _base_dataparser_configs(self) -> ssl4rs.utils.DictConfig:
+        """Returns the 'base' (class-specific-default) configs for the data parsers."""
+        return {
             "_default_": {  # all data parsers will be based on the internal ucmerced parser class
                 "_target_": "ssl4rs.data.parsers.ucmerced.DeepLakeParser",
             },
@@ -91,11 +85,6 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             "valid": {"batch_id_prefix": "valid"},
             "test": {"batch_id_prefix": "test"},
         }
-        configs = omegaconf.OmegaConf.merge(
-            omegaconf.OmegaConf.create(base_dataparser_configs),
-            configs,
-        )
-        return configs
 
     @property
     def num_classes(self) -> int:

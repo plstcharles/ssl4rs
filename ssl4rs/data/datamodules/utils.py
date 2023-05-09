@@ -1,4 +1,5 @@
 """Contains utility functions and a base interface for lightning datamodules."""
+import copy
 import os
 import typing
 
@@ -81,19 +82,58 @@ class DataModule(pl.LightningDataModule):
         https://pytorch.org/docs/stable/data.html#torch.utils.data.DataLoader
         """
         super().__init__()
-        if dataparser_configs is None:
-            dataparser_configs = omegaconf.OmegaConf.create()
-        if dataloader_configs is None:
-            dataloader_configs = omegaconf.OmegaConf.create()
         assert len(self.subset_types) > 0, f"invalid data subset types: {self.subset_types}"
-        combined_parser_subsets = set(list(dataparser_configs.keys()) + list(self.subset_types))
-        self.dataparser_configs = omegaconf.OmegaConf.create(
-            {subset: dataparser_configs.get(subset, omegaconf.OmegaConf.create()) for subset in combined_parser_subsets}
-        )
-        combined_loader_subsets = set(list(dataloader_configs.keys()) + list(self.subset_types))
-        self.dataloader_configs = omegaconf.OmegaConf.create(
-            {subset: dataloader_configs.get(subset, omegaconf.OmegaConf.create()) for subset in combined_loader_subsets}
-        )
+        self.dataparser_configs = self._init_configs(dataparser_configs, self._base_dataparser_configs)
+        self.dataloader_configs = self._init_configs(dataloader_configs, self._base_dataloader_configs)
+
+    @property
+    def _base_dataparser_configs(self) -> ssl4rs.utils.DictConfig:
+        """Returns the 'base' (class-specific-default) configs for the data parsers."""
+        # we do not have anything to provide here (override if needed!)
+        return omegaconf.OmegaConf.create()
+
+    @property
+    def _base_dataloader_configs(self) -> ssl4rs.utils.DictConfig:
+        """Returns the 'base' (class-specific-default) configs for the data loaders."""
+        # we do not have anything to provide here (override if needed!)
+        return omegaconf.OmegaConf.create()
+
+    def _init_configs(
+        self,
+        user_configs: typing.Optional[ssl4rs.utils.DictConfig],
+        base_configs: typing.Optional[ssl4rs.utils.DictConfig] = None,
+    ) -> omegaconf.DictConfig:
+        """Initializes (merges) the given user + base configs with extra defaults and/or subsets.
+
+        Derived classes may override the `_base_dataparser_configs` or `_base_dataloader_configs`
+        properties or this function to add extra defaults or subsets specific to each datamodule.
+        """
+        if user_configs is None:
+            user_configs = omegaconf.OmegaConf.create()
+        elif isinstance(user_configs, dict):
+            user_configs = omegaconf.OmegaConf.create(user_configs)
+        if base_configs is None:
+            base_configs = omegaconf.OmegaConf.create()
+        elif isinstance(user_configs, dict):
+            base_configs = omegaconf.OmegaConf.create(base_configs)
+        subsets = set(list(user_configs.keys()) + list(base_configs.keys()) + list(self.subset_types))
+        output_configs = {}
+        for subset in subsets:
+            # instead of a global merge, we update subset-level settings key by key to replace groups
+            output_config = copy.deepcopy(base_configs.get(subset, omegaconf.OmegaConf.create()))
+            if not isinstance(output_config, omegaconf.DictConfig):
+                output_config = omegaconf.OmegaConf.create(output_config)
+            user_config = user_configs.get(subset, omegaconf.OmegaConf.create())
+            for setting_name in user_config.keys():
+                omegaconf.OmegaConf.update(
+                    cfg=output_config,
+                    key=setting_name,
+                    value=user_config.get(setting_name),
+                    merge=False,
+                )
+            output_configs[subset] = output_config
+        output_configs = omegaconf.OmegaConf.create(output_configs)
+        return output_configs
 
     @property
     def subset_types(self) -> typing.Sequence[str]:
@@ -289,14 +329,22 @@ class DataModule(pl.LightningDataModule):
 
         This function will use defaults if available, and then override with specific values.
         """
-        default_settings = configs.get("_default_", omegaconf.OmegaConf.create())
-        if default_settings is None:  # in case it was specified as an empty group, same as default
-            default_settings = omegaconf.OmegaConf.create()
-        target_settings = configs.get(subset_type, omegaconf.OmegaConf.create())
-        if target_settings is None:  # in case it was specified as an empty group, same as default
-            target_settings = omegaconf.OmegaConf.create()
-        combined_settings = omegaconf.OmegaConf.merge(default_settings, target_settings)
-        return combined_settings
+        default_subset_settings = configs.get("_default_", omegaconf.OmegaConf.create())
+        if default_subset_settings is None:  # in case it was specified as an empty group, same as default
+            default_subset_settings = omegaconf.OmegaConf.create()
+        target_subset_settings = configs.get(subset_type, omegaconf.OmegaConf.create())
+        if target_subset_settings is None:  # in case it was specified as an empty group, same as default
+            target_subset_settings = omegaconf.OmegaConf.create()
+        # instead of a global merge, we update subset-level settings key by key to replace groups
+        output_settings = copy.deepcopy(default_subset_settings)
+        for setting_name in target_subset_settings:
+            omegaconf.OmegaConf.update(
+                cfg=output_settings,
+                key=setting_name,
+                value=target_subset_settings.get(setting_name),
+                merge=False,
+            )
+        return output_settings
 
     def _create_dataloader(
         self,
@@ -327,7 +375,7 @@ class DataModule(pl.LightningDataModule):
                             "_target_": "lightning_fabric.utilities.seed.pl_worker_init_function",
                         }
                     )
-        if "_target_" not in config:
+        if "_target_" not in config or config["_target_"] is None:
             # if the type of dataloader is not specified, use PyTorch's DataLoader class
             with omegaconf.open_dict(config):
                 # open_dict allows us to write through hydra's omegaconf struct

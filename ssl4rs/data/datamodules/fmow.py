@@ -67,7 +67,6 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             deeplake_kwargs: extra arguments forwarded to the deeplake dataset parser.
         """
         self.save_hyperparameters(logger=False)
-        dataparser_configs = self._init_dataparser_configs(dataparser_configs)
         super().__init__(dataparser_configs=dataparser_configs, dataloader_configs=dataloader_configs)
         data_dir = pathlib.Path(data_dir)
         assert data_dir.is_dir(), f"invalid fMoW dataset directory: {data_dir}"
@@ -77,15 +76,10 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         logger.debug(f"fMoW dataset root: {data_dir}")
         self.data_parsers: typing.Dict[str, ssl4rs.data.parsers.fmow.DeepLakeParser] = {}
 
-    @staticmethod
-    def _init_dataparser_configs(configs: ssl4rs.utils.DictConfig) -> omegaconf.DictConfig:
-        """Updates the dataparser configs before they are passed to the base class w/ defaults."""
-        # we'll add in the required defaults for the data parser configs based on our expected use
-        if configs is None:
-            configs = omegaconf.OmegaConf.create()
-        elif isinstance(configs, dict):
-            configs = omegaconf.OmegaConf.create(configs)
-        base_dataparser_configs = {
+    @property
+    def _base_dataparser_configs(self) -> ssl4rs.utils.DictConfig:
+        """Returns the 'base' (class-specific-default) configs for the data parsers."""
+        return {
             "_default_": {
                 "batch_transforms": {  # to enable batching, by default, we need to crop the images
                     "_target_": "ssl4rs.data.transforms.geo.fmow.InstanceCenterCrop",
@@ -114,11 +108,6 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
                 "_target_": "ssl4rs.data.parsers.fmow.DeepLakeParser",
             },
         }
-        configs = omegaconf.OmegaConf.merge(
-            omegaconf.OmegaConf.create(base_dataparser_configs),
-            configs,
-        )
-        return configs
 
     @property
     def num_classes(self) -> int:
