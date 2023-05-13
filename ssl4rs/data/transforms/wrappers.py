@@ -1,7 +1,11 @@
 import typing
 
+import omegaconf
+
 if typing.TYPE_CHECKING:
     from ssl4rs.data import BatchDictType
+
+DictConfigType = (typing.Dict, omegaconf.DictConfig)
 
 
 class BatchDictToArgsWrapper:
@@ -47,10 +51,10 @@ class BatchDictToArgsWrapper:
         key_map: typing.Dict[str, typing.Dict[typing.Union[int, str], typing.Union[int, str]]],
     ):
         """Validates and initializes mapping parameters."""
-        assert isinstance(key_map, dict), f"invalid key map type: {type(key_map)}"
+        assert isinstance(key_map, DictConfigType), f"invalid key map type: {type(key_map)}"
         assert "input" and "output" in key_map, f"missing input/output fields in: {key_map}"
-        assert isinstance(key_map["input"], dict), f"invalid input kwargs type: {type(key_map['input'])}"
-        assert isinstance(key_map["output"], dict), f"invalid output kwargs type: {type(key_map['output'])}"
+        assert isinstance(key_map["input"], DictConfigType), f"invalid input kwargs type: {type(key_map['input'])}"
+        assert isinstance(key_map["output"], DictConfigType), f"invalid output kwargs type: {type(key_map['output'])}"
         input_dict = key_map["input"]
         assert all([isinstance(k, str) for k in input_dict.keys()]), "input keys must strings"
         assert all([isinstance(v, (str, int)) for v in input_dict.values()]), "input vals must be int/str"
@@ -78,7 +82,7 @@ class BatchDictToArgsWrapper:
         Returns:
             The same dictionary with the updated batch elements from the wrapped op.
         """
-        assert isinstance(batch, dict), f"unexpected input batch type: {type(batch)}"
+        assert isinstance(batch, typing.Dict), f"unexpected input batch type: {type(batch)}"
         input_args, input_kwargs = {}, {}
         for input_arg, input_key in self.key_map["input"].items():
             assert input_arg in batch, f"missing batch element '{input_arg}' for argument '{input_key}'"
@@ -91,7 +95,7 @@ class BatchDictToArgsWrapper:
         input_args = [input_args[key] for key in sorted(input_args.keys())]
         output = self.wrapped_op(*input_args, **input_kwargs)
         if self._expects_dict:
-            assert isinstance(output, dict), f"unexpected wrapped op output type: {type(output)}"
+            assert isinstance(output, typing.Dict), f"unexpected wrapped op output type: {type(output)}"
             for output_arg, output_key in self.key_map["output"].items():
                 assert isinstance(output_arg, str) and isinstance(output_key, str)
                 batch[output_key] = output[output_arg]
