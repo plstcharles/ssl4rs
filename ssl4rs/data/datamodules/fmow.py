@@ -93,13 +93,33 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             },
             "train": {
                 "batch_id_prefix": "train",
-                "batch_transforms": {  # to enable batching, by default, we need to crop the images
-                    "_target_": "ssl4rs.data.transforms.geo.crop.GSDAwareRandomResizedCrop",
-                    "size": (512, 512),
-                    "gsd_ratios": (0.8, 1.5),  # scale from 80% to 150% of original GSD
-                    "target_key": "image/rgb/jpg",
-                    "gsd_key": "image/rgb/gsd",
-                },
+                "batch_transforms": [
+                    {  # the random resized crop will not auto-pad small images, do it first
+                        "_target_": "ssl4rs.data.transforms.wrappers.BatchDictToArgsWrapper",
+                        "wrapped_op": {
+                            "_target_": "albumentations.augmentations.geometric.transforms.PadIfNeeded",
+                            "min_height": 512,
+                            "min_width": 512,
+                            "border_mode": 0,  # cv.BORDER_CONSTANT
+                            "always_apply": True,
+                        },
+                        "key_map": {
+                            "input": {
+                                "image/rgb/jpg": "image",
+                            },
+                            "output": {
+                                "image": "image/rgb/jpg",
+                            },
+                        },
+                    },
+                    {  # to enable batching, by default, we need to crop the images
+                        "_target_": "ssl4rs.data.transforms.geo.crop.GSDAwareRandomResizedCrop",
+                        "size": (512, 512),
+                        "gsd_ratios": (0.8, 1.5),  # scale from 80% to 150% of original GSD
+                        "target_key": "image/rgb/jpg",
+                        "gsd_key": "image/rgb/gsd",
+                    },
+                ],
             },
             "val": {"batch_id_prefix": "val"},
             "test": {"batch_id_prefix": "test"},
