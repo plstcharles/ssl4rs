@@ -6,6 +6,9 @@ import torch
 if typing.TYPE_CHECKING:
     from ssl4rs.data import BatchDictType
 
+batch_size_key: str = "batch_size"
+"""Default key (string) used to store/fetch the batch size from a batch dictionary."""
+
 
 class BatchSizer:
     """Adds a `batch_size` attribute to a loaded batch dictionary using a specified arg length.
@@ -62,7 +65,7 @@ class BatchSizer:
         """
         assert isinstance(batch, typing.Dict), f"unexpected input batch type: {type(batch)}"
         if not batch:  # easy case: the batch dict is empty
-            batch["batch_size"] = 0
+            batch[batch_size_key] = 0
             return batch
         if isinstance(self.batch_size_hint, int):
             batch_size = self.batch_size_hint
@@ -71,7 +74,7 @@ class BatchSizer:
                 self.batch_size_hint in batch
             ), f"could not locate batch size hint target in given dict: {self.batch_size_hint}"
             batch_size = len(batch[self.batch_size_hint])
-        if "batch_size" in batch:
+        if batch_size_key in batch:
             found_batch_size = get_batch_size(batch)
             if self.throw_if_smaller:
                 assert found_batch_size == batch_size, f"batch sizes mismatch! ({batch['batch_size']} vs {batch_size})"
@@ -80,7 +83,7 @@ class BatchSizer:
                     found_batch_size <= batch_size
                 ), f"bad batch size upper bound! ({found_batch_size} > {batch_size})"
         else:
-            batch["batch_size"] = batch_size
+            batch[batch_size_key] = batch_size
         return batch
 
     def __repr__(self) -> str:
@@ -105,8 +108,8 @@ def get_batch_size(batch: "BatchDictType") -> int:
     """
     if batch is None or not batch:
         return 0
-    assert "batch_size" in batch, "could not find the mandatory 'batch_size' key in the given batch dictionary!"
-    batch_size = batch["batch_size"]
+    assert batch_size_key in batch, "could not find the mandatory 'batch_size' key in the given batch dictionary!"
+    batch_size = batch[batch_size_key]
     # we'll try to interpret this potential object in any way we can...
     if isinstance(batch_size, int):
         pass  # nothing to do, it's good as-is!

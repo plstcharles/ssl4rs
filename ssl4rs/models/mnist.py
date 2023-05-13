@@ -57,7 +57,7 @@ class MNISTClassifier(ssl4rs.models.classif.base.GenericClassifier):
     def _render_and_log_samples(
         self,
         loop_type: str,  # 'train', 'valid', or 'test'
-        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
         sample_idxs: typing.List[int],
         sample_ids: typing.List[typing.Hashable],

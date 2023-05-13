@@ -226,7 +226,7 @@ class BaseModel(pl.LightningModule):
         return self.example_input_array
 
     @abc.abstractmethod
-    def forward(self, batch: typing.Dict[typing.AnyStr, typing.Any]) -> typing.Any:
+    def forward(self, batch: ssl4rs.data.BatchDictType) -> typing.Any:
         """Forwards batch data through the model, similar to `torch.nn.Module.forward()`.
 
         This function is meant to be used mostly for inference purposes, e.g. when this model is
@@ -254,7 +254,7 @@ class BaseModel(pl.LightningModule):
     @abc.abstractmethod
     def _generic_step(
         self,
-        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
     ) -> typing.Dict[typing.AnyStr, typing.Any]:
         """Runs a generic version of the forward + evaluation step for the train/valid/test loops.
@@ -286,7 +286,7 @@ class BaseModel(pl.LightningModule):
 
     def training_step(
         self,
-        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
     ) -> pl_types.STEP_OUTPUT:
         """Runs a forward + evaluation step for the training loop.
@@ -306,7 +306,10 @@ class BaseModel(pl.LightningModule):
         return outputs
 
     def on_train_batch_end(
-        self, outputs: pl_types.STEP_OUTPUT, batch: typing.Dict[typing.AnyStr, typing.Any], batch_idx: int
+        self,
+        outputs: pl_types.STEP_OUTPUT,
+        batch: ssl4rs.data.BatchDictType,
+        batch_idx: int,
     ) -> None:
         """Completes the forward + evaluation step for the training loop.
 
@@ -322,7 +325,7 @@ class BaseModel(pl.LightningModule):
             "loss" in outputs
         ), "loss tensor is NOT optional in training step end implementation (needed for backprop!)"
         loss = outputs["loss"]
-        batch_size = outputs.get("batch_size", None)
+        batch_size = outputs.get(ssl4rs.data.batch_size_key, None)
         # todo: figure out if we need to add sync_dist arg to self.log calls below?
         self.log("train/loss", loss.item(), prog_bar=True, batch_size=batch_size)
         self.log("train/epoch", float(self.current_epoch), batch_size=batch_size)
@@ -357,7 +360,7 @@ class BaseModel(pl.LightningModule):
 
     def validation_step(
         self,
-        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> typing.Optional[pl_types.STEP_OUTPUT]:
@@ -384,7 +387,7 @@ class BaseModel(pl.LightningModule):
     def on_validation_batch_end(
         self,
         outputs: typing.Optional[pl_types.STEP_OUTPUT],
-        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> None:
@@ -401,7 +404,7 @@ class BaseModel(pl.LightningModule):
         """
         if "loss" in outputs:
             loss = outputs["loss"]
-            batch_size = outputs.get("batch_size", None)
+            batch_size = outputs.get(ssl4rs.data.batch_size_key, None)
             # todo: figure out if we need to add sync_dist arg to self.log calls below?
             self.log("valid/loss", loss.item(), prog_bar=True, batch_size=batch_size)
         self._update_metrics(loop_type="valid", outputs=outputs, return_vals=False)
@@ -432,7 +435,7 @@ class BaseModel(pl.LightningModule):
 
     def test_step(
         self,
-        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> typing.Optional[pl_types.STEP_OUTPUT]:
@@ -459,7 +462,7 @@ class BaseModel(pl.LightningModule):
     def on_test_batch_end(
         self,
         outputs: typing.Optional[pl_types.STEP_OUTPUT],
-        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> None:
@@ -476,7 +479,7 @@ class BaseModel(pl.LightningModule):
         """
         if "loss" in outputs:
             loss = outputs["loss"]
-            batch_size = outputs.get("batch_size", None)
+            batch_size = outputs.get(ssl4rs.data.batch_size_key, None)
             # todo: figure out if we need to add sync_dist arg to self.log calls below?
             self.log("test/loss", loss.item(), prog_bar=True, batch_size=batch_size)
         self._update_metrics(loop_type="test", outputs=outputs, return_vals=False)
@@ -495,7 +498,7 @@ class BaseModel(pl.LightningModule):
 
     def predict_step(
         self,
-        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
         dataloader_idx: int = 0,
     ) -> typing.Any:
@@ -540,7 +543,7 @@ class BaseModel(pl.LightningModule):
     def _get_data_id(
         self,
         loop_type: str,  # 'train', 'valid', or 'test'
-        batch: typing.Optional[typing.Dict[typing.AnyStr, typing.Any]],  # null when not in loop
+        batch: typing.Optional[ssl4rs.data.BatchDictType],  # null when not in loop
         batch_idx: int,  # index of the batch itself inside the dataloader loop
         sample_idx: int,  # index of the data sample itself that should be ID'd inside the batch
         dataloader_idx: int = 0,  # index of the dataloader that the batch was loaded from
@@ -561,7 +564,7 @@ class BaseModel(pl.LightningModule):
                 "batch_id" in batch
             ), "missing mandatory 'batch_id' field required to generate persistent data sample IDs!"
             assert (
-                "batch_size" in batch
+                ssl4rs.data.batch_size_key in batch
             ), "missing mandatory 'batch_size' field required to validate persistent data sample IDs!"
             batch_size, batch_ids = ssl4rs.data.get_batch_size(batch), batch["batch_id"]
             assert len(batch_ids) == batch_size, "unexpected batch id/size mismatch?"
@@ -575,7 +578,7 @@ class BaseModel(pl.LightningModule):
     def _get_data_ids_for_batch(
         self,
         loop_type: str,  # 'train', 'valid', or 'test'
-        batch: typing.Optional[typing.Dict[typing.AnyStr, typing.Any]],  # null when not in loop
+        batch: typing.Optional[ssl4rs.data.BatchDictType],  # null when not in loop
         batch_idx: int,  # index of the batch itself inside the dataloader loop
         dataloader_idx: int = 0,  # index of the dataloader that the batch was loaded from
     ) -> typing.List[typing.Hashable]:
@@ -584,7 +587,7 @@ class BaseModel(pl.LightningModule):
         This function  returns potentially temporary IDs provided by the `_get_data_id` function.
         """
         assert loop_type in ["train", "valid", "test"]
-        if batch is not None and "batch_size" in batch:
+        if batch is not None and ssl4rs.data.batch_size_key in batch:
             batch_size = ssl4rs.data.get_batch_size(batch)
         else:
             if loop_type == "train":
@@ -725,7 +728,7 @@ class BaseModel(pl.LightningModule):
     def _check_and_render_batch(
         self,
         loop_type: str,  # 'train', 'valid', or 'test'
-        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
         outputs: typing.Dict[typing.AnyStr, typing.Any],
         dataloader_idx: int = 0,
@@ -785,7 +788,7 @@ class BaseModel(pl.LightningModule):
     def _render_and_log_samples(
         self,
         loop_type: str,  # 'train', 'valid', or 'test'
-        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
         sample_idxs: typing.List[int],
         sample_ids: typing.List[typing.Hashable],

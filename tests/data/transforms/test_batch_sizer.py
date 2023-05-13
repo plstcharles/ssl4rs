@@ -1,6 +1,7 @@
 import pytest
 
 import ssl4rs.data.transforms.batch_sizer as batch_sizer
+from ssl4rs.data import batch_size_key
 
 
 def test_batch_sizer__fixed():
@@ -8,20 +9,20 @@ def test_batch_sizer__fixed():
 
     empty_batch = t({})
     assert len(empty_batch) == 1
-    assert empty_batch["batch_size"] == 0
+    assert empty_batch[batch_size_key] == 0
 
     not_empty_batch = t({"hello": "something"})
     assert len(not_empty_batch) == 2
-    assert not_empty_batch["batch_size"] == 128
+    assert not_empty_batch[batch_size_key] == 128
     assert not_empty_batch["hello"] == "something"
 
-    already_sized_batch = t({"hello": "something", "batch_size": 128})
+    already_sized_batch = t({"hello": "something", batch_size_key: 128})
     assert len(already_sized_batch) == 2
-    assert already_sized_batch["batch_size"] == 128
+    assert already_sized_batch[batch_size_key] == 128
     assert already_sized_batch["hello"] == "something"
 
     with pytest.raises(AssertionError):
-        _ = t({"hello": "something", "batch_size": 64})
+        _ = t({"hello": "something", batch_size_key: 64})
 
 
 def test_batch_sizer__hint():
@@ -29,7 +30,7 @@ def test_batch_sizer__hint():
 
     empty_batch = t({})
     assert len(empty_batch) == 1
-    assert empty_batch["batch_size"] == 0
+    assert empty_batch[batch_size_key] == 0
 
     with pytest.raises(AssertionError):
         _ = t({"hello": "something"})
@@ -37,13 +38,13 @@ def test_batch_sizer__hint():
     magic_array = [0, 1, 2, 3]
     not_empty_batch = t({"magic_array": magic_array})
     assert len(not_empty_batch) == 2
-    assert not_empty_batch["batch_size"] == 4
+    assert not_empty_batch[batch_size_key] == 4
     assert not_empty_batch["magic_array"] is magic_array
 
-    already_sized_batch = t({"magic_array": magic_array, "batch_size": 4})
+    already_sized_batch = t({"magic_array": magic_array, batch_size_key: 4})
     assert len(already_sized_batch) == 2
-    assert already_sized_batch["batch_size"] == 4
+    assert already_sized_batch[batch_size_key] == 4
     assert not_empty_batch["magic_array"] is magic_array
 
     with pytest.raises(AssertionError):
-        _ = t({"magic_array": magic_array, "batch_size": 5})
+        _ = t({"magic_array": magic_array, batch_size_key: 5})

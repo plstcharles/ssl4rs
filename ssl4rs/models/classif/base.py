@@ -103,7 +103,7 @@ class GenericClassifier(ssl4rs.models.BaseModel):
             )
         )
 
-    def forward(self, batch: typing.Dict[typing.AnyStr, typing.Any]) -> torch.Tensor:
+    def forward(self, batch: ssl4rs.data.BatchDictType) -> torch.Tensor:
         """Forwards batch data through the model, similar to `torch.nn.Module.forward()`."""
         assert self.input_key in batch, f"missing mandatory '{self.input_key}' tensor from batch"
         input_tensor = batch[self.input_key]
@@ -122,7 +122,7 @@ class GenericClassifier(ssl4rs.models.BaseModel):
 
     def _generic_step(
         self,
-        batch: typing.Dict[typing.AnyStr, typing.Any],
+        batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
     ) -> typing.Dict[typing.AnyStr, typing.Any]:
         """Runs a generic version of the forward + evaluation step for the train/valid/test loops.
@@ -140,5 +140,5 @@ class GenericClassifier(ssl4rs.models.BaseModel):
             "loss": loss,  # mandatory for training loop, optional for validation/testing
             "preds": preds,  # used in metrics, logging, and potentially even returned to user
             "target": target,  # so that metric update functions have access to the tensor itself
-            "batch_size": ssl4rs.data.get_batch_size(batch),  # so that logging functions can use it
+            ssl4rs.data.batch_size_key: ssl4rs.data.get_batch_size(batch),  # so that logging can use it
         }

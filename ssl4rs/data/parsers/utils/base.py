@@ -66,6 +66,7 @@ class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixi
         if self.batch_transforms:
             batch = self.batch_transforms(batch)
         assert isinstance(batch, dict), f"unexpected post-transform batch type: {type(batch)}"
+        batch[ssl4rs.data.batch_size_key] = self._get_batch_size_from_index(index)
         # finally, we'll add the batch id in the dict (if it's not already there)
         if self.batch_id_key not in batch:
             batch[self.batch_id_key] = self._get_batch_id_for_index(index)
@@ -80,6 +81,11 @@ class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixi
         assert isinstance(index, int), f"unsupported index type for base parser: {type(index)}"
         assert 0 <= index < len(self), f"invalid data batch index being queried: {index}"
         return index
+
+    def _get_batch_size_from_index(self, index: typing.Hashable) -> int:
+        """Returns the expected batch size for the given (validated, converted) index."""
+        # see above; we assume this index is not a slice, and is therefore an integer
+        return 1  # ...and therefore, the 'batch size' is always one
 
     @abc.abstractmethod
     def _get_raw_batch(

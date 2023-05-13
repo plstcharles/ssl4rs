@@ -3,13 +3,14 @@ import pytest
 import torch
 
 import ssl4rs.utils.config
+from ssl4rs.data import batch_size_key
 from ssl4rs.data.datamodules.mnist import DataModule as MNISTDataModule
 
 
 def _check_minibatch_content(minibatch, expected_batch_size: int = 0):
     # minibatch loaded by the new mnist datamodule should always be a dict w/ metadata!
     assert isinstance(minibatch, dict)
-    batch_size = minibatch["batch_size"].sum().item()
+    batch_size = minibatch[batch_size_key].sum().item()
     assert isinstance(batch_size, int) and batch_size > 0
     if expected_batch_size != 0:
         assert batch_size == expected_batch_size
