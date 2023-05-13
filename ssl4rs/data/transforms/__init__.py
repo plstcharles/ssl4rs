@@ -9,10 +9,12 @@ import ssl4rs.data.transforms.geo
 import ssl4rs.data.transforms.identity
 import ssl4rs.data.transforms.patchify
 import ssl4rs.data.transforms.tuple_mapper
+import ssl4rs.data.transforms.wrappers
 from ssl4rs.data.transforms.batch_sizer import BatchSizer, get_batch_size
 from ssl4rs.data.transforms.identity import Identity
 from ssl4rs.data.transforms.patchify import Patchify
 from ssl4rs.data.transforms.tuple_mapper import TupleMapper
+from ssl4rs.data.transforms.wrappers import BatchDictToArgsWrapper
 
 BatchDictType = typing.Dict[typing.AnyStr, typing.Any]
 _BatchTransformType = typing.Callable[[BatchDictType], BatchDictType]
