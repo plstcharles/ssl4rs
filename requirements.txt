@@ -1,6 +1,7 @@
 # Note: this is the list of dependencies that should be installed for the project.
 # It is recommended to install these in a Miniconda/Anaconda environment with Python 3.10.
 
+albumentations  # data augmentations
 black  # code formatting
 comet_ml  # visualization/logging
 deepdiff  # generic data manipulation utility
