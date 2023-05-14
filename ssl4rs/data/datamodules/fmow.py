@@ -103,7 +103,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
                     {  # to enable batching, by default, we need to crop the images
                         "_target_": "ssl4rs.data.transforms.geo.crop.GSDAwareRandomResizedCrop",
                         "size": (512, 512),
-                        "gsd_ratios": (0.8, 1.5),  # scale from 80% to 150% of original GSD
+                        "gsd_ratios": (0.8, 3.0),  # scale from 80% to 300% of original GSD
                         "target_key": "image/rgb/jpg",
                         "gsd_key": "image/rgb/gsd",
                     },
