@@ -1,0 +1,24 @@
+datamodule: # this corresponds to the main LightningDataModule we'll be getting dataloaders from
+  _recursive_: False # we actually defer the full instantiation of params to the datamodule itself
+  _target_: ??? # MANDATORY class to be instantiated (should be derived from a pl.DataModule)
+  dataloader_configs: # note: subgroups here correspond to different loader types
+    _default_: # this group provides shared (but overridable) settings for all data loader types
+      _target_: _deeplake_pytorch_loader_ # key used internally to toggle deeplake loaders
+      # @@@@@@@@@ todo: update the settings below for compat w/ parser.dataloader().pytorch() calls
+      batch_size: 1 # sets the default batch size for all data loaders to 1
+      shuffle: False # the base default loader will not shuffle its data, but check overrides below!
+      # sampler: null
+      # batch_sampler: null
+      num_workers: ${utils.default_num_workers} # all loaders will run on a predefined thread count
+      collate_fn: # by default, we use the DataModule base class's impl (it handles batch IDs)
+        _partial_: True
+        _target_: ssl4rs.data.default_collate
+      pin_memory: False # we also will not be pinning tensors to memory with the default setting
+      # drop_last: False
+      # timeout: 0.0
+      worker_init_fn: null # when `seed_workers=True`, will be auto-set to `pl_worker_init_function`
+      # generator: null
+      # prefetch_factor: 2
+      # persistent_workers: False
+    train: # this group will override the base settings for all train data loaders
+      shuffle: True # the training data loader should always shuffle its data (by default)

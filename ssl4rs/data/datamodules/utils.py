@@ -18,6 +18,9 @@ if typing.TYPE_CHECKING:
 
 logger = ssl4rs.utils.logging.get_logger(__name__)
 
+use_deeplake_loaders_key = "_deeplake_pytorch_loader_"
+"""Key to toggle on the use of the deeplake data loaders."""
+
 
 class DataModule(pl.LightningDataModule):
     """Wraps the standard LightningDataModule interface to combine it with Hydra.
@@ -72,7 +75,8 @@ class DataModule(pl.LightningDataModule):
 
         In that case, all data loaders will be instantiated from the `torch.utils.data.DataLoader`
         target class, and they will all have a batch size of 64 by default. The training data
-        loader will have a batch size of 32, and it will shuffle its data.
+        loader will have a batch size of 32, and it will shuffle its data. For the creation of
+        DeepLake PyTorch DataLoaders, see the implementation of `_create_dataloader` for more info.
 
         If any of the settings for the specified/supported subsets is null or missing, it
         will be set as the default from the _default_ section if a match exists, otherwise it will
@@ -383,10 +387,26 @@ class DataModule(pl.LightningDataModule):
         assert not config.get(
             "_partial_", False
         ), "this function should not return a partial function, it's time to create the loader!"
-        dataloader = hydra.utils.instantiate(config, parser)
-        assert isinstance(
-            dataloader, torch.utils.data.DataLoader
-        ), f"invalid dataloader type: {type(dataloader)} (...should be DataLoader-derived)"
+        if config["_target_"] == use_deeplake_loaders_key:
+            import deeplake
+
+            import ssl4rs.data.parsers.utils.deeplake
+
+            assert isinstance(
+                parser, ssl4rs.data.parsers.utils.deeplake.DeepLakeParser
+            ), f"need a deeplake data parser, but got: {type(parser)}"
+            assert isinstance(
+                parser.dataset, deeplake.Dataset
+            ), f"need a deeplake dataset attrib in parser, but got: {type(parser.dataset)}"
+            raise NotImplementedError(
+                # @@@@@@@@@@ todo: add the code to get a dataloader from the parser directly
+                "missing something like `parser.dataset.dataloader().pytorch(**kwargs)` here"
+            )
+        else:
+            dataloader = hydra.utils.instantiate(config, parser)
+            assert isinstance(
+                dataloader, torch.utils.data.DataLoader
+            ), f"invalid dataloader type: {type(dataloader)} (...should be DataLoader-derived)"
         return dataloader
 
 
