@@ -167,10 +167,6 @@ def decode_jpg(
     return output
 
 
-# check crop_multiple from turbojpeg @@@@@@
-# also check regular crop and transform ops (flips, rotations)
-
-
 def flex_crop(
     image: typing.Union[np.ndarray, torch.Tensor],
     patch: "ssl4rs.utils.patch_coord.PatchCoord",
