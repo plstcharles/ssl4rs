@@ -110,6 +110,7 @@ def decode_jpg(
     use_fast_upsample: bool = False,
     use_fast_dct: bool = False,
     scaling_factor: typing.Optional[typing.Tuple[int, int]] = None,
+    crop_region: typing.Optional[typing.Tuple[int, int, int, int]] = None,
 ):
     """Decodes a JPEG from its (encoded) bytes data into an image.
 
@@ -127,6 +128,8 @@ def decode_jpg(
             being decoded. Derived from IDCT scaling extensions in libjpeg-turbo decompressor.
             Only a handful of factors are supported, and only `(1, 2)` and `(1, 4)` are
             SIMD-enabled.
+        crop_region: optional crop region parameters (top, left, height, width) to target only
+            a region of the JPEG to be decoded and returned.
 
     Returns:
         The decoded jpeg image.
@@ -144,6 +147,16 @@ def decode_jpg(
         flags = flags | turbojpeg.TJFLAG_FASTUPSAMPLE
     if use_fast_dct:
         flags = flags | turbojpeg.TJFLAG_FASTDCT
+    assert crop_region is None or scaling_factor is None, "cannot use scale+crop simultaneously"
+    if crop_region is not None:
+        assert isinstance(crop_region, typing.Sequence) and len(crop_region) == 4
+        image = turbojpeg_handler.crop(
+            image,
+            x=crop_region[1],
+            y=crop_region[0],
+            w=crop_region[3],
+            h=crop_region[2],
+        )
     output = turbojpeg_handler.decode(
         image,
         pixel_format=turbojpeg.TJPF_BGR if to_bgr_format else turbojpeg.TJPF_RGB,
