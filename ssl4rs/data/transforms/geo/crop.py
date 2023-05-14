@@ -48,7 +48,7 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
 
         Args:
             size: expected output size of the crop, for each edge, after resizing. This is expected
-                to be height first, width second, and pixel values.
+                to be height first, width second, and in pixel values.
             gsd_ratios: expected min/max ratios to use when selecting a new ground sampling
                 distance value. For example, with a GSD of 4m and a (min,max) ratio of (0.5, 2),
                 a new GSD value will be uniformly sampled from the [2m, 8m] interval, and used
@@ -161,7 +161,7 @@ class GroundSamplingDistanceAwareRandomResizedCrop(torch.nn.Module):
             input_array: the input array from which a crop should be generated.
             gsd: the ground sample distance associated with the above array.
             size: expected output size of the crop, for each edge, after resizing. This is expected
-                to be height first, width second, and pixel values.
+                to be height first, width second, and in pixel values.
             gsd_ratios: expected min/max ratios to use when selecting a new ground sampling
                 distance value. See constructor for more info.
             batch_dict: input batch dictionary provided to the transform op; might be used in
@@ -570,9 +570,6 @@ class GroundSamplingDistanceAwareCenterFixedCrop(torch.nn.Module):
         out_str += ")"
         return out_str
 
-
-# @@@@ TODO: GroundSamplingDistanceAwareJPEGDecoderWithRandomResizedCrop
-# @@@@ TODO: GroundSamplingDistanceAwareJPEGDecoderWithCenterResizedCrop
 
 GSDAwareRandomResizedCrop = GroundSamplingDistanceAwareRandomResizedCrop
 GSDAwareCenterFixedCrop = GroundSamplingDistanceAwareCenterFixedCrop

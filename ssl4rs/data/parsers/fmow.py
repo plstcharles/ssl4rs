@@ -405,7 +405,7 @@ def _get_batch_from_sample_data(
             batch["image/rgb/sun_elevation"] = metadata["sun_elevation_dbl"]
             if image_compression == "jpg":
                 image = _decompress_jpeg_image(image_data.rgb.jpg, decompression_strategy)
-                if not isinstance(image, torch.Tensor):
+                if isinstance(image, np.ndarray):
                     image = torchvision.transforms.functional.to_tensor(image)
                 batch["image/rgb/jpg"] = image
             else:
