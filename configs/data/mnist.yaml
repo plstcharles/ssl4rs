@@ -9,3 +9,5 @@ datamodule: # the mnist dataset comes with its own custom data module for classi
   dataloader_configs:
     _default_: # this group provides shared (but overridable) settings for all data loader types
       batch_size: 32 # bump up the default batch size for all data loaders
+
+num_classes: 10

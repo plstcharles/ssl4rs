@@ -11,4 +11,4 @@ datamodule: # the aid dataset comes with its own custom data module for classifi
     _default_: # this group provides shared (but overridable) settings for all data loader types
       batch_size: 32 # bump up the default batch size for all data loaders
 
-# @@@@@@@@@@@@ TODO: replace torch data loaders w/ deeplake loaders (faster!)
+num_classes: 30

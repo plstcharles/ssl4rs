@@ -1,0 +1,13 @@
+defaults:
+  - default.yaml # reloads all the default data settings and overrides with those below
+  - _self_
+
+datamodule: # the fMoW dataset comes with its own custom data module for classification tasks
+  _target_: ssl4rs.data.datamodules.fmow.DataModule
+  data_dir: ${utils.data_root_dir}/fmow/fmow-rgb/.deeplake
+  deeplake_kwargs: null
+  dataloader_configs:
+    _default_: # this group provides shared (but overridable) settings for all data loader types
+      batch_size: 8
+
+num_classes: 62

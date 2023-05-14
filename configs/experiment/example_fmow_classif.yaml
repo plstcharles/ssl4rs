@@ -1,0 +1,45 @@
+# @package _global_
+
+# To execute this experiment, run one of the entrypoints while specifying this config, e.g.:
+#     python train.py experiment=example_fmow_classif
+
+defaults:
+  - /model/optimization: default.yaml # use default optim settings (adam + step scheduler)
+  - override /data: fmow-rgb.yaml # defines the datamodule for fMoW classification tasks
+  - override /callbacks: classification.yaml # adds a few useful callbacks for classification tasks
+  - _self_
+
+experiment_name: fmow_with_resnet # experiment name used in output paths
+
+model: # specified which LightningModule-derived implementation provides the training/inference logic
+  _recursive_: False
+  _target_: ssl4rs.models.classif.base.GenericClassifier
+  encoder:
+    _target_: torchvision.models.resnet18
+    weights: pretrained
+    num_classes: ${data.num_classes}
+  head:
+  loss_fn: # in this case, we'll instantiate the cross-entropy loss module directly
+    _target_: torch.nn.CrossEntropyLoss
+
+data:
+  datamodule:
+    dataloader_configs:
+      _default_: # this group provides shared (but overridable) settings for all data loader types
+        batch_size: 16 # bump up the batch size from the default
+
+trainer:
+  precision: 32-true
+  max_epochs: 15
+
+target_metric: valid/accuracy # name of the metric we will be targeting for hparam optimization
+target_metric_mode: max # optimization mode of the target metric defined above
+
+utils:
+  print_config: True
+  project_name: ${utils.framework_name}-examples
+
+profiler: # in case we run the data profiler, these are the modified setting to use
+  use_parser: False
+  batch_count: 10
+  loop_count: 10
