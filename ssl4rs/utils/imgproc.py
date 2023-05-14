@@ -1,5 +1,5 @@
 """Contains utilities related to image loading/processing/drawing."""
-
+import io
 import pathlib
 import typing
 from unittest import mock
@@ -27,7 +27,7 @@ def _get_turbojpeg_handler() -> "turbojpeg.TurboJPEG":
 
 
 def get_image_shape_from_file(
-    file_path: typing.Union[typing.AnyStr, pathlib.Path],
+    file_path_or_data: typing.Union[io.BytesIO, typing.AnyStr, pathlib.Path],
     with_turbojpeg: bool = True,
 ) -> typing.Tuple[int, int]:
     """Returns the (height, width) of an image stored on disk.
@@ -40,13 +40,14 @@ def get_image_shape_from_file(
     """
     if with_turbojpeg:
         turbojpeg_handler = _get_turbojpeg_handler()
-        jpeg_header = _read_jpeg_header_only(file_path)
+        assert isinstance(file_path_or_data, (str, pathlib.Path)), "missing impl for bytes"
+        jpeg_header = _read_jpeg_header_only(file_path_or_data)
         header = turbojpeg_handler.decode_header(jpeg_header)
         width, height, jpeg_subsample, jpeg_colorspace = header
     else:
         import imagesize
 
-        width, height = imagesize.get(str(file_path))
+        width, height = imagesize.get(file_path_or_data)
     assert width > 0 and height > 0, "invalid image!"
     return height, width
 
