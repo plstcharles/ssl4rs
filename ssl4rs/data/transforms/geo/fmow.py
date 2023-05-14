@@ -1,6 +1,8 @@
+import io
 import typing
 
 import torch
+import torchvision.transforms.functional
 from torchvision.transforms import InterpolationMode
 
 import ssl4rs.data.transforms.geo.crop
@@ -131,3 +133,145 @@ class InstanceCenterCrop(GeoCenterCrop):
                     f"in a {input_width}x{input_height} image without padding"
                 )
         return crop_top, crop_left, crop_height, crop_width, output_gsd
+
+
+class JPEGDecoderWithRandomResizedCrop(
+    ssl4rs.data.transforms.geo.crop.GroundSamplingDistanceAwareRandomResizedCrop,
+):
+    """Derived version of the GSD-aware random resized crop that decodes JPEGs at the same time."""
+
+    def __init__(
+        self,
+        min_crop_size: typing.Tuple[int, int],
+        output_size: typing.Tuple[int, int],
+        gsd_ratios: typing.Tuple[float, float],
+        use_fast_upsample: bool = False,
+        use_fast_dct: bool = False,
+        interpolation: InterpolationMode = InterpolationMode.BILINEAR,
+        antialias: bool = True,
+        add_params_to_batch_dict: bool = True,
+    ):
+        """Validates cropping settings.
+
+        Args:
+            min_crop_size: minimum size of the crops taken from the input array; if the input array
+                itself is smaller than this, it will be padded.  This is expected to be height
+                first, width second, and in pixel values.
+            output_size: expected output size of the crop, for each edge, after resizing. This is
+                expected to be height first, width second, and in pixel values.
+            gsd_ratios: expected min/max ratios to use when selecting a new ground sampling
+                distance value. For example, with a GSD of 4m and a (min,max) ratio of (0.5, 2),
+                a new GSD value will be uniformly sampled from the [2m, 8m] interval, and used
+                to determine the overall shape of the region to crop and resize. A minimum ratio
+                that is under 1 will lead to upsampling instead of downsampling, which may create
+                blurry images. Use with caution!
+            use_fast_upsample: allows faster decoding by skipping chrominance sample smoothing; see
+                https://jpeg-turbo.dpldocs.info/libjpeg.turbojpeg.TJFLAG_FASTUPSAMPLE.html
+            use_fast_dct: allows the use of the fastest DCT/IDCT algorithm available; see
+                https://jpeg-turbo.dpldocs.info/libjpeg.turbojpeg.TJFLAG_FASTDCT.html
+            interpolation: Desired interpolation enum defined by
+                `torchvision.transforms.InterpolationMode`. Default is bilinear.
+            antialias: defines whether to apply antialiasing. It only affects tensors when the
+                bilinear or bicubic interpolation modes are selected, and is ignored otherwise.
+            add_params_to_batch_dict: toggles whether crop parameters should be also added to the
+                batch dictionary when one is provided. These parameters will be stored
+        """
+        super().__init__(
+            size=output_size,
+            gsd_ratios=gsd_ratios,
+            target_key="image/rgb/jpg",
+            gsd_key="image/rgb/gsd",
+            interpolation=interpolation,
+            antialias=antialias,
+            add_params_to_batch_dict=add_params_to_batch_dict,
+        )
+        self.min_crop_size = min_crop_size
+        self.use_fast_upsample = use_fast_upsample
+        self.use_fast_dct = use_fast_dct
+
+    def forward(
+        self,
+        data: typing.Union[torch.Tensor, "BatchDictType"],
+        gsd: typing.Optional[float] = None,
+    ) -> typing.Union[typing.Tuple[torch.Tensor, float], "BatchDictType"]:
+        """Returns a crop inside the not-yet-loaded jpeg data provided via a batch dict.
+
+        Args:
+            data: the loaded batch dictionary that contains a JPEG image to be decoded and cropped.
+                The batch dictionary will be UPDATED IN PLACE since we do not deep copy this ref.
+            gsd: the current ground sample distance associated with the array to be cropped. If it
+                is not directly specified via this argument, the `gsd_key` attribute will be used
+                to fetch it from inside the batch dictionary.
+
+        Returns:
+            The cropped tensor and its GSD value, if only a tensor was provided, or the reference
+            to the same (but updated) batch dictionary that contains the crop + GSD value.
+        """
+        if isinstance(data, dict):
+            assert self.target_key is not None, "missing 'target_key' attribute for batch dicts!"
+            input_array = data[self.target_key]
+        else:
+            input_array = data
+        assert isinstance(input_array, bytes), f"unexpected encoded jpeg type: {type(input_array)}"
+        im_height, im_width = ssl4rs.utils.imgproc.get_image_shape_from_file(
+            file_path_or_data=io.BytesIO(input_array),
+            with_turbojpeg=False,
+        )
+        orig_im_height, orig_im_width = im_height, im_width
+        im_height = max(im_height, self.min_crop_size[0])
+        im_width = max(im_width, self.min_crop_size[1])
+        if gsd is None:
+            assert isinstance(data, dict), "must provide gsd as arg or provide it through batch dict!"
+            assert self.gsd_key is not None, "missing 'gsd_key' attribute for batch dicts!"
+            gsd = data[self.gsd_key]
+        assert isinstance(gsd, float), f"invalid input gsd type: {type(gsd)}"
+        crop_params = self.get_params(
+            input_array=torch.empty(  # for size lookups, create a no-alloc array
+                (0, 3, im_height, im_width),
+                dtype=torch.uint8,
+            ),
+            gsd=gsd,
+            size=self.size,
+            gsd_ratios=self.gsd_ratios,
+            batch_dict=data if isinstance(data, dict) else None,
+        )
+        (crop_top_idx, crop_left_idx, crop_height, crop_width, output_gsd) = crop_params
+        assert crop_top_idx >= 0 and crop_left_idx >= 0
+        pad_rows = pad_cols = 0
+        need_padding = crop_top_idx + crop_height > orig_im_height or crop_left_idx + crop_width > orig_im_width
+        if need_padding:
+            assert crop_top_idx + crop_height <= im_height
+            assert crop_left_idx + crop_width <= im_width
+            pad_rows = (crop_top_idx + crop_height) - orig_im_height
+            pad_cols = (crop_left_idx + crop_width) - orig_im_width
+        crop = ssl4rs.utils.imgproc.decode_jpg(
+            image=input_array,
+            to_bgr_format=False,
+            use_fast_upsample=self.use_fast_upsample,
+            use_fast_dct=self.use_fast_dct,
+            crop_region=(crop_top_idx, crop_left_idx, crop_height - pad_rows, crop_width - pad_cols),
+        )
+        assert crop.ndim == 3 and crop.shape[2] == 3
+        crop = ssl4rs.data.transforms.pad_if_needed(
+            input_tensor=torchvision.transforms.functional.to_tensor(crop),
+            min_height=crop_height,
+            min_width=crop_width,
+        )[:, 0:crop_height, 0:crop_width]
+        resized_crop = torchvision.transforms.functional.resize(
+            img=crop,
+            size=self.size,  # noqa
+            interpolation=self.interpolation,
+            antialias=self.antialias,
+        )
+        if isinstance(data, dict):
+            data[self.target_key] = resized_crop
+            data[self.gsd_key] = output_gsd
+            if self.add_params_to_batch_dict:
+                data[self.target_key + "/crop_params"] = crop_params
+            return data
+        else:
+            return resized_crop, output_gsd
+
+
+# @@@@ TODO: GroundSamplingDistanceAwareJPEGDecoderWithCenterResizedCrop?
+# @@@@ TODO: add another random resized crop with 1/2 and 1/4 downsampling via turbojpeg?
