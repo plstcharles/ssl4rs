@@ -38,7 +38,7 @@ class GenericClassifier(ssl4rs.models.BaseModel):
         head: typing.Optional[TorchModuleOrDictConfig],
         loss_fn: TorchModuleOrDictConfig,
         num_classes: int,
-        optimization: typing.Optional[ssl4rs.utils.DictConfig] = None,
+        optimization: typing.Optional[ssl4rs.utils.DictConfig],
         input_key: typing.AnyStr = "input",
         label_key: typing.AnyStr = "label",
         **kwargs,
@@ -74,7 +74,7 @@ class GenericClassifier(ssl4rs.models.BaseModel):
         assert isinstance(num_classes, int) and num_classes > 0, f"invalid num_classes: {num_classes}"
         self.num_classes = num_classes
         self.input_key, self.label_key = input_key, label_key
-        super().__init__(**kwargs)
+        super().__init__(optimization=optimization, **kwargs)
         if isinstance(encoder, (dict, omegaconf.DictConfig)):
             encoder = hydra.utils.instantiate(encoder)
         assert isinstance(encoder, torch.nn.Module), f"incompatible encoder type: {type(encoder)}"
@@ -87,10 +87,6 @@ class GenericClassifier(ssl4rs.models.BaseModel):
             loss_fn = hydra.utils.instantiate(loss_fn)
         assert isinstance(loss_fn, torch.nn.Module), f"incompatible loss_fn type: {type(loss_fn)}"
         self.loss_fn = loss_fn
-        assert optimization is None or isinstance(
-            optimization, (dict, omegaconf.DictConfig)
-        ), f"incompatible optimization config type: {type(optimization)}"
-        self.optim_config = optimization  # this will be instantiated later, if we actually need it
 
     def configure_metrics(self) -> torchmetrics.MetricCollection:
         """Configures and returns the metric objects to update when given predictions + labels."""

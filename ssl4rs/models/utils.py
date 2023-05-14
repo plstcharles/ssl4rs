@@ -51,6 +51,7 @@ class BaseModel(pl.LightningModule):
 
     def __init__(
         self,
+        optimization: typing.Optional[ssl4rs.utils.DictConfig],
         log_train_metrics_each_step: bool = False,
         sample_count_to_render: int = 10,
         log_metrics_in_loop_types: typing.Sequence[str] = ("train", "valid", "test"),
@@ -64,6 +65,8 @@ class BaseModel(pl.LightningModule):
             https://github.com/Lightning-AI/lightning/issues/16206
 
         Args:
+            optimization: optimizer+scheduler configuration dictionary used during training. If
+                training is never expected, can be `None`.
             log_train_metrics_each_step: toggles whether the metrics should be computed and logged
                 each step in the training loop (true), or whether we should accumulate predictions
                 and targets and only compute/log the metrics at the end of the epoch (false) as in
@@ -90,6 +93,10 @@ class BaseModel(pl.LightningModule):
         self.example_input_array: typing.Optional[typing.Any] = None
         self.metrics = self._instantiate_metrics(log_metrics_in_loop_types)  # auto-updated + reset
         self._ids_to_render: typing.Dict[str, typing.List[typing.Hashable]] = {}
+        assert optimization is None or isinstance(
+            optimization, (typing.Dict, omegaconf.DictConfig)
+        ), f"incompatible optimization config type: {type(optimization)}"
+        self.optimization = optimization  # this will be instantiated later, if we actually need it
 
     def _instantiate_metrics(
         self,
@@ -184,27 +191,27 @@ class BaseModel(pl.LightningModule):
         the `OneCycleLR` scheduler), use the `self.trainer.estimated_stepping_batches` value.
         """
         logger.debug("Configuring module optimizer and scheduler...")
-        assert self.optim_config is not None, "we're about to train, we need an optimization cfg!"
-        optim_config = copy.deepcopy(self.optim_config)  # we'll fully resolve + convert it below
-        omegaconf.OmegaConf.resolve(optim_config)
-        assert "optimizer" in optim_config, "missing mandatory 'optimizer' field in optim cfg!"
-        assert isinstance(optim_config.optimizer, (dict, omegaconf.DictConfig))
-        if optim_config.get("freeze_no_grad_params", True):
+        assert self.optimization is not None, "we're about to train, we need an optimization cfg!"
+        optimization = copy.deepcopy(self.optimization)  # we'll fully resolve + convert it below
+        omegaconf.OmegaConf.resolve(optimization)
+        assert "optimizer" in optimization, "missing mandatory 'optimizer' field in optim cfg!"
+        assert isinstance(optimization.optimizer, (dict, omegaconf.DictConfig))
+        if optimization.get("freeze_no_grad_params", True):
             model_params = [p for p in self.parameters() if p.requires_grad]
             assert len(model_params) > 0, "no model parameters left to train??"
         else:
             model_params = self.parameters()
-        optimizer = hydra.utils.instantiate(optim_config.optimizer, model_params)
+        optimizer = hydra.utils.instantiate(optimization.optimizer, model_params)
         scheduler = None
-        if "lr_scheduler" in optim_config:
-            assert isinstance(optim_config.lr_scheduler, (dict, omegaconf.DictConfig))
-            assert "scheduler" in optim_config.lr_scheduler, "missing mandatory 'scheduler' field!"
+        if "lr_scheduler" in optimization:
+            assert isinstance(optimization.lr_scheduler, (dict, omegaconf.DictConfig))
+            assert "scheduler" in optimization.lr_scheduler, "missing mandatory 'scheduler' field!"
             scheduler = hydra.utils.instantiate(
-                config=optim_config.lr_scheduler.scheduler,
+                config=optimization.lr_scheduler.scheduler,
                 optimizer=optimizer,
             )
         output = omegaconf.OmegaConf.to_container(
-            cfg=optim_config,
+            cfg=optimization,
             resolve=True,
             throw_on_missing=True,
         )

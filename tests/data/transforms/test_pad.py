@@ -1,6 +1,9 @@
 import torch
 
-from ssl4rs.data.transforms.pad import pad_if_needed, PadIfNeeded  # Replace with the actual module name
+from ssl4rs.data.transforms.pad import (  # Replace with the actual module name
+    PadIfNeeded,
+    pad_if_needed,
+)
 
 
 def test_pad_if_needed_fn():
