@@ -95,8 +95,7 @@ class PadIfNeeded(torch.nn.Module):
         self.kwargs = kwargs
 
     def forward(self, batch: "BatchDictType") -> "BatchDictType":
-        """
-        Forward pass of the PadIfNeeded module.
+        """Forward pass of the PadIfNeeded module.
 
         Args:
             batch: the loaded batch dictionary that contains a tensor to be padded. This tensor
