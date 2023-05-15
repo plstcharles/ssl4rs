@@ -6,7 +6,8 @@ import lightning.pytorch.core.mixins as pl_mixins
 import numpy as np
 import torch.utils.data.dataset
 
-import ssl4rs.data.transforms
+if typing.TYPE_CHECKING:
+    from ssl4rs.data import BatchDictType, BatchTransformType
 
 
 class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixin):
@@ -20,33 +21,46 @@ class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixi
     to save/restore constructor parameters. This allows us to build and return new data parser
     instances constructed with the original hyperparameters whenever we e.g. create a "filtered"
     version of this object.
+
+    Args:
+        batch_transforms: configuration dictionary or list of transformation operations that
+            will be applied to the "raw" batch data read by this class. These should be
+            callable objects that expect to receive a batch dictionary, and that also return
+            a batch dictionary.
+        add_default_transforms: specifies whether the 'default transforms' (batch sizer, batch
+            identifier) should be added to the provided list of transforms. The following
+            settings are used by these default transforms.
+        batch_id_prefix: string used as a prefix in the batch identifiers generated for the
+            data samples read by this parser.
+        batch_index_key: an attribute name (key) under which we should be able to find the "index"
+            of the batch dictionaries. Will be ignored if a batch identifier is already present in
+            the loaded batches.
     """
 
     # TODO @@@@@@: add metadata getter, transform map, filter, select, cache, tensor names, ...
 
-    batch_id_key: str = "batch_id"
-    """Attribute name used to insert batch identifiers inside the loaded batch dictionaries."""
-
     def __init__(
         self,
-        batch_transforms: "ssl4rs.data.BatchTransformType" = None,
+        batch_transforms: "BatchTransformType" = None,
+        add_default_transforms: bool = True,
         batch_id_prefix: typing.Optional[typing.AnyStr] = None,
+        batch_index_key: typing.Optional[str] = None,
     ):
-        """Base class constructor that validates batch transforms and batch id settings.
+        """Base class constructor that validates batch transforms and batch id settings."""
+        import ssl4rs.data.transforms
 
-        Args:
-            batch_transforms: configuration dictionary or list of transformation operations that
-                will be applied to the "raw" batch data read by this class. These should be
-                callable objects that expect to receive a batch dictionary, and that also return
-                a batch dictionary.
-            batch_id_prefix: string used as a prefix in the batch identifiers generated for the
-                data samples read by this parser.
-        """
         super().__init__()
-        self.batch_transforms = ssl4rs.data.transforms.validate_or_convert_transform(batch_transforms)
-        if batch_id_prefix is None:
-            batch_id_prefix = ""
-        self.batch_id_prefix = str(batch_id_prefix)
+        self.batch_id_key = ssl4rs.data.transforms.batch.batch_id_key
+        self.batch_size_key = ssl4rs.data.transforms.batch.batch_size_key
+        self.batch_id_prefix = batch_id_prefix
+        self.batch_index_key = batch_index_key
+        self.batch_transforms = ssl4rs.data.transforms.validate_or_convert_transform(
+            batch_transforms,
+            add_default_transforms=add_default_transforms,
+            batch_id_prefix=self.batch_id_prefix,
+            batch_index_key=self.batch_index_key,
+            dataset_name=self.dataset_name,
+        )
 
     @abc.abstractmethod
     def __len__(self) -> int:
@@ -58,18 +72,20 @@ class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixi
         """
         raise NotImplementedError
 
-    def __getitem__(self, index: typing.Hashable) -> typing.Dict[str, typing.Any]:
+    def __getitem__(self, index: typing.Hashable) -> "BatchDictType":
         """Returns a single data batch loaded from the dataset at the given index."""
         index = self._validate_or_convert_index(index)
         batch = self._get_raw_batch(index)
         # here, the 'batch' can be any type, but following the transforms, we'll expect a dict
         if self.batch_transforms:
             batch = self.batch_transforms(batch)
-        assert isinstance(batch, dict), f"unexpected post-transform batch type: {type(batch)}"
-        batch[ssl4rs.data.batch_size_key] = self._get_batch_size_from_index(index)
-        # finally, we'll add the batch id in the dict (if it's not already there)
+        assert isinstance(batch, typing.Dict), f"unexpected post-transform batch type: {type(batch)}"
+        if self.batch_index_key is not None and self.batch_index_key not in batch:
+            batch[self.batch_index_key] = index
+        if self.batch_size_key not in batch:
+            batch[self.batch_size_key] = self._get_batch_size_from_index(batch, index)
         if self.batch_id_key not in batch:
-            batch[self.batch_id_key] = self._get_batch_id_for_index(index)
+            batch[self.batch_id_key] = self._get_batch_id_for_index(batch, index)
         return batch
 
     def _validate_or_convert_index(self, index: typing.Hashable) -> typing.Hashable:
@@ -81,11 +97,6 @@ class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixi
         assert isinstance(index, int), f"unsupported index type for base parser: {type(index)}"
         assert 0 <= index < len(self), f"invalid data batch index being queried: {index}"
         return index
-
-    def _get_batch_size_from_index(self, index: typing.Hashable) -> int:
-        """Returns the expected batch size for the given (validated, converted) index."""
-        # see above; we assume this index is not a slice, and is therefore an integer
-        return 1  # ...and therefore, the 'batch size' is always one
 
     @abc.abstractmethod
     def _get_raw_batch(
@@ -103,18 +114,33 @@ class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixi
 
     def _get_batch_id_for_index(
         self,
+        batch: "BatchDictType",
         index: typing.Hashable,
-    ) -> str:
-        """Returns the unique batch identifier (a string) for a given batch index.
+    ) -> typing.Hashable:
+        """Returns the unique batch identifier for the given batch + (validated, converted) index.
 
-        The default format is the combination of the batch identifier prefix (provided in the class
-        constructor), the dataset name (class-defined), an underscore, and the batch index itself.
-        If the index is an integer, its value will be zero-padded to 8 digits.
+        This will be called in case the "default transforms" were deactivated, and when the raw
+        batch dictionaries that are loaded do not contain a batch id attribute. Derived classes
+        should implement this if a special format of identifiers is required.
         """
-        prefix = f"{self.batch_id_prefix}_" if self.batch_id_prefix else ""
-        if np.issubdtype(type(index), np.integer) or isinstance(index, int):
-            index = f"batch{index:08d}"
-        return f"{prefix}{self.dataset_name}_{index}"
+        import ssl4rs.data.transforms
+
+        return ssl4rs.data.transforms.get_batch_id(
+            batch=batch,
+            batch_id_prefix=self.batch_id_prefix,
+            batch_index_key=self.batch_index_key,
+            dataset_name=self.dataset_name,
+            index=index,
+        )
+
+    def _get_batch_size_from_index(self, batch: "BatchDictType", index: typing.Hashable) -> int:
+        """Returns the expected batch size for the given batch + (validated, converted) index.
+
+        This will be called in case the "default transforms" were deactivated, and when the raw
+        batch dictionaries that are loaded do not contain a batch size attribute. Derived classes
+        should implement this if the index may be a slice or any non-integer value.
+        """
+        return 1
 
     @property
     @abc.abstractmethod

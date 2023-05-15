@@ -8,6 +8,8 @@ from ssl4rs.data.parsers.utils import DataParser, DeepLakeParser, ParserWrapper
 from ssl4rs.data.transforms import (
     BatchDictType,
     BatchTransformType,
+    batch_id_key,
     batch_size_key,
+    get_batch_id,
     get_batch_size,
 )

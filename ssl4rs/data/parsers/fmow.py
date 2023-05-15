@@ -13,6 +13,7 @@ import cv2 as cv
 import deeplake
 import numpy as np
 import torch
+import torch.utils.data
 import torchvision.io
 import torchvision.transforms.functional
 

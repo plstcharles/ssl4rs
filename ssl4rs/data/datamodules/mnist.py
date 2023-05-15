@@ -72,6 +72,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         return {
             "_default_": {  # all data parsers will wrap the torchvision mnist dataset parser
                 "_target_": "ssl4rs.data.parsers.ParserWrapper",
+                "add_default_transforms": False,
                 "batch_transforms": [  # we'll set up all the parsers with these two transforms
                     {
                         # this will map the loaded tuples with actual attribute names

@@ -4,6 +4,7 @@ import typing
 
 import deeplake
 import deeplake.util.pretty_print
+import torch.utils.data
 
 import ssl4rs.utils.logging
 from ssl4rs.data.parsers.utils.base import DataParser
@@ -20,55 +21,72 @@ class DeepLakeParser(DataParser):
     in a specific fashion before it can be used should rely on their own derived class. See the
     `_get_raw_batch()` function specifically for more info.
 
-    Note: we should NOT call `self.save_hyperparameters` in this class constructor if it is not
-    intended to be used as the FINAL derivation before being instantiated into an object; in other
-    words, if you intend on using this class as an interface, turn `save_hyperparams` OFF! See
-    these links for more information:
-        https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#save-hyperparameters
-        https://github.com/Lightning-AI/lightning/issues/16206
+    Args:
+        dataset_path_or_object: path to the deeplake dataset to be read, or deeplake dataset
+            object to be wrapped by this reader. Will be set to READ-ONLY if it is not already.
+        save_hyperparams: toggles whether hyperparameters should be saved in this class. This
+            should be `False` when this class is derived, and the `save_hyperparameters` function
+            should be called in the derived constructor.
+        batch_transforms: configuration dictionary or list of transformation operations that
+            will be applied to the "raw" batch data read by this class. These should be
+            callable objects that expect to receive a batch dictionary, and that also return
+            a batch dictionary.
+        add_default_transforms: specifies whether the 'default transforms' (batch sizer, batch
+            identifier) should be added to the provided list of transforms. The following
+            settings are used by these default transforms.
+        batch_id_prefix: string used as a prefix in the batch identifiers generated for the
+            data samples read by this parser.
+        batch_index_key: an attribute name (key) under which we should be able to find the "index"
+            of the batch dictionaries. Will be ignored if a batch identifier is already present in
+            the loaded batches.
+        extra_deeplake_kwargs: extra parameters sent to the deeplake dataset constructor.
+            Should not be used if an already-opened dataset is provided.
     """
 
     def __init__(
         self,
         dataset_path_or_object: typing.Union[typing.AnyStr, pathlib.Path, deeplake.Dataset],
-        batch_transforms: "ssl4rs.data.BatchTransformType" = None,
-        batch_id_prefix: typing.Optional[typing.AnyStr] = None,
         save_hyperparams: bool = True,  # turn this off in derived classes
+        batch_transforms: "ssl4rs.data.BatchTransformType" = None,
+        add_default_transforms: bool = True,
+        batch_id_prefix: typing.Optional[typing.AnyStr] = None,
+        batch_index_key: typing.Optional[str] = None,
         **extra_deeplake_kwargs,
     ):
         """Parses a deeplake archive or wraps an already-opened object.
 
-        Note that due to the design of this class (and in contrast to the exporter class), all
-        datasets should only ever be opened in read-only mode here.
+        Due to the design of this class (and in contrast to the exporter class), all datasets
+        should only ever be opened in read-only mode here.
 
-        Args:
-            dataset_path_or_object: path to the deeplake dataset to be read, or deeplake dataset
-                object to be wrapped by this reader. Will be set to READ-ONLY if it is not already.
-            batch_transforms: configuration dictionary or list of transformation operations that
-                will be applied to the "raw" batch data read by this class. These should be
-                callable objects that expect to receive a batch dictionary, and that also return
-                a batch dictionary.
-            batch_id_prefix: string used as a prefix in the batch identifiers generated for the
-                data samples read by this parser.
-            extra_deeplake_kwargs: extra parameters sent to the deeplake dataset constructor.
-                Should not be used if an already-opened dataset is provided.
+        Note: we should NOT call `self.save_hyperparameters` in this class constructor if it is not
+        intended to be used as the FINAL derivation before being instantiated into an object; in other
+        words, if you intend on using this class as an interface, turn `save_hyperparams` OFF! See
+        these links for more information:
+            https://lightning.ai/docs/pytorch/stable/common/lightning_module.html#save-hyperparameters
+            https://github.com/Lightning-AI/lightning/issues/16206
         """
         if save_hyperparams:
             self.save_hyperparameters(
                 ignore=["dataset_path_or_object", "extra_deeplake_kwargs"],
                 logger=False,
             )
-        super().__init__(batch_transforms=batch_transforms, batch_id_prefix=batch_id_prefix)
         if isinstance(dataset_path_or_object, deeplake.Dataset):
             assert not extra_deeplake_kwargs, "dataset is already opened, can't use extra kwargs"
-            self.dataset = dataset_path_or_object
+            dataset = dataset_path_or_object
         else:
-            self.dataset = deeplake.load(dataset_path_or_object, read_only=True, **extra_deeplake_kwargs)
-        if not self.dataset.read_only:
-            self.dataset.read_only = True
+            dataset = deeplake.load(dataset_path_or_object, read_only=True, **extra_deeplake_kwargs)
+        if not dataset.read_only:
+            dataset.read_only = True
         assert (
-            hasattr(self.dataset, "info") and "name" in self.dataset.info
+            hasattr(dataset, "info") and "name" in dataset.info
         ), "dataset info should at least contain a 'name' field!"
+        self.dataset = dataset
+        super().__init__(
+            batch_transforms=batch_transforms,
+            add_default_transforms=add_default_transforms,
+            batch_id_prefix=batch_id_prefix,
+            batch_index_key=batch_index_key,
+        )
 
     def __len__(self) -> int:
         """Returns the total size (in terms of data batch count) of the dataset."""
@@ -121,7 +139,10 @@ class DeepLakeParser(DataParser):
         return self.dataset.info["name"]
 
     def summary(self) -> None:
-        """Prints a summary of the deeplake dataset using the default logger."""
+        """Prints a summary of the deeplake dataset using the default logger.
+
+        Note: this might take a while (minutes) with huge datasets!
+        """
         # note: this code is derived from the original deeplake dataset's "summary" implementation
         pretty_print = deeplake.util.pretty_print.summary_dataset(self.dataset)
         logger.info(self.dataset)

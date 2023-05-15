@@ -12,6 +12,23 @@ class ParserWrapper(DataParser):
     This is meant to provide a compatibility layer between data parsers that might be imported from
     other framework and that do not have a simple way to interface with the rest of this framework,
     e.g. to apply batch-level transformation operations and generate batch identifiers.
+
+    Args:
+        dataset: the dataset-compatible object to be wrapped by this class.
+        dataset_name: the name of the dataset to use in batch identifiers and logging. If "AUTO",
+            will use the name of the wrapped "dataset" object's class.
+        batch_transforms: configuration dictionary or list of transformation operations that
+            will be applied to the "raw" batch data read by this class. These should be
+            callable objects that expect to receive a batch dictionary, and that also return
+            a batch dictionary.
+        add_default_transforms: specifies whether the 'default transforms' (batch sizer, batch
+            identifier) should be added to the provided list of transforms. The following
+            settings are used by these default transforms.
+        batch_id_prefix: string used as a prefix in the batch identifiers generated for the
+            data samples read by this parser.
+        batch_index_key: an attribute name (key) under which we should be able to find the "index"
+            of the batch dictionaries. Will be ignored if a batch identifier is already present in
+            the loaded batches.
     """
 
     def __init__(
@@ -19,19 +36,26 @@ class ParserWrapper(DataParser):
         dataset: typing.Any,
         dataset_name: typing.AnyStr = "AUTO",  # if 'AUTO', will use wrapped object class name
         batch_transforms: "ssl4rs.data.BatchTransformType" = None,
+        add_default_transforms: bool = True,
         batch_id_prefix: typing.Optional[typing.AnyStr] = None,
+        batch_index_key: typing.Optional[str] = None,
     ):
         """Validates that the provided PyTorch-Dataset-compatible object can be wrapped."""
         self.save_hyperparameters(ignore="dataset", logger=False)
-        super().__init__(batch_transforms=batch_transforms, batch_id_prefix=batch_id_prefix)
+        self._dataset_size: typing.Optional[int] = None
+        if dataset_name == "AUTO":
+            dataset_name = ssl4rs.utils.filesystem.slugify(type(dataset).__name__)
+        self._dataset_name = str(dataset_name)
+        self._tensor_names: typing.List[str] = []  # will be filled when needed/available
+        super().__init__(
+            batch_transforms=batch_transforms,
+            add_default_transforms=add_default_transforms,
+            batch_id_prefix=batch_id_prefix,
+            batch_index_key=batch_index_key,
+        )
         assert hasattr(dataset, "__len__"), "missing mandatory dataset length attribute!"
         assert hasattr(dataset, "__getitem__"), "missing mandatory dataset item getter!"
         self.dataset = dataset  # should be read-only, as we'll cache the dataset size
-        self._dataset_size: typing.Optional[int] = None
-        if dataset_name == "AUTO":
-            dataset_name = ssl4rs.utils.filesystem.slugify(type(self.dataset).__name__)
-        self._dataset_name = str(dataset_name)
-        self._tensor_names: typing.List[str] = []  # will be filled when needed/available
 
     def __len__(self) -> int:
         """Returns the total size (in terms of data batch count) of the dataset.

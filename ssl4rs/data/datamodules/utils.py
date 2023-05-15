@@ -18,7 +18,7 @@ if typing.TYPE_CHECKING:
 
 logger = ssl4rs.utils.logging.get_logger(__name__)
 
-use_deeplake_loaders_key = "_deeplake_pytorch_loader_"
+use_deeplake_loaders_key = "deeplake.integrations.pytorch.pytorch.dataset_to_pytorch"
 """Key to toggle on the use of the deeplake data loaders."""
 
 
@@ -398,15 +398,12 @@ class DataModule(pl.LightningDataModule):
             assert isinstance(
                 parser.dataset, deeplake.Dataset
             ), f"need a deeplake dataset attrib in parser, but got: {type(parser.dataset)}"
-            raise NotImplementedError(
-                # @@@@@@@@@@ todo: add the code to get a dataloader from the parser directly
-                "missing something like `parser.dataset.dataloader().pytorch(**kwargs)` here"
-            )
+            dataloader = hydra.utils.instantiate(config, parser)  # UPDATE ME W PARSER's DATALOADER GETTER
         else:
             dataloader = hydra.utils.instantiate(config, parser)
-            assert isinstance(
-                dataloader, torch.utils.data.DataLoader
-            ), f"invalid dataloader type: {type(dataloader)} (...should be DataLoader-derived)"
+        assert isinstance(
+            dataloader, torch.utils.data.DataLoader
+        ), f"invalid dataloader type: {type(dataloader)} (...should be DataLoader-derived)"
         return dataloader
 
 

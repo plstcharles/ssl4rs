@@ -144,8 +144,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
                 _recursive_=False,
                 **deeplake_kwargs,
             )
-            parser.summary()
-            logger.debug(f"ready to parse {len(parser)} fMoW samples")
+            logger.info(f"ready to parse {len(parser)} fMoW samples")
             self.data_parsers["all"] = parser
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
