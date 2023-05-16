@@ -10,11 +10,9 @@ import deeplake.util.exceptions
 import numpy as np
 import tqdm
 
-import ssl4rs
-
-# TODO @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-# need parsers for DOTA_, BigEarthNet, NWPU-VHR-10, NWPU-RESISC45, xview, MLRSN, agrivis, spacenet?
-# TODO @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+import ssl4rs.utils.config
+import ssl4rs.utils.logging
+from ssl4rs.data import BatchDictType
 
 logger = ssl4rs.utils.logging.get_logger(__name__)
 
@@ -63,13 +61,17 @@ class DeepLakeRepackager:
         """
         raise NotImplementedError
 
+    def __init__(self):
+        """Does nothing; the derived class is responsible for parsing the data to be repackaged."""
+        pass
+
     @abc.abstractmethod
     def __len__(self) -> int:
         """Returns the total size (sample count) of the dataset that will be exported."""
         raise NotImplementedError
 
     @abc.abstractmethod
-    def __getitem__(self, item: int) -> typing.Dict[str, typing.Any]:
+    def __getitem__(self, item: int) -> BatchDictType:
         """Returns a single data sample that should be exported in the dataset.
 
         The data sample is provided as a dictionary where the `tensor_names` property defined above
@@ -106,7 +108,7 @@ class DeepLakeRepackager:
         scheduler: str = "threaded",
         progressbar: bool = True,
         **extra_deeplake_kwargs,
-    ) -> None:
+    ) -> deeplake.Dataset:
         """Exports the dataset to the specified location.
 
         By default, if a file exists at the specified path, we will not be overwriting it; we will
@@ -115,7 +117,10 @@ class DeepLakeRepackager:
 
         Note that with deeplake, the output path can be a local path or a remote (server) path
         under the form `PROTOCOL://SERVERNAME/DATASETNAME`. Deeplake will take care of exporting
-        the data during the dataset creation.
+        the data during the dataset creation. In-memory datasets can also be created using this
+        exporter; simply specify a dummy path with a `mem://` prefix, e.g. `mem://dummy/path`.
+
+        Once exported, the dataset object that was created (or that was found) will be returned.
         """
         output_path = str(output_path)
         # first, figure out if the dataset exists and whether we need to validate it...
@@ -132,13 +137,9 @@ class DeepLakeRepackager:
                 pass  # dataset does not exist, we won't be overwriting anything, perfect
             if existing_dataset is not None:
                 # if we get here, we need to verify dataset overlap...
-                ssl4rs.data.repackagers.utils.check_info_overlap(
-                    existing_dataset,
-                    self.dataset_info,
-                    self.tensor_info,
-                )
+                check_info_overlap(existing_dataset, self.dataset_info, self.tensor_info)
                 # if the above check passed, we can return right away, as the dataset is all good!
-                return
+                return existing_dataset
             dataset = deeplake.empty(output_path, overwrite=False, **extra_deeplake_kwargs)
         else:
             dataset = deeplake.empty(output_path, overwrite=True, **extra_deeplake_kwargs)
@@ -174,6 +175,7 @@ class DeepLakeRepackager:
         # all done!
         size_approx_mb = dataset.size_approx() // (1024 * 1024)
         logger.debug(f"export complete, approx size = {size_approx_mb} MB")
+        return dataset
 
 
 def check_info_overlap(

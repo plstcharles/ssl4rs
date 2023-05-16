@@ -89,7 +89,12 @@ class ParserWrapper(DataParser):
         """
         # we fetch the corresponding batch data for the given index from the wrapped dataset object;
         # if this line fails, it means we do not have a PyTorch-Dataset-compatible object
-        return self.dataset[index]
+        batch = self.dataset[index]
+        # if the raw data is a dictionary, and if the default batch index key is not in there...
+        if isinstance(batch, typing.Dict) and ssl4rs.data.batch_index_key not in batch:
+            # ... add the index used to fetch the batch with the default key
+            batch[ssl4rs.data.batch_index_key] = index
+        return batch
 
     @property
     def tensor_names(self) -> typing.List[str]:

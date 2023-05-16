@@ -108,6 +108,8 @@ class DeepLakeParser(DataParser):
         # shapes, when loading json data, when decoding raw bytes, etc.) ... in those cases, you
         # should derive and implement your own version of this function to do your own unpacking!
         batch = {tensor_name: data[tensor_name].numpy() for tensor_name in self.tensor_names}
+        # as a bonus, we provide the index used to fetch the batch with the default key
+        batch[ssl4rs.data.batch_index_key] = index
         return batch
 
     @property

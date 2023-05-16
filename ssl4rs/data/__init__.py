@@ -9,7 +9,9 @@ from ssl4rs.data.transforms import (
     BatchDictType,
     BatchTransformType,
     batch_id_key,
+    batch_index_key,
     batch_size_key,
     get_batch_id,
+    get_batch_index,
     get_batch_size,
 )

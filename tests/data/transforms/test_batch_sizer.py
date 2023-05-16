@@ -53,7 +53,7 @@ def test_batch_sizer__hint():
 def test_batch_identifier():
     t = batch_transforms.BatchIdentifier(
         batch_id_prefix="potato",
-        batch_index_key="INDEX",
+        batch_index_key_="INDEX",
         dataset_name="hello",
     )
     batch_id_key = batch_transforms.batch_id_key

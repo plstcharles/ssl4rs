@@ -153,15 +153,20 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
             instance_idx = self.image_idx_to_instance_idx_map[index]  # noqa
             instance_data = self.dataset.instances[instance_idx]
             image_data = self.dataset.images[index]
+            batch_index = index
         else:
             instance_data = self.dataset.instances[index]
             image_idxs = instance_data.image_idxs.list()
             if self.parsing_strategy == "instances-with-random-image":
-                image_data = self.dataset.images[np.random.choice(image_idxs)]
+                image_idx = np.random.choice(image_idxs)
+                image_data = self.dataset.images[image_idx]
+                batch_index = (index, image_idx)
             elif self.parsing_strategy == "instances-with-first-image":
                 image_data = self.dataset.images[image_idxs[0]]
+                batch_index = (index, image_idxs[0])
             elif self.parsing_strategy == "instances":
                 image_data = self.dataset.images[image_idxs]
+                batch_index = index
             else:
                 raise NotImplementedError
         batch = _get_batch_from_sample_data(
@@ -171,6 +176,7 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
             decompression_strategy=self.decompression_strategy,
             keep_metadata_dict=self.keep_metadata_dict,
         )
+        batch[ssl4rs.data.batch_index_key] = batch_index
         return batch
 
     def _get_subset(
@@ -320,15 +326,20 @@ class _DeepLakeSubsetParser(ssl4rs.data.parsers.utils.DeepLakeParser):
             instance_idx = self.image_idx_to_instance_idx_map[index]  # noqa
             instance_data = self.instance_subset[instance_idx]
             image_data = self.image_subset[index]  # noqa
+            batch_index = index
         else:
             instance_data = self.instance_subset[index]  # noqa
             image_idxs = [self.old_image_idx_to_subset_image_idx_map[idx] for idx in instance_data.image_idxs.list()]
             if self.parsing_strategy == "instances-with-random-image":
-                image_data = self.image_subset[np.random.choice(image_idxs)]
+                image_idx = np.random.choice(image_idxs)
+                image_data = self.image_subset[image_idx]
+                batch_index = (index, image_idx)
             elif self.parsing_strategy == "instances-with-first-image":
                 image_data = self.image_subset[image_idxs[0]]
+                batch_index = (index, image_idxs[0])
             elif self.parsing_strategy == "instances":
                 image_data = self.image_subset[image_idxs]
+                batch_index = index
             else:
                 raise NotImplementedError
         batch = _get_batch_from_sample_data(
@@ -338,6 +349,7 @@ class _DeepLakeSubsetParser(ssl4rs.data.parsers.utils.DeepLakeParser):
             decompression_strategy=self.decompression_strategy,
             keep_metadata_dict=self.keep_metadata_dict,
         )
+        batch[ssl4rs.data.batch_index_key] = batch_index
         return batch
 
     @property

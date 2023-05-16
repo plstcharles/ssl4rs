@@ -15,8 +15,10 @@ from ssl4rs.data.transforms.batch import (
     BatchIdentifier,
     BatchSizer,
     batch_id_key,
+    batch_index_key,
     batch_size_key,
     get_batch_id,
+    get_batch_index,
     get_batch_size,
 )
 from ssl4rs.data.transforms.identity import Identity
@@ -34,7 +36,7 @@ def validate_or_convert_transform(
     transform: BatchTransformType,
     add_default_transforms: bool = True,
     batch_id_prefix: typing.Optional[str] = None,
-    batch_index_key: typing.Optional[str] = None,
+    batch_index_key_: typing.Optional[str] = None,
     dataset_name: typing.Optional[str] = None,
 ) -> BatchTransformType:
     """Validates or converts the given transform object to a proper (torchvision-style) object.
@@ -49,7 +51,7 @@ def validate_or_convert_transform(
             and are ignored if `add_default_transforms` is False.
         batch_id_prefix: a prefix used when building batch identifiers. Will be ignored if a batch
             identifier is already present in the `batch`.
-        batch_index_key: an attribute name (key) under which we should be able to find the "index"
+        batch_index_key_: an attribute name (key) under which we should be able to find the "index"
             of the provided batch dictionary. Will be ignored if a batch identifier is already
             present in the `batch`.
         dataset_name: an extra name to add when building batch identifiers. Will be ignored if a
@@ -83,7 +85,7 @@ def validate_or_convert_transform(
             BatchSizer(batch_size_hint=1),
             BatchIdentifier(
                 batch_id_prefix=batch_id_prefix,
-                batch_index_key=batch_index_key,
+                batch_index_key_=batch_index_key_,
                 dataset_name=dataset_name,
             ),
             *out_t,

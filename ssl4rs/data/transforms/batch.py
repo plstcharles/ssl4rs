@@ -7,10 +7,13 @@ if typing.TYPE_CHECKING:
     from ssl4rs.data import BatchDictType
 
 batch_size_key: str = "batch_size"
-"""Default key (string) used to store/fetch the batch size in a batch dictionary."""
+"""Default batch dictionary key (string) used to store/fetch the batch size."""
 
 batch_id_key: str = "batch_id"
-"""Default key (string) used to store/fetch the batch identifier in a batch dictionary."""
+"""Default batch dictionary key (string) used to store/fetch the batch identifier."""
+
+batch_index_key: str = "batch_index"
+"""Default batch dictionary key (string) used to store/fetch the batch index."""
 
 
 class BatchSizer:
@@ -136,7 +139,7 @@ class BatchIdentifier:
     Args:
         batch_id_prefix: a prefix used when building batch identifiers. Will be ignored if a batch
             identifier is already present in the `batch`.
-        batch_index_key: an attribute name (key) under which we should be able to find the "index"
+        batch_index_key_: an attribute name (key) under which we should be able to find the "index"
             of the provided batch dictionary. Will be ignored if a batch identifier is already
             present in the `batch`.
         dataset_name: an extra name to add when building batch identifiers. Will be ignored if a
@@ -146,12 +149,12 @@ class BatchIdentifier:
     def __init__(
         self,
         batch_id_prefix: typing.Optional[str] = None,
-        batch_index_key: typing.Optional[str] = None,
+        batch_index_key_: typing.Optional[str] = None,
         dataset_name: typing.Optional[str] = None,
     ):
         """Validates and initializes the batch id settings."""
         self.batch_id_prefix = batch_id_prefix
-        self.batch_index_key = batch_index_key
+        self.batch_index_key = batch_index_key_
         self.dataset_name = dataset_name
 
     def __call__(
@@ -167,7 +170,7 @@ class BatchIdentifier:
                 dictionary will be UPDATED IN PLACE since we do not deep copy this reference.
             index: the hashable index that corresponds to the integer or unique ID used to fetch
                 the given `batch` from a dataset parser. Constitutes the basis for the creation of
-                a batch identifier. If not specified, the `batch_index_key` must be provided so
+                a batch identifier. If not specified, the `batch_index_key_` must be provided so
                 that we can find the actual index from a field within the batch dictionary.
 
         Returns:
@@ -182,7 +185,7 @@ class BatchIdentifier:
         batch_id = get_batch_id(
             batch=batch,
             batch_id_prefix=self.batch_id_prefix,
-            batch_index_key=self.batch_index_key,
+            batch_index_key_=self.batch_index_key,
             dataset_name=self.dataset_name,
             index=index,
         )
@@ -192,7 +195,7 @@ class BatchIdentifier:
     def __repr__(self) -> str:
         out_str = self.__class__.__name__ + "("
         out_str += f"batch_id_prefix={self.batch_id_prefix}"
-        out_str += f", batch_index_key={self.batch_index_key}"
+        out_str += f", batch_index_key_={self.batch_index_key}"
         out_str += f", dataset_name={self.dataset_name}"
         out_str += ")"
         return out_str
@@ -201,7 +204,7 @@ class BatchIdentifier:
 def get_batch_id(
     batch: typing.Optional["BatchDictType"] = None,
     batch_id_prefix: typing.Optional[str] = None,
-    batch_index_key: typing.Optional[typing.AnyStr] = "index",
+    batch_index_key_: typing.Optional[str] = None,
     dataset_name: typing.Optional[str] = None,
     index: typing.Optional[typing.Hashable] = None,
 ) -> typing.Hashable:
@@ -216,9 +219,10 @@ def get_batch_id(
             there), or from which we'll gather data in order to build a batch identifier.
         batch_id_prefix: a prefix used when building batch identifiers. Will be ignored if a batch
             identifier is already present in the `batch`.
-        batch_index_key: an attribute name (key) under which we should be able to find the "index"
+        batch_index_key_: an attribute name (key) under which we should be able to find the "index"
             of the provided batch dictionary. Will be ignored if a batch identifier is already
-            present in the `batch`.
+            present in the `batch`. If necessary yet `None`, we will at least try the default
+            `batch_index_key` value before throwing an exception.
         dataset_name: an extra name to add when building batch identifiers. Will be ignored if a
             batch identifier is already present in the `batch`.
         index: the hashable index that corresponds to the integer or unique ID used to fetch the
@@ -232,11 +236,14 @@ def get_batch_id(
     """
     if batch is None or not batch or batch_id_key not in batch:
         if index is None:
-            assert isinstance(batch, typing.Dict) and batch_index_key is not None and batch_index_key in batch, (
+            if batch_index_key_ is None:
+                batch_index_key_ = batch_index_key  # fallback to module-wide default
+            assert isinstance(batch, typing.Dict) and batch_index_key_ in batch, (
                 "batch dict did not contain a batch identifier, and we need at least an index to "
-                "build such an identifier!"
+                f"build such an identifier!\n (provide it via the `{batch_index_key_}` dict key in"
+                f"the data parser, or implement your own transform to add it)"
             )
-            index = batch[batch_index_key]
+            index = batch[batch_index_key_]
         assert isinstance(index, typing.Hashable), f"bad index for batch identifier: {type(index)}"
         prefix = f"{batch_id_prefix}_" if batch_id_prefix else ""
         dataset = f"{dataset_name}_" if dataset_name else ""
@@ -247,3 +254,27 @@ def get_batch_id(
         batch_id = batch[batch_id_key]
         assert isinstance(batch_id, typing.Hashable), f"found batch id has bad type: {type(batch_id)}"
     return batch_id
+
+
+def get_batch_index(
+    batch: "BatchDictType",
+    batch_index_key_: typing.Optional[str] = None,
+) -> typing.Hashable:
+    """Checks the provided batch dictionary and attempts to return the batch index.
+
+    If the given dictionary does not contain a `batch_index` attribute that we can interpret, we
+    will throw an exception.
+
+
+    Args:
+        batch: the batch dictionary from which we'll return the batch index.
+        batch_index_key_: an attribute name (key) under which we should be able to find the "index"
+            of the provided batch dictionary. If `None`, will default to the module-defined value.
+    """
+    assert isinstance(batch, typing.Dict), f"invalid batch type: {type(batch)}"
+    if batch_index_key_ is None:
+        batch_index_key_ = batch_index_key
+    assert batch_index_key_ in batch, f"batch dict does not contain key: {batch_index_key_}"
+    batch_index = batch[batch_index_key_]
+    assert isinstance(batch_index, typing.Hashable), f"invalid batch index type: {type(batch_index)}"
+    return batch_index
