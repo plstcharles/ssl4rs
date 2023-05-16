@@ -18,9 +18,6 @@ if typing.TYPE_CHECKING:
 
 logger = ssl4rs.utils.logging.get_logger(__name__)
 
-use_deeplake_loaders_key = "deeplake.integrations.pytorch.pytorch.dataset_to_pytorch"
-"""Key to toggle on the use of the deeplake data loaders."""
-
 
 class DataModule(pl.LightningDataModule):
     """Wraps the standard LightningDataModule interface to combine it with Hydra.
@@ -387,20 +384,7 @@ class DataModule(pl.LightningDataModule):
         assert not config.get(
             "_partial_", False
         ), "this function should not return a partial function, it's time to create the loader!"
-        if config["_target_"] == use_deeplake_loaders_key:
-            import deeplake
-
-            import ssl4rs.data.parsers.utils.deeplake
-
-            assert isinstance(
-                parser, ssl4rs.data.parsers.utils.deeplake.DeepLakeParser
-            ), f"need a deeplake data parser, but got: {type(parser)}"
-            assert isinstance(
-                parser.dataset, deeplake.Dataset
-            ), f"need a deeplake dataset attrib in parser, but got: {type(parser.dataset)}"
-            dataloader = hydra.utils.instantiate(config, parser)  # UPDATE ME W PARSER's DATALOADER GETTER
-        else:
-            dataloader = hydra.utils.instantiate(config, parser)
+        dataloader = hydra.utils.instantiate(config, parser)
         assert isinstance(
             dataloader, torch.utils.data.DataLoader
         ), f"invalid dataloader type: {type(dataloader)} (...should be DataLoader-derived)"

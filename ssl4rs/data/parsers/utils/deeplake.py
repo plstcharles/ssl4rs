@@ -199,3 +199,51 @@ class DeepLakeParser(DataParser):
             raise NotImplementedError("cannot filter variable length datasets")
         filtered_dataset = self.dataset.filter(function=function, **filter_kwargs)
         return self.__class__(dataset_path_or_object=filtered_dataset, **self.hparams)
+
+    def get_dataloader(
+        self,
+        num_workers: int = 0,
+        batch_size: int = 1,
+        drop_last: bool = False,
+        collate_fn: typing.Optional[typing.Callable] = None,
+        pin_memory: bool = False,
+        shuffle: bool = False,
+        buffer_size: int = 2048,
+        use_local_cache: bool = False,
+        **deeplake_pytorch_dataloader_kwargs,
+    ) -> torch.utils.data.DataLoader:
+        """Returns a deeplake data loader for this data parser object.
+
+        Derived classes may implement/use more complex collate or transform objects here. By
+        default, we simply forward the default settings to deeplake's dataloader creator.
+        """
+        dataloader = deeplake.integrations.pytorch.pytorch.dataset_to_pytorch(
+            self.dataset,
+            num_workers=num_workers,
+            batch_size=batch_size,
+            drop_last=drop_last,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            shuffle=shuffle,
+            buffer_size=buffer_size,
+            use_local_cache=use_local_cache,
+            transform=self.batch_transforms,
+            return_index=True,
+            **deeplake_pytorch_dataloader_kwargs,
+        )
+        return dataloader
+
+
+def get_dataloader(
+    parser: DeepLakeParser,
+    **deeplake_pytorch_dataloader_kwargs,
+) -> torch.utils.data.DataLoader:
+    """Returns a deeplake data loader for the given data parser object.
+
+    This will call the `get_dataloader` function from the parser class itself, which may be derived
+    from the base class for some datasets.
+    """
+    assert isinstance(
+        parser, DeepLakeParser
+    ), f"invalid data parser type to use the deeplake dataloader getter: {type(parser)}"
+    return parser.get_dataloader(**deeplake_pytorch_dataloader_kwargs)
