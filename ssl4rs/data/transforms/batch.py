@@ -12,7 +12,7 @@ batch_size_key: str = "batch_size"
 batch_id_key: str = "batch_id"
 """Default batch dictionary key (string) used to store/fetch the batch identifier."""
 
-batch_index_key: str = "batch_index"
+batch_index_key: str = "index"
 """Default batch dictionary key (string) used to store/fetch the batch index."""
 
 
@@ -244,6 +244,11 @@ def get_batch_id(
                 f"the data parser, or implement your own transform to add it)"
             )
             index = batch[batch_index_key_]
+        if isinstance(index, np.ndarray):
+            assert index.ndim == 1 and index.size > 0, "index should be non-empty 1d vector"
+            index = tuple(index)
+            if len(index) == 1:
+                index = index[0]
         assert isinstance(index, typing.Hashable), f"bad index for batch identifier: {type(index)}"
         prefix = f"{batch_id_prefix}_" if batch_id_prefix else ""
         dataset = f"{dataset_name}_" if dataset_name else ""
@@ -276,5 +281,10 @@ def get_batch_index(
         batch_index_key_ = batch_index_key
     assert batch_index_key_ in batch, f"batch dict does not contain key: {batch_index_key_}"
     batch_index = batch[batch_index_key_]
+    if isinstance(batch_index, np.ndarray):
+        assert batch_index.ndim == 1 and batch_index.size > 0, "index should be non-empty 1d vector"
+        batch_index = tuple(batch_index)
+        if len(batch_index) == 1:
+            batch_index = batch_index[0]
     assert isinstance(batch_index, typing.Hashable), f"invalid batch index type: {type(batch_index)}"
     return batch_index

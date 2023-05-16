@@ -58,7 +58,7 @@ class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixi
             batch_transforms,
             add_default_transforms=add_default_transforms,
             batch_id_prefix=self.batch_id_prefix,
-            batch_index_key=self.batch_index_key,
+            batch_index_key_=self.batch_index_key,
             dataset_name=self.dataset_name,
         )
 
@@ -128,7 +128,7 @@ class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixi
         return ssl4rs.data.transforms.get_batch_id(
             batch=batch,
             batch_id_prefix=self.batch_id_prefix,
-            batch_index_key=self.batch_index_key,
+            batch_index_key_=self.batch_index_key,
             dataset_name=self.dataset_name,
             index=index,
         )
