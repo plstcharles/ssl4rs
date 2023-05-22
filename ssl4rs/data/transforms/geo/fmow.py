@@ -54,8 +54,8 @@ class InstanceCenterCrop(GeoCenterCrop):
         super().__init__(
             size=size,
             output_gsd=output_gsd,
-            target_key="image/rgb/jpg",
-            gsd_key="image/rgb/gsd",
+            target_key="image",
+            gsd_key="gsd",
             allow_auto_padding=allow_auto_padding,
             interpolation=interpolation,
             antialias=antialias,
@@ -105,8 +105,8 @@ class InstanceCenterCrop(GeoCenterCrop):
         )
         # now, relocate the crop to the bounding box location...
         assert batch_dict is not None, "missing batch dict (must be called with full fMoW batch data)"
-        assert "image/rgb/bbox" in batch_dict, "missing bbox in batch dict?"
-        bbox = batch_dict["image/rgb/bbox"]
+        assert "bbox" in batch_dict, "missing bbox in batch dict?"
+        bbox = batch_dict["bbox"]
         bbox_left, bbox_top, bbox_width, bbox_height = bbox
         bbox_center = (bbox_top + bbox_height // 2, bbox_left + bbox_width // 2)
         crop_top = bbox_center[0] - crop_height // 2
@@ -179,8 +179,8 @@ class JPEGDecoderWithRandomResizedCrop(
         super().__init__(
             size=output_size,
             gsd_ratios=gsd_ratios,
-            target_key="image/rgb/jpg",
-            gsd_key="image/rgb/gsd",
+            target_key="image",
+            gsd_key="gsd",
             interpolation=interpolation,
             antialias=antialias,
             add_params_to_batch_dict=add_params_to_batch_dict,
@@ -244,7 +244,7 @@ class JPEGDecoderWithRandomResizedCrop(
             assert crop_left_idx + crop_width <= im_width
             pad_rows = (crop_top_idx + crop_height) - orig_im_height
             pad_cols = (crop_left_idx + crop_width) - orig_im_width
-        crop = ssl4rs.utils.imgproc.decode_jpg(
+        crop = ssl4rs.utils.imgproc.decode_with_turbo_jpeg(
             image=input_array,
             to_bgr_format=False,
             use_fast_upsample=self.use_fast_upsample,

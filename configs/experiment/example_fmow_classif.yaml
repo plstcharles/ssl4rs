@@ -26,6 +26,7 @@ data:
   datamodule:
     dataloader_configs:
       _default_: # this group provides shared (but overridable) settings for all data loader types
+        num_workers: 6
         batch_size: 16 # bump up the batch size from the default
 
 trainer:

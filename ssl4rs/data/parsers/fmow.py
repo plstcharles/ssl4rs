@@ -5,11 +5,10 @@ https://arxiv.org/abs/1711.07846
 https://github.com/fMoW/dataset
 https://spacenet.ai/iarpa-functional-map-of-the-world-fmow/
 """
-
+import functools
 import pathlib
 import typing
 
-import cv2 as cv
 import deeplake
 import numpy as np
 import torch
@@ -25,17 +24,17 @@ import ssl4rs.utils.logging
 logger = ssl4rs.utils.logging.get_logger(__name__)
 
 
-class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
+class DeepLakeParserBase(ssl4rs.data.parsers.utils.DeepLakeParser):
     """Provides data parsing functions for the ENTIRE fMoW dataset (i.e. the 'all' subset).
-
-    Note that fMoW requires a bit of special handling on top of the base deeplake parser. In short,
-    we need to handle different datasets (for instance data and image data) that are different
-    lengths, and we need to do this manually for each subset.
 
     This class implements getter functions for each of the expected subsets of the fMoW dataset,
     specifically: `get_train_subset`, `get_val_subset`, `get_test_subset`, and `get_seq_subset`.
     Those subsets will be provided in a DeepLakeParser-compatible interface to simplify and
     optimize data loading.
+
+    The deeplake-derived dataloader is only supported when the `parsing_strategy` is `images`, i.e.
+    when a single image is expected for each data sample loaded by this trainer. To use an
+    instance-based data loading strategy, use a regular `torch.utils.data.DataLoader`.
     """
 
     metadata = ssl4rs.data.metadata.fmow
@@ -60,7 +59,7 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
     def __init__(
         self,
         dataset_path_or_object: typing.Union[typing.AnyStr, pathlib.Path, deeplake.Dataset],
-        parsing_strategy: str = "instances",
+        parsing_strategy: str = "images",
         decompression_strategy: str = "deeplake",
         keep_metadata_dict: bool = False,
         batch_transforms: "ssl4rs.data.BatchTransformType" = None,
@@ -71,6 +70,10 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
 
         Note that due to the design of this class (and in contrast to the exporter class), all
         datasets should only ever be opened in read-only mode here.
+
+        Note that the instance data (instance identifiers, image indices, labels, and subsets)
+        will be loaded directly into memory. This increases memory usage in this class, but that
+        should not really be an issue, even with 120k instances.
 
         Args:
             dataset_path_or_object: path to the deeplake dataset to be read, or deeplake dataset
@@ -109,34 +112,36 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
         ), f"invalid decompression strategy: {decompression_strategy}"
         self.decompression_strategy = decompression_strategy
         self.keep_metadata_dict = keep_metadata_dict
-        self.image_idx_to_instance_idx_map = self._build_image_idx_to_instance_idx_map()
+        self.image_count = len(self.dataset)
+        self.instance_count, self.instance_data, self.instance_idx_to_image_idxs_map = self._load_instance_data(
+            self.dataset
+        )
 
-    def _build_image_idx_to_instance_idx_map(self) -> typing.Dict[int, int]:
-        """Builds and returns an image-index to instance-index map.
-
-        This will be useful when using the "images" parsing strategy, as we will need to figure out
-        which instance must be queried to return the metadata along with a particular image.
-        """
-        image_idx_to_instance_idx_map = {}
-        if self.parsing_strategy == "images":
-            logger.debug("Preparing fMoW image-index-to-instance-index map...")
-            # there are not too many indices to be scared of loading them all at once into memory
-            image_idxs_lists = self.dataset.instances.image_idxs.list()
-            for instance_idx in range(len(self.dataset.instances)):
-                image_idxs = image_idxs_lists[instance_idx]
-                assert len(image_idxs) > 0
-                for image_idx in image_idxs:
-                    assert image_idx not in image_idx_to_instance_idx_map
-                    image_idx_to_instance_idx_map[image_idx] = instance_idx
-            assert len(image_idx_to_instance_idx_map) > 0
-        return image_idx_to_instance_idx_map
+    @staticmethod
+    def _load_instance_data(
+        dataset: deeplake.Dataset,
+    ) -> typing.Tuple[int, typing.Dict[str, np.ndarray], typing.Dict[int, typing.List[int]]]:
+        """Returns instance data (total count, tensors, and an image-idx-to instance-idx map)."""
+        logger.debug(f"Preloading fMoW instance metadata for {len(dataset)} images...")
+        instance_data = {
+            "instance_idxs": dataset.instance[:].numpy().flatten(),
+            "instance_labels": dataset.label[:].numpy().flatten(),
+            "instance_subset_idxs": dataset.subset[:].numpy().flatten(),
+        }
+        instance_idx_to_image_idxs_map = {}
+        for image_idx, instance_idx in enumerate(instance_data["instance_idxs"]):
+            if instance_idx not in instance_idx_to_image_idxs_map:
+                instance_idx_to_image_idxs_map[instance_idx] = []
+            instance_idx_to_image_idxs_map[instance_idx].append(image_idx)
+        instance_count = len(instance_idx_to_image_idxs_map)
+        return instance_count, instance_data, instance_idx_to_image_idxs_map
 
     def __len__(self) -> int:
         """Returns the total size (in terms of instance or image count) of the dataset."""
         if self.parsing_strategy == "images":
-            return len(self.image_idx_to_instance_idx_map)
+            return self.image_count
         else:
-            return len(self.dataset.instances)
+            return self.instance_count
 
     def _get_raw_batch(
         self,
@@ -150,28 +155,26 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
         so that they can be batched properly.
         """
         if self.parsing_strategy == "images":
-            instance_idx = self.image_idx_to_instance_idx_map[index]  # noqa
-            instance_data = self.dataset.instances[instance_idx]
-            image_data = self.dataset.images[index]
+            image_data = self.dataset[index]
             batch_index = index
         else:
-            instance_data = self.dataset.instances[index]
-            image_idxs = instance_data.image_idxs.list()
+            instance_idx = self.dataset.instance[index].numpy().item()
+            image_idxs = self.instance_idx_to_image_idxs_map[instance_idx]
             if self.parsing_strategy == "instances-with-random-image":
                 image_idx = np.random.choice(image_idxs)
-                image_data = self.dataset.images[image_idx]
+                image_data = self.dataset[image_idx]
                 batch_index = (index, image_idx)
             elif self.parsing_strategy == "instances-with-first-image":
-                image_data = self.dataset.images[image_idxs[0]]
+                image_data = self.dataset[image_idxs[0]]
                 batch_index = (index, image_idxs[0])
             elif self.parsing_strategy == "instances":
-                image_data = self.dataset.images[image_idxs]
+                image_data = self.dataset[image_idxs]
                 batch_index = index
             else:
                 raise NotImplementedError
         batch = _get_batch_from_sample_data(
-            instance_data=instance_data,
             image_data=image_data,
+            dataset_info=self.dataset.info,
             parsing_strategy=self.parsing_strategy,
             decompression_strategy=self.decompression_strategy,
             keep_metadata_dict=self.keep_metadata_dict,
@@ -179,284 +182,187 @@ class DeepLakeParser(ssl4rs.data.parsers.utils.DeepLakeParser):
         batch[ssl4rs.data.batch_index_key] = batch_index
         return batch
 
+    def get_dataloader(
+        self,
+        num_workers: int = 0,
+        batch_size: int = 1,
+        drop_last: bool = False,
+        collate_fn: typing.Optional[typing.Callable] = None,
+        pin_memory: bool = False,
+        shuffle: bool = False,
+        buffer_size: int = 2048,
+        use_local_cache: bool = False,
+        **deeplake_pytorch_dataloader_kwargs,
+    ) -> torch.utils.data.DataLoader:
+        """Returns a deeplake data loader for this data parser object."""
+        if self.parsing_strategy != "images":
+            raise NotImplementedError(
+                "the deeplake dataloader should probably not be used to load instances?\n"
+                "\t(potential slow down w/ irregular image shapes, no real use case)"
+            )
+        assert self.decompression_strategy != "defer", "should not defer decompression past dataloader?"
+        transforms = torchvision.transforms.Compose(
+            [
+                functools.partial(
+                    _get_batch_from_sample_data,
+                    dataset_info=self.dataset.info,
+                    parsing_strategy=self.parsing_strategy,
+                    decompression_strategy=self.decompression_strategy,
+                    keep_metadata_dict=self.keep_metadata_dict,
+                ),
+                self.batch_transforms,
+            ]
+        )
+        jpeg_decode_method = "numpy" if self.decompression_strategy == "deeplake" else "tobytes"
+        decode_method = {
+            tensor: "numpy" if tensor != "image" else jpeg_decode_method for tensor in self.dataset.tensors
+        }
+        dataloader = deeplake.integrations.pytorch.pytorch.dataset_to_pytorch(
+            self.dataset,
+            num_workers=num_workers,
+            batch_size=batch_size,
+            drop_last=drop_last,
+            collate_fn=collate_fn,
+            pin_memory=pin_memory,
+            shuffle=shuffle,
+            buffer_size=buffer_size,
+            use_local_cache=use_local_cache,
+            transform=transforms,
+            return_index=True,
+            decode_method=decode_method,
+            **deeplake_pytorch_dataloader_kwargs,
+        )
+        return dataloader
+
+
+class DeepLakeParser(DeepLakeParserBase):
+    """Derived version of the `DeepLakeParserBase` allowing subsets to be queried as views.
+
+    See the base class for more information.
+    """
+
     def _get_subset(
         self,
         subset: str,
         hparams_override: typing.Optional[ssl4rs.utils.DictConfig] = None,
-    ) -> "_DeepLakeSubsetParser":
+    ) -> "DeepLakeParserBase":
         """Returns a subset data parser for a specific intersection of dataset instances."""
         assert subset in self.metadata.subset_types, f"unsupported subset: {subset}"
         logger.info(f"Preparing parser for {self.dataset_name}-{subset}")
-        target_subset_idx = self.metadata.subset_types.index(subset)
-        instances_parser = self.dataset.instances.filter(
-            lambda batch: batch["subset"].numpy() == target_subset_idx,
-        )
-        num_instances = len(instances_parser)
-        assert num_instances > 0
-        target_image_idxs = instances_parser.image_idxs.list()
-        assert len(target_image_idxs) == num_instances
-        target_image_idxs = np.concatenate(target_image_idxs)
-        assert len(target_image_idxs) == len(np.unique(target_image_idxs))
-        old_image_idx_to_subset_image_idx_map = {old_idx: new_idx for new_idx, old_idx in enumerate(target_image_idxs)}
-        images_parser = self.dataset.images[target_image_idxs.tolist()]
-        instance_tensor_keys = set(instances_parser.tensors.keys())
-        image_tensor_keys = set(images_parser.tensors.keys())
-        assert not instance_tensor_keys.intersection(image_tensor_keys)
+        subset_view = self.dataset.load_view(subset)
+        assert len(subset_view) > 0
         subset_hparams = self.hparams if hparams_override is None else hparams_override
-        return _DeepLakeSubsetParser(
-            parent_dataset=self.dataset,
-            instance_subset=instances_parser,
-            image_subset=images_parser,
-            old_image_idx_to_subset_image_idx_map=old_image_idx_to_subset_image_idx_map,
-            subset=subset,
+        return DeepLakeParserBase(
+            dataset_path_or_object=subset_view,
             **subset_hparams,
         )
 
     def get_train_subset(
         self,
         hparams_override: typing.Optional[ssl4rs.utils.DictConfig] = None,
-    ) -> ssl4rs.data.parsers.utils.DeepLakeParser:
+    ) -> "DeepLakeParserBase":
         """Returns a `DeepLakeParser`-compatible parser for the fMoW training set."""
         return self._get_subset("train", hparams_override)
 
     def get_val_subset(
         self,
         hparams_override: typing.Optional[ssl4rs.utils.DictConfig] = None,
-    ) -> ssl4rs.data.parsers.utils.DeepLakeParser:
+    ) -> "DeepLakeParserBase":
         """Returns a `DeepLakeParser`-compatible parser for the fMoW validation set."""
         return self._get_subset("val", hparams_override)
 
     def get_test_subset(
         self,
         hparams_override: typing.Optional[ssl4rs.utils.DictConfig] = None,
-    ) -> ssl4rs.data.parsers.utils.DeepLakeParser:
+    ) -> "DeepLakeParserBase":
         """Returns a `DeepLakeParser`-compatible parser for the fMoW testing set."""
         return self._get_subset("test", hparams_override)
 
     def get_seq_subset(
         self,
         hparams_override: typing.Optional[ssl4rs.utils.DictConfig] = None,
-    ) -> ssl4rs.data.parsers.utils.DeepLakeParser:
+    ) -> "DeepLakeParserBase":
         """Returns a `DeepLakeParser`-compatible parser for the fMoW seq set."""
         return self._get_subset("seq", hparams_override)
 
 
-class _DeepLakeSubsetParser(ssl4rs.data.parsers.utils.DeepLakeParser):
-    """Provides data parsing functions for a fMoW data subset.
-
-    NOTE: AN INSTANCE OF THIS CLASS SHOULD NEVER BE CREATED DIRECTLY BY A USER. THE INTERFACE
-    SHOULD BE THE SAME AS THE `DeepLakeParser` CLASS ABOVE.
-    """
-
-    metadata = ssl4rs.data.metadata.fmow
-    supported_parsing_strategies = DeepLakeParser.supported_parsing_strategies
-    supported_decompression_strategies = DeepLakeParser.supported_decompression_strategies
-
-    def __init__(
-        self,
-        parent_dataset: deeplake.Dataset,
-        instance_subset: deeplake.Dataset,
-        image_subset: deeplake.Dataset,
-        old_image_idx_to_subset_image_idx_map: typing.Dict[int, int],
-        parsing_strategy: str,
-        decompression_strategy: str,
-        keep_metadata_dict: bool,
-        subset: str,
-        batch_transforms: "ssl4rs.data.BatchTransformType" = None,
-        batch_id_prefix: typing.Optional[typing.AnyStr] = None,
-    ):
-        """Parses a fMoW deeplake subset."""
-        self.save_hyperparameters(
-            ignore=["parent_dataset", "instance_subset", "image_subset", "old_image_idx_to_subset_image_idx_map"],
-            logger=False,
-        )
-        super().__init__(
-            dataset_path_or_object=parent_dataset,
-            batch_transforms=batch_transforms,
-            batch_id_prefix=batch_id_prefix,
-            save_hyperparams=False,
-        )
-        self.instance_subset = instance_subset
-        self.image_subset = image_subset
-        self.old_image_idx_to_subset_image_idx_map = old_image_idx_to_subset_image_idx_map
-        self.subset = subset
-        self.parsing_strategy = parsing_strategy
-        self.decompression_strategy = decompression_strategy
-        self.keep_metadata_dict = keep_metadata_dict
-        self.image_idx_to_instance_idx_map = self._build_image_idx_to_instance_idx_map()
-
-    def _build_image_idx_to_instance_idx_map(self) -> typing.Dict[int, int]:
-        """Builds and returns an image-index to instance-index map.
-
-        This will be useful when using the "images" parsing strategy, as we will need to figure out
-        which instance must be queried to return the metadata along with a particular image.
-        """
-        image_idx_to_instance_idx_map = {}
-        if self.parsing_strategy == "images":
-            old_image_idxs_lists = self.instance_subset.image_idxs.list()
-            for instance_idx in range(len(self.instance_subset)):
-                old_image_idxs = old_image_idxs_lists[instance_idx]
-                assert len(old_image_idxs) > 0
-                for old_image_idx in old_image_idxs:
-                    image_idx = self.old_image_idx_to_subset_image_idx_map[old_image_idx]
-                    assert image_idx not in image_idx_to_instance_idx_map
-                    image_idx_to_instance_idx_map[image_idx] = instance_idx
-            assert len(image_idx_to_instance_idx_map) > 0
-        return image_idx_to_instance_idx_map
-
-    def __len__(self) -> int:
-        """Returns the total size (in terms of instance or image count) of the dataset."""
-        if self.parsing_strategy == "images":
-            return len(self.image_idx_to_instance_idx_map)
-        else:
-            return len(self.instance_subset)
-
-    def _get_raw_batch(
-        self,
-        index: typing.Hashable,
-    ) -> typing.Any:
-        """Returns a single data batch loaded from the deeplake dataset at a specified index.
-
-        In contrast with the `__getitem__` function, this internal call will not apply transforms.
-
-        This is a custom reimplementation of the base class version that processes sequences of data
-        so that they can be batched properly.
-        """
-        if self.parsing_strategy == "images":
-            instance_idx = self.image_idx_to_instance_idx_map[index]  # noqa
-            instance_data = self.instance_subset[instance_idx]
-            image_data = self.image_subset[index]  # noqa
-            batch_index = index
-        else:
-            instance_data = self.instance_subset[index]  # noqa
-            image_idxs = [self.old_image_idx_to_subset_image_idx_map[idx] for idx in instance_data.image_idxs.list()]
-            if self.parsing_strategy == "instances-with-random-image":
-                image_idx = np.random.choice(image_idxs)
-                image_data = self.image_subset[image_idx]
-                batch_index = (index, image_idx)
-            elif self.parsing_strategy == "instances-with-first-image":
-                image_data = self.image_subset[image_idxs[0]]
-                batch_index = (index, image_idxs[0])
-            elif self.parsing_strategy == "instances":
-                image_data = self.image_subset[image_idxs]
-                batch_index = index
-            else:
-                raise NotImplementedError
-        batch = _get_batch_from_sample_data(
-            instance_data=instance_data,
-            image_data=image_data,
-            parsing_strategy=self.parsing_strategy,
-            decompression_strategy=self.decompression_strategy,
-            keep_metadata_dict=self.keep_metadata_dict,
-        )
-        batch[ssl4rs.data.batch_index_key] = batch_index
-        return batch
-
-    @property
-    def dataset_name(self) -> typing.AnyStr:
-        """Returns the dataset name used to identify this particular data subset."""
-        return f"{super().dataset_name}-{self.subset}"
-
-
 def _get_batch_from_sample_data(
-    instance_data,
-    image_data,
+    image_data: typing.Union[deeplake.Dataset, typing.Dict[str, np.ndarray]],
+    dataset_info: typing.Dict[str, typing.Any],
     parsing_strategy: str,
     decompression_strategy: str,
     keep_metadata_dict: bool,
 ) -> typing.Dict[str, typing.Any]:
-    """Converts a pair of instance + image data samples into a batch dictionary.
+    """Converts image data sample(s) into a batch dictionary.
 
-    When `parsing_strategy="instances"`, the images will be provided under the `images/rgb/...`
-    prefix, as a list of values will be provided for each instance. When another parsing strategy
-    is used, the images will be provided under the `image/rgb/...` prefix, and the arrays/values
-    will be directly accessible.
+    When `parsing_strategy="instances"`, the images will be already-batched under lists. With other
+    parsing strategies, the data will be returned as-is (unbatched).
 
-    The resulting batch dictionary will also contain these metadata fields:
-        `image(s)/rgb/bbox`: bounding box for the instance in the image.
-        `image(s)/rgb/gsd`: the ground sampling distance for the image.
-        `image(s)/rgb/cloud_cover`: 0-100 coverage of the image obscured by clouds.
-        `image(s)/rgb/sun_azimuth`: degrees (0-360) of clockwise rotation off north to the sun.
-        `image(s)/rgb/sun_elevation`: degrees (0-90) of elevation from the horizontal to the sun.
+    The resulting batch dictionary will contain these metadata fields:
+        `bbox`: bounding box (in LTWH format) for the instance in the image.
+        `gsd`: the ground sampling distance for the image.
+        `cloud_cover`: 0-100 coverage of the image obscured by clouds.
+        `sun_azimuth`: degrees (0-360) of clockwise rotation off north to the sun.
+        `sun_elevation`: degrees (0-90) of elevation from the horizontal to the sun.
     """
-    batch = {
-        "instance/label": instance_data.label.numpy(),
-        "instance/subset": instance_data.subset.numpy(),
-        "instance/id": instance_data.id.text(),
-    }
-    dataset_info = instance_data.parent.info
-    image_type = dataset_info["image_type"]
     image_compression = dataset_info["image_compression"]
-    assert len(image_data) > 0, "all instances should have at least one image?"
-    if image_type == "rgb":
-        if parsing_strategy == "instances":
-            metadata = [img_data.rgb.metadata.dict() for img_data in image_data]
-            if keep_metadata_dict:
-                batch["images/rgb/metadata"] = metadata
-            batch["images/rgb/bbox"] = [img_data.rgb.bbox.numpy() for img_data in image_data]
-            batch["images/rgb/gsd"] = [m["gsd"] for m in metadata]
-            batch["images/rgb/cloud_cover"] = [m["cloud_cover"] for m in metadata]
-            batch["images/rgb/sun_azimuth"] = [m["sun_azimuth_dbl"] for m in metadata]
-            batch["images/rgb/sun_elevation"] = [m["sun_elevation_dbl"] for m in metadata]
-            if image_compression == "jpg":
-                images = [_decompress_jpeg_image(img_data.rgb.jpg, decompression_strategy) for img_data in image_data]
-                images = [
-                    torchvision.transforms.functional.to_tensor(image) if not isinstance(image, torch.Tensor) else image
-                    for image in images
-                ]
-                batch["images/rgb/jpg"] = images
-            else:
-                raise NotImplementedError  # todo: implement me for png/lz4 data
+    batch = dict()
+    if parsing_strategy == "instances":
+        assert isinstance(
+            image_data, deeplake.Dataset
+        ), "the preloaded batch data input for this function is not supported for instance parsing"
+        metadata = [img_data.metadata.dict() for img_data in image_data]
+        if keep_metadata_dict:
+            batch["metadata"] = metadata
+        batch["instance"] = image_data.instance.numpy().flatten()
+        batch["label"] = image_data.label.numpy().flatten()
+        batch["subset"] = image_data.subset.numpy().flatten()
+        batch["bbox"] = [img_data.bbox.numpy() for img_data in image_data]  # should be in LTWH format
+        batch["gsd"] = [m["gsd"] for m in metadata]
+        batch["cloud_cover"] = [m["cloud_cover"] for m in metadata]
+        batch["sun_azimuth"] = [m["sun_azimuth_dbl"] for m in metadata]
+        batch["sun_elevation"] = [m["sun_elevation_dbl"] for m in metadata]
+        if image_compression == "jpg":
+            images = [
+                ssl4rs.utils.imgproc.decode_jpeg(img_data.image, decompression_strategy) for img_data in image_data
+            ]
+            images = [
+                torchvision.transforms.functional.to_tensor(image) if not isinstance(image, torch.Tensor) else image
+                for image in images
+            ]
+            batch["image"] = images
         else:
-            metadata = image_data.rgb.metadata.dict()
-            if keep_metadata_dict:
-                batch["image/rgb/metadata"] = metadata
-            batch["image/rgb/bbox"] = image_data.rgb.bbox.numpy()
-            batch["image/rgb/gsd"] = metadata["gsd"]
-            batch["image/rgb/cloud_cover"] = metadata["cloud_cover"]
-            batch["image/rgb/sun_azimuth"] = metadata["sun_azimuth_dbl"]
-            batch["image/rgb/sun_elevation"] = metadata["sun_elevation_dbl"]
-            if image_compression == "jpg":
-                image = _decompress_jpeg_image(image_data.rgb.jpg, decompression_strategy)
-                if isinstance(image, np.ndarray):
-                    image = torchvision.transforms.functional.to_tensor(image)
-                batch["image/rgb/jpg"] = image
-            else:
-                raise NotImplementedError  # todo: implement me for png/lz4 data
+            raise NotImplementedError  # todo: implement me for png/lz4 data
     else:
-        raise NotImplementedError  # todo: implement me for multispectral data
+        if isinstance(image_data, deeplake.Dataset):
+            # this branch runs when we use the dataset directly in a regular dataloader
+            metadata = image_data.metadata.dict()
+            batch["instance"] = image_data.instance.numpy().item()
+            batch["label"] = image_data.label.numpy().item()
+            batch["subset"] = image_data.subset.numpy().item()
+            batch["bbox"] = image_data.bbox.numpy()  # should be in LTWH format
+            image = image_data.image
+        else:
+            # this branch runs when we use the deeplake dataloader (which preloads the tensor vals)
+            assert isinstance(image_data, typing.Dict)
+            metadata = image_data["metadata"].item()
+            batch["instance"] = image_data["instance"].item()
+            batch["label"] = image_data["label"].item()
+            batch["subset"] = image_data["subset"].item()
+            batch["bbox"] = image_data["bbox"]  # should be in LTWH format
+            batch["index"] = image_data["index"].item()
+            image = image_data["image"]
+        if keep_metadata_dict:
+            batch["metadata"] = metadata
+        batch["gsd"] = metadata["gsd"]
+        batch["cloud_cover"] = metadata["cloud_cover"]
+        batch["sun_azimuth"] = metadata["sun_azimuth_dbl"]
+        batch["sun_elevation"] = metadata["sun_elevation_dbl"]
+        if image_compression == "jpg":
+            image = ssl4rs.utils.imgproc.decode_jpeg(image, decompression_strategy)
+            if isinstance(image, np.ndarray):
+                image = torchvision.transforms.functional.to_tensor(image)
+            batch["image"] = image
+        else:
+            raise NotImplementedError  # todo: implement me for png/lz4 data
     return batch
-
-
-def _decompress_jpeg_image(
-    encoded_jpg_data,
-    decompression_strategy: str,
-) -> torch.Union[np.ndarray, torch.Tensor]:
-    """Decompresses a the raw bytes array in an JPEG data sample."""
-    if decompression_strategy == "defer":
-        # assume the user will decompress images later (provide the bytes array directly)
-        return encoded_jpg_data.tobytes()
-    elif decompression_strategy == "deeplake":
-        # use deeplake to auto-decompress its internal jpg compression by asking for a numpy array
-        return encoded_jpg_data.numpy()
-    elif decompression_strategy == "opencv":
-        # remember: with OpenCV, the images will be in BGR order!
-        return cv.imdecode(np.fromstring(encoded_jpg_data.tobytes(), np.uint8), cv.IMREAD_COLOR)  # noqa
-    elif decompression_strategy == "libjpeg-turbo":
-        # with turbo-jpeg, by default, we'll activate all the extra-speed stuff here
-        return ssl4rs.utils.imgproc.decode_jpg(
-            image=encoded_jpg_data.tobytes(),
-            to_bgr_format=False,
-            use_fast_upsample=True,
-            use_fast_dct=True,
-        )
-    elif decompression_strategy == "nvjpeg":
-        # note: there is a memory leak in the nvjpeg library for CUDA versions < 11.6
-        # ...make sure to rely on CUDA 11.6 or above before using nvjpeg
-        return torchvision.io.decode_jpeg(
-            input=torch.frombuffer(encoded_jpg_data.tobytes(), dtype=torch.uint8),
-            mode=torchvision.io.ImageReadMode.RGB,
-            device="cuda",
-        )
-    else:
-        raise ValueError(f"bad decompression strategy: {decompression_strategy}")

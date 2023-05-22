@@ -94,7 +94,11 @@ class DeepLakeRepackager:
         """Fetches a data sample from a derived getitem implementation for exportation."""
         exporter._export_sample_data(sample_index, sample_out)  # noqa
 
-    def _finalize_dataset_export(self, dataset: deeplake.Dataset) -> None:
+    def _finalize_dataset_export(
+        self,
+        dataset: deeplake.Dataset,
+        num_workers: int,
+    ) -> None:
         """Finalizes the exportation of the deeplake dataset, adding extra info as needed."""
         # by default, we do nothing here, as the default implementation has nothing to add
         pass
@@ -171,7 +175,9 @@ class DeepLakeRepackager:
                     sample_idxs = tqdm.tqdm(sample_idxs, desc=f"exporting {self.dataset_name}")
                 for sample_idx in sample_idxs:
                     self._export_sample_data(sample_idx, dataset)
-            self._finalize_dataset_export(dataset)
+        # finalize after writing the first batch of data (if needed)
+        with dataset:
+            self._finalize_dataset_export(dataset=dataset, num_workers=num_workers)
         # all done!
         size_approx_mb = dataset.size_approx() // (1024 * 1024)
         logger.debug(f"export complete, approx size = {size_approx_mb} MB")

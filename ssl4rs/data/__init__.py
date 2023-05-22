@@ -1,5 +1,4 @@
 import ssl4rs.data.datamodules
-import ssl4rs.data.metadata
 import ssl4rs.data.parsers
 import ssl4rs.data.repackagers
 import ssl4rs.data.transforms

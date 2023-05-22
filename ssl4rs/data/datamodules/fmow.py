@@ -10,7 +10,6 @@ import pathlib
 import typing
 
 import hydra
-import omegaconf
 import torch.utils.data
 
 import ssl4rs.data.datamodules.utils
@@ -88,6 +87,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
                     "allow_auto_padding": True,
                 },
                 "parsing_strategy": "images",
+                # note: as of 2023-05-22, tiling makes it impossible to decompress w/ other impls
                 "decompression_strategy": "deeplake",
                 "keep_metadata_dict": False,
             },
@@ -96,7 +96,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
                 "batch_transforms": [
                     {  # the random resized crop will not auto-pad small images, do it first
                         "_target_": "ssl4rs.data.transforms.pad.PadIfNeeded",
-                        "target_key": "image/rgb/jpg",
+                        "target_key": "image",
                         "min_height": 512,
                         "min_width": 512,
                     },
@@ -104,8 +104,8 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
                         "_target_": "ssl4rs.data.transforms.geo.crop.GSDAwareRandomResizedCrop",
                         "size": (512, 512),
                         "gsd_ratios": (0.8, 3.0),  # scale from 80% to 300% of original GSD
-                        "target_key": "image/rgb/jpg",
-                        "gsd_key": "image/rgb/gsd",
+                        "target_key": "image",
+                        "gsd_key": "gsd",
                     },
                 ],
             },
@@ -153,7 +153,6 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             assert "all" in self.data_parsers, "global parser unavailable, call `setup()` first!"
             train_parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "train")
             train_data_parser = self.data_parsers["all"].get_train_subset(train_parser_config)
-            # @@@@@ todo: optimize (rechunk) for better speed?
             self.data_parsers["train"] = train_data_parser
         return self._create_dataloader(self.data_parsers["train"], subset_type="train")
 

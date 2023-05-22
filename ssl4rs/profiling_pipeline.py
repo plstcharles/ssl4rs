@@ -29,7 +29,7 @@ def _common_init(
     logger.info(f"Output directory: {output_dir.absolute()}")
     ssl4rs.utils.config.extra_inits(config, output_dir=output_dir)
 
-    logger.info(f"Instantiating datamodule: {config.data.datamodule._target_}")
+    logger.info(f"Instantiating datamodule: {config.data.datamodule._target_}")  # noqa
     datamodule: pl.LightningDataModule = hydra.utils.instantiate(config.data.datamodule)
     assert isinstance(
         datamodule, ssl4rs.data.DataModule

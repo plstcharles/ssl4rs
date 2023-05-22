@@ -21,7 +21,7 @@ def test_get_image_shape_from_file(tmpdir):
         assert found_h == img_h and found_w == img_w
 
 
-def test_decode_jpg_without_rescale(tmpdir):
+def test_decode_turbo_jpeg_without_rescale(tmpdir):
     img_dir = pathlib.Path(tmpdir) / "dummy_images_for_decoder_without_rescale"
     img_dir.mkdir(exist_ok=True)
     np.random.seed(0)
@@ -30,13 +30,13 @@ def test_decode_jpg_without_rescale(tmpdir):
         img = np.random.randint(0, 256, size=(img_h, img_w, 3), dtype=np.uint8)
         img_path = img_dir / f"{img_idx}.jpg"
         PIL.Image.fromarray(img).save(img_path)
-        decoded_img = imgproc.decode_jpg(image=img_path)
+        decoded_img = imgproc.decode_with_turbo_jpeg(image=img_path)
         assert decoded_img.ndim == 3 and decoded_img.shape[-1] == 3
         assert decoded_img.shape == img.shape
 
 
 @pytest.mark.parametrize("downscale_ratio", [2, 4, 8])
-def test_decode_jpg_with_rescale(tmpdir, downscale_ratio):
+def test_decode_turbo_jpeg_with_rescale(tmpdir, downscale_ratio):
     # note: scales 1:2 + 1:4 are SIMD-enabled, 1:8 is not (according to libjpeg-turbo docs)
     img_dir = pathlib.Path(tmpdir) / "dummy_images_for_decoder_with_rescale"
     img_dir.mkdir(exist_ok=True)
@@ -46,7 +46,7 @@ def test_decode_jpg_with_rescale(tmpdir, downscale_ratio):
         img = np.random.randint(0, 256, size=(img_h, img_w, 3), dtype=np.uint8)
         img_path = img_dir / f"{img_idx}.jpg"
         PIL.Image.fromarray(img).save(img_path)
-        decoded_img = imgproc.decode_jpg(
+        decoded_img = imgproc.decode_with_turbo_jpeg(
             image=img_path,
             to_bgr_format=False,
             use_fast_upsample=True,

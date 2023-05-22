@@ -4,8 +4,10 @@ import pathlib
 import typing
 from unittest import mock
 
+import deeplake
 import numpy as np
 import torch
+import torchvision
 
 import ssl4rs.utils.patch_coord
 
@@ -104,7 +106,7 @@ def _read_jpeg_header_only(
     return header_data
 
 
-def decode_jpg(
+def decode_with_turbo_jpeg(
     image: typing.Union[typing.AnyStr, pathlib.Path, bytes],
     to_bgr_format: bool = True,
     use_fast_upsample: bool = False,
@@ -112,7 +114,7 @@ def decode_jpg(
     scaling_factor: typing.Optional[typing.Tuple[int, int]] = None,
     crop_region: typing.Optional[typing.Tuple[int, int, int, int]] = None,
 ):
-    """Decodes a JPEG from its (encoded) bytes data into an image.
+    """Decodes a JPEG from its (encoded) bytes data into an image using turbo jpeg.
 
     Note: when using the scaling factor, the expected image size might be off-by-one compared to
     when using a rounded or floored shape estimate; do not rely on those too much...
@@ -165,6 +167,50 @@ def decode_jpg(
     )
     assert output.ndim == 3 and output.shape[-1] == 3
     return output
+
+
+def decode_jpeg(
+    encoded_jpg_data: typing.Union[deeplake.Tensor, np.ndarray, bytes],
+    decompression_strategy: str,
+) -> torch.Union[np.ndarray, torch.Tensor, bytes]:
+    """Decompresses a the raw bytes array in an JPEG data sample."""
+    if decompression_strategy == "deeplake":
+        if isinstance(encoded_jpg_data, deeplake.Tensor):
+            # use deeplake to auto-decompress its internal jpg compression by asking for a numpy array
+            return encoded_jpg_data.numpy()
+        # assume we've already decoded the data through the deeplake dataloader impl; skip
+        assert isinstance(encoded_jpg_data, np.ndarray) and encoded_jpg_data.ndim == 3
+        return encoded_jpg_data  # it's already decoded...
+    elif decompression_strategy in ["opencv", "libjpeg-turbo", "nvjpeg", "defer"]:
+        if isinstance(encoded_jpg_data, deeplake.Tensor):
+            encoded_jpg_data = encoded_jpg_data.tobytes()
+        elif isinstance(encoded_jpg_data, np.ndarray):
+            assert encoded_jpg_data.ndim == 1 and encoded_jpg_data.dtype == np.uint8
+            encoded_jpg_data.tobytes()
+        assert isinstance(encoded_jpg_data, bytes)
+        if decompression_strategy == "defer":
+            # assume the user will decompress images later (provide the bytes array directly)
+            return encoded_jpg_data
+        elif decompression_strategy == "opencv":
+            # remember: with OpenCV, the output images will be in BGR order!
+            return cv.imdecode(np.fromstring(encoded_jpg_data, np.uint8), cv.IMREAD_COLOR)  # noqa
+        elif decompression_strategy == "libjpeg-turbo":
+            # with turbo-jpeg, by default, we'll activate all the extra-speed stuff here
+            return decode_with_turbo_jpeg(
+                image=encoded_jpg_data,
+                to_bgr_format=False,
+                use_fast_upsample=True,
+                use_fast_dct=True,
+            )
+        elif decompression_strategy == "nvjpeg":
+            # note: there is a memory leak in the nvjpeg library for CUDA versions < 11.6
+            # ...make sure to rely on CUDA 11.6 or above before using nvjpeg
+            return torchvision.io.decode_jpeg(
+                input=torch.frombuffer(encoded_jpg_data, dtype=torch.uint8),
+                mode=torchvision.io.ImageReadMode.RGB,
+                device="cuda",
+            )
+    raise NotImplementedError(f"bad decompression strategy: {decompression_strategy}")
 
 
 def flex_crop(

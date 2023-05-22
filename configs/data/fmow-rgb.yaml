@@ -6,9 +6,5 @@ datamodule: # the fMoW dataset comes with its own custom data module for classif
   _target_: ssl4rs.data.datamodules.fmow.DataModule
   data_dir: ${utils.data_root_dir}/fmow/fmow-rgb/.deeplake
   deeplake_kwargs: null
-  dataloader_configs:
-    _default_: # this group provides shared (but overridable) settings for all data loader types
-      _target_: ssl4rs.data.parsers.fmow.get_dataloader_for_parser
-      batch_size: 1
 
 num_classes: 62
