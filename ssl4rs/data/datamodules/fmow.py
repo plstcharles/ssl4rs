@@ -87,8 +87,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
                     "allow_auto_padding": True,
                 },
                 "parsing_strategy": "images",
-                # note: as of 2023-05-22, tiling makes it impossible to decompress w/ other impls
-                "decompression_strategy": "deeplake",
+                "decompression_strategy": "libjpeg-turbo",
                 "keep_metadata_dict": False,
             },
             "train": {

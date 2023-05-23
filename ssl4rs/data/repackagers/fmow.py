@@ -54,6 +54,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                 htype="image" if self.image_type == "rgb" else "generic",
                 dtype=np.uint8 if self.image_type == "rgb" else np.int16,  # TODO: make sure int16 is OK?
                 sample_compression=self.image_compression_type,
+                tiling_threshold=-1,  # hidden param, normally in bytes, -1 = disables tiling
             ),
             "bbox": dict(htype="bbox", dtype=np.int32, coords=dict(type="pixel", mode="LTWH")),
             "metadata": dict(htype="json", sample_compression=None),
