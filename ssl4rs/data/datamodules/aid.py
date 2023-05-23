@@ -184,5 +184,5 @@ def _local_main(data_root_dir: pathlib.Path) -> None:
 
 if __name__ == "__main__":
     ssl4rs.utils.logging.setup_logging_for_analysis_script()
-    config_ = ssl4rs.utils.config.init_hydra_and_compose_config(config_name="data_profiler.yaml")
+    config_ = ssl4rs.utils.config.init_hydra_and_compose_config(config_name="profiler.yaml")
     _local_main(pathlib.Path(config_.utils.data_root_dir))

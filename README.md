@@ -122,7 +122,9 @@ experiment. These are:
   at `configs/test.yaml` by default.
 - `<repository_root>/data_profiler.py`: used to profile datamodule creation, data loader
   initialization, and data sample loading; will load the configuration file at
-  `configs/data_profiler.yaml` by default.
+  `configs/profiler.yaml` by default.
+- `<repository_root>/model_profiler.py`: used to profile model training and validation epochs;
+  will load the configuration file at `configs/profiler.yaml` by default.
 
 ## Configuration Files
 

@@ -9,7 +9,6 @@ import ssl4rs.data.repackagers.utils
 
 
 class _FakeDatasetRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
-
     @property
     def image_shape(self):
         return self.dataset.shape[1:]
@@ -51,7 +50,6 @@ class _FakeDatasetRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         batch = self.dataset[item]
         batch = {t: batch[t] for t in self.tensor_names}
         return batch
-
 
 
 @pytest.fixture

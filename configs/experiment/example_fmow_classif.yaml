@@ -16,17 +16,20 @@ model: # specified which LightningModule-derived implementation provides the tra
   _target_: ssl4rs.models.classif.base.GenericClassifier
   encoder:
     _target_: torchvision.models.resnet18
-    weights: pretrained
+    weights:
     num_classes: ${data.num_classes}
   head:
   loss_fn: # in this case, we'll instantiate the cross-entropy loss module directly
     _target_: torch.nn.CrossEntropyLoss
+  num_classes: ${data.num_classes}
+  input_key: image
+  label_key: label
 
 data:
   datamodule:
     dataloader_configs:
       _default_: # this group provides shared (but overridable) settings for all data loader types
-        num_workers: 6
+        num_workers: 4
         batch_size: 16 # bump up the batch size from the default
 
 trainer:
@@ -41,6 +44,8 @@ utils:
   project_name: ${utils.framework_name}-examples
 
 profiler: # in case we run the data profiler, these are the modified setting to use
+  default_dataloader_type: train
+  valid_dataloader_type: val
   use_parser: False
   batch_count: 32
   loop_count: 10

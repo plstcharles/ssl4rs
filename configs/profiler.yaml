@@ -13,10 +13,10 @@ defaults:
   - utils: default.yaml # utility configs contain general-use-but-not-so-important settings
   - output: default.yaml # output configs define the root path and name patterns to use for logging
   - data: default.yaml # data configs define the datamodule and dataloaders to instantiate
-  - model: null # we should not actually need a model config for the data profiler
+  - model: default.yaml # model configs define the LightningModule-derived models to instantiate
   - callbacks: null # we should not actually need trainer callbacks for the data profiler
   - logger: null # we should not actually need trainer loggers for the data profiler
-  - trainer: null # we should not actually need a trainer config for the data profiler
+  - trainer: default.yaml # trainer configs define the (lightning-derived) trainer to instantiate
   - experiment: null # experiment configs allow for overrides and version control of all settings
   - optional local: default.yaml # optional overriding config for machine/user specific settings
   - debug: null # debugging configs allow for extra logging and deactivation of optimization stuff
@@ -27,7 +27,8 @@ run_name: ${utils.curr_timestamp} # defines the run name used in various output/
 job_name: ${oc.select:hydra.job.num,0} # defines the job name used in various output/logging paths
 
 profiler:
-  dataloader_type: train # dataloader to be used for profiling (likely one of train/valid/test)
+  default_dataloader_type: train # loader used for data profiling (likely one of train/valid/test)
+  valid_dataloader_type: valid # eval loader used for model profiling (likely valid/test)
   use_parser: False # toggles whether to profile the dataset parser or the dataloader
   batch_count: 10 # batches to fetch before breaking off the loop (-1 or null = full run)
   loop_count: 1 # number of loops to complete over the same dataloader to get average timings

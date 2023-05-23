@@ -1,3 +1,4 @@
+import copy
 import functools
 import logging
 import pathlib
@@ -12,6 +13,7 @@ import torch.utils.data
 import ssl4rs
 
 logger = ssl4rs.utils.get_logger(__name__)
+stopwatch_creator = functools.partial(ssl4rs.utils.Stopwatch, log_level=logging.INFO, logger=logger)
 
 
 def _common_init(
@@ -39,8 +41,9 @@ def _common_init(
 
 
 def _get_dataloader(
-    config: omegaconf.DictConfig,
     datamodule: ssl4rs.data.DataModule,
+    target_dataloader_type: typing.AnyStr,
+    return_parser: bool,
 ) -> typing.Union[torch.utils.data.DataLoader, ssl4rs.data.DataParser]:
     """Returns the dataloader object we'll be profiling.
 
@@ -51,8 +54,6 @@ def _get_dataloader(
     The PyTorch DataLoader and the framework's base data parser classes should have compatible
     interfaces in terms of how to fetch data batches.
     """
-    assert "profiler" in config, "missing mandatory 'profiler' (sub)config!"
-    target_dataloader_type = config.profiler.get("dataloader_type", "train")
     avail_dataloader_types = datamodule.dataloader_types
     assert (
         target_dataloader_type in avail_dataloader_types
@@ -63,7 +64,7 @@ def _get_dataloader(
         dataloader, torch.utils.data.DataLoader
     ), f"current data profiler impl does not support this loader type: {type(dataloader)}"
 
-    if not config.profiler.get("use_parser", False):
+    if not return_parser:
         return dataloader
 
     dataparser = dataloader.dataset
@@ -80,11 +81,7 @@ def data_profiler(config: omegaconf.DictConfig) -> None:
     Args:
         config (DictConfig): Configuration composed by Hydra.
     """
-    stopwatch_creator = functools.partial(
-        ssl4rs.utils.Stopwatch,
-        log_level=logging.INFO,
-        logger=logger,
-    )
+    assert "profiler" in config, "missing mandatory 'profiler' (sub)config!"
     with stopwatch_creator(name="initialization and datamodule creation"):
         (exp_name, run_name, run_type, job_name), datamodule = _common_init(config)
     with stopwatch_creator(name="datamodule.prepare_data()"):
@@ -92,7 +89,11 @@ def data_profiler(config: omegaconf.DictConfig) -> None:
     with stopwatch_creator(name="datamodule.setup()"):
         datamodule.setup()
     with stopwatch_creator(name="dataloader creation"):
-        dataloader = _get_dataloader(config, datamodule)
+        dataloader = _get_dataloader(
+            datamodule=datamodule,
+            target_dataloader_type=config.profiler.get("default_dataloader_type", "train"),
+            return_parser=config.profiler.get("use_parser", False),
+        )
     max_batch_count = config.profiler.get("batch_count", -1)
     assert max_batch_count is None or max_batch_count == -1 or max_batch_count >= 0
     if max_batch_count is None:
@@ -128,4 +129,73 @@ def data_profiler(config: omegaconf.DictConfig) -> None:
     logger.info(f"Done ({exp_name}: {run_name}, '{run_type}', job={job_name})")
 
 
-# todo: add model inference profiler?
+def _get_trainer_override_settings(max_batch_count: int) -> omegaconf.DictConfig:
+    """Returns the set of overriding trainer settings used for model train/valid profiling."""
+    return omegaconf.OmegaConf.create(
+        {
+            "max_epochs": 1,
+            "limit_train_batches": max_batch_count if max_batch_count > 0 else None,
+            "limit_val_batches": max_batch_count if max_batch_count > 0 else None,
+            "num_sanity_val_steps": 0,
+            "barebones": True,
+        }
+    )
+
+
+def model_profiler(config: omegaconf.DictConfig) -> None:
+    """Runs the model (1x training + validation epoch) profiling pipeline.
+
+    Args:
+        config (DictConfig): Configuration composed by Hydra.
+    """
+    assert "profiler" in config, "missing mandatory 'profiler' (sub)config!"
+    with stopwatch_creator(name="initialization and datamodule creation"):
+        (exp_name, run_name, run_type, job_name), datamodule = _common_init(config)
+        datamodule.prepare_data()
+        datamodule.setup()
+        train_dataloader = _get_dataloader(
+            datamodule=datamodule,
+            target_dataloader_type=config.profiler.get("default_dataloader_type", "train"),
+            return_parser=config.profiler.get("use_parser", False),
+        )
+        valid_dataloader = _get_dataloader(
+            datamodule=datamodule,
+            target_dataloader_type=config.profiler.get("valid_dataloader_type", "train"),
+            return_parser=config.profiler.get("use_parser", False),
+        )
+    with stopwatch_creator(name="model and trainer creation"):
+        model = ssl4rs.utils.config.get_model(config)
+    max_batch_count = config.profiler.get("batch_count", -1)
+    assert max_batch_count is None or max_batch_count == -1 or max_batch_count >= 0
+    if max_batch_count is None:
+        max_batch_count = -1
+    trainer_config = copy.deepcopy(config.trainer)
+    trainer_override_config = _get_trainer_override_settings(max_batch_count)
+    for key, val in trainer_override_config.items():
+        if key in trainer_config:
+            omegaconf.OmegaConf.update(cfg=trainer_config, key=key, value=val, merge=False)
+        else:
+            with omegaconf.open_dict(trainer_config):
+                trainer_config[key] = val
+    logger.info("Final trainer settings for model profiling:")
+    for key, val in trainer_config.items():
+        logger.info(f"\t{key}: {val}")
+    if max_batch_count != 0:
+        loop_count = config.profiler.get("loop_count", 1)
+        assert loop_count > 0
+        loop_times = []
+        for loop_idx in range(loop_count):
+            trainer: pl.Trainer = hydra.utils.instantiate(trainer_config)
+            with stopwatch_creator(name=f"loop{loop_idx:03d}") as loop_sw:
+                trainer.fit(
+                    model=model,  # noqa
+                    train_dataloaders=train_dataloader,
+                    val_dataloaders=valid_dataloader,
+                )
+            loop_times.append(loop_sw.total())
+        logger.info(f"epoch time min: {np.min(loop_times)}")
+        logger.info(f"epoch time max: {np.max(loop_times)}")
+        logger.info(f"epoch time avg: {np.mean(loop_times)}")
+        logger.info(f"epoch time std: {np.std(loop_times)}")
+    datamodule.teardown()
+    logger.info(f"Done ({exp_name}: {run_name}, '{run_type}', job={job_name})")

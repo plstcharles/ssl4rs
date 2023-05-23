@@ -130,5 +130,5 @@ def _repackage_aid(dataset_root_path: pathlib.Path):
 
 if __name__ == "__main__":
     ssl4rs.utils.logging.setup_logging_for_analysis_script()
-    config_ = ssl4rs.utils.config.init_hydra_and_compose_config(config_name="data_profiler.yaml")
+    config_ = ssl4rs.utils.config.init_hydra_and_compose_config(config_name="profiler.yaml")
     _repackage_aid(pathlib.Path(config_.utils.data_root_dir) / "aid")
