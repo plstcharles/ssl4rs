@@ -4,6 +4,7 @@ import logging
 import pathlib
 import typing
 
+import cv2 as cv
 import hydra
 import lightning.pytorch as pl
 import numpy as np
@@ -98,6 +99,8 @@ def data_profiler(config: omegaconf.DictConfig) -> None:
     assert max_batch_count is None or max_batch_count == -1 or max_batch_count >= 0
     if max_batch_count is None:
         max_batch_count = -1
+    display_key = config.profiler.get("display_key", None)
+    display_wait_time = config.profiler.get("display_wait_time", 0)  # in milliseconds
     if max_batch_count != 0:
         batch_stopwatch = stopwatch_creator(
             log_message_format="batch{idx:04d} elapsed time: {:0.4f} seconds",
@@ -110,12 +113,14 @@ def data_profiler(config: omegaconf.DictConfig) -> None:
             with stopwatch_creator(name=f"loop{loop_idx:03d}") as loop_sw:
                 batch_stopwatch.start()
                 for batch_idx, batch in enumerate(dataloader):
-                    curr_elapsed_time = batch_stopwatch.stop()
+                    curr_elapsed_time, _ = batch_stopwatch.stop(), loop_sw.stop()
                     logger.debug(f"batch{batch_idx:04d} elapsed time: {curr_elapsed_time:0.4f} seconds")
                     tot_batch_count += ssl4rs.data.get_batch_size(batch)
+                    if display_key:
+                        _display_batched_tensor(batch, display_key, display_wait_time)
                     if max_batch_count != -1 and batch_idx + 1 == max_batch_count:
                         break
-                    batch_stopwatch.start()
+                    batch_stopwatch.start(), loop_sw.start()
             loop_times.append(loop_sw.total())
         logger.info(f"loop time min: {np.min(loop_times)}")
         logger.info(f"loop time max: {np.max(loop_times)}")
@@ -127,6 +132,27 @@ def data_profiler(config: omegaconf.DictConfig) -> None:
     with stopwatch_creator(name="datamodule.teardown()"):
         datamodule.teardown()
     logger.info(f"Done ({exp_name}: {run_name}, '{run_type}', job={job_name})")
+
+
+def _display_batched_tensor(
+    batch: ssl4rs.data.BatchDictType,
+    display_key: typing.AnyStr,
+    display_wait_time: int = 0,  # in msec
+) -> None:
+    """Renders and displays the images given via a batched tensor using opencv."""
+    batch_size = ssl4rs.data.get_batch_size(batch)
+    if batch_size == 0:
+        return
+    assert display_key is not None and display_key in batch, f"missing tensor key: {display_key}"
+    display_tensor = batch[display_key]
+    if len(display_tensor) == batch_size:
+        display_images = [ssl4rs.utils.drawing.get_displayable_image(t) for t in display_tensor]
+    else:
+        assert batch_size == 1, "mismatch between tensor dim0 length & batch size for auto-display"
+        display_images = [ssl4rs.utils.drawing.get_displayable_image(display_tensor)]
+    for img in display_images:
+        cv.imshow(f"{display_key}", img)
+        cv.waitKey(display_wait_time)
 
 
 def _get_trainer_override_settings(max_batch_count: int) -> omegaconf.DictConfig:

@@ -3,6 +3,7 @@ import typing
 import cv2 as cv
 import matplotlib.pyplot as plt
 import numpy as np
+import torch
 
 default_pad_color = (218, 224, 237)  # BGR color of the default padding to use in displays
 default_text_color = (32, 26, 26)  # BGR color of the text to render in the displays
@@ -18,12 +19,27 @@ def fig2array(fig: plt.Figure) -> np.ndarray:
 
 
 def get_displayable_image(
-    array: np.ndarray,
+    array: typing.Union[np.ndarray, torch.Tensor],
     grayscale: bool = False,
     mask: typing.Optional[np.ndarray] = None,
+    auto_permute_tensors: bool = True,
+    expect_3ch_tensors_as_rgb: bool = True,
 ) -> np.ndarray:
-    """Returns a 'displayable' image that has been normalized and padded to three channels."""
-    assert array.ndim in [2, 3], "unexpected input array dim count"
+    """Returns a 'displayable' image that has been normalized and padded to BGR format."""
+    if isinstance(array, torch.Tensor):
+        if array.ndim not in [2, 3]:
+            array = torch.squeeze(array)
+        if array.ndim == 3 and auto_permute_tensors and array.shape[0] in (1, 2, 3, 4):
+            array = torch.permute(array, (1, 2, 0))
+        array = array.numpy()
+        if array.ndim == 3 and expect_3ch_tensors_as_rgb and array.shape[2] == 3:
+            # let's switch to BGR to display via opencv
+            array = array[..., ::-1]
+    else:
+        isinstance(array, np.ndarray), f"unexpected input array type: {type(array)}"
+        if array.ndim not in [2, 3]:
+            array = np.squeeze(array)
+    assert array.ndim in [2, 3], f"unexpected input array dim count: {array.ndim}"
     if array.ndim == 3:  # if image is already 3-dim
         if array.shape[2] == 2:  # if we only have two channels
             array = np.dstack((array, array[:, :, 0]))  # add an extra channel to make it RGB
@@ -37,11 +53,15 @@ def get_displayable_image(
     return image  # this should be a 3-ch BGR image in HxWxC format
 
 
-def get_displayable_heatmap(array: np.ndarray) -> np.ndarray:
-    """Returns a 'displayable' array that has been min-maxed and mapped to BGR triplets."""
+def get_displayable_heatmap(
+    array: typing.Union[np.ndarray, torch.Tensor],
+) -> np.ndarray:
+    """Returns a 'displayable' heatmap that has been min-maxed and mapped to BGR triplets."""
+    if isinstance(array, torch.Tensor):
+        array = array.numpy()
     if array.ndim != 2:
         array = np.squeeze(array)
-    assert array.ndim == 2, "unexpected input array dim count"
+    assert array.ndim == 2, f"unexpected input array dim count: {array.ndim}"
     array = cv.normalize(array, None, 0, 255, cv.NORM_MINMAX, dtype=cv.CV_8U)
     heatmap = cv.applyColorMap(array, cv.COLORMAP_VIRIDIS)
     return heatmap

@@ -89,5 +89,8 @@ class Stopwatch:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """Stops the stopwatch time monitoring process, logging the total elapsed time."""
-        self.stop()
+        try:
+            self.stop()
+        except AssertionError:
+            pass
         self.log()

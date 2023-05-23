@@ -47,5 +47,7 @@ profiler: # in case we run the data profiler, these are the modified setting to 
   default_dataloader_type: train
   valid_dataloader_type: val
   use_parser: False
+  display_key: image
+  display_wait_time: 100
   batch_count: 32
   loop_count: 10
