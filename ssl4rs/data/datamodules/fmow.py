@@ -91,20 +91,16 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
                 "keep_metadata_dict": False,
             },
             "train": {
+                "decompression_strategy": "defer",
                 "batch_id_prefix": "train",
                 "batch_transforms": [
-                    {  # the random resized crop will not auto-pad small images, do it first
-                        "_target_": "ssl4rs.data.transforms.pad.PadIfNeeded",
-                        "target_key": "image",
-                        "min_height": 512,
-                        "min_width": 512,
-                    },
-                    {  # to enable batching, by default, we need to crop the images
-                        "_target_": "ssl4rs.data.transforms.geo.crop.GSDAwareRandomResizedCrop",
-                        "size": (512, 512),
+                    {  # jpeg-decoder + random resized crop (with minimal input padding)
+                        "_target_": "ssl4rs.data.transforms.geo.fmow.JPEGDecoderWithRandomResizedCrop",
+                        "min_crop_size": (512, 512),
+                        "output_size": (512, 512),
                         "gsd_ratios": (0.8, 3.0),  # scale from 80% to 300% of original GSD
-                        "target_key": "image",
-                        "gsd_key": "gsd",
+                        "use_fast_upsample": False,
+                        "use_fast_dct": False,
                     },
                 ],
             },

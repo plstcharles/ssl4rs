@@ -200,7 +200,6 @@ class DeepLakeParserBase(ssl4rs.data.parsers.utils.DeepLakeParser):
                 "the deeplake dataloader should probably not be used to load instances?\n"
                 "\t(potential slow down w/ irregular image shapes, no real use case)"
             )
-        assert self.decompression_strategy != "defer", "should not defer decompression past dataloader?"
         transforms = torchvision.transforms.Compose(
             [
                 functools.partial(
