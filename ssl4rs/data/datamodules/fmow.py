@@ -50,6 +50,8 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         dataparser_configs: typing.Optional[ssl4rs.utils.DictConfig] = None,
         dataloader_configs: typing.Optional[ssl4rs.utils.DictConfig] = None,
         deeplake_kwargs: typing.Optional[typing.Dict[typing.AnyStr, typing.Any]] = None,
+        crop_size: typing.Tuple[int, int] = (512, 512),  # 512x512 pixels = nice for 16x16 patches
+        train_gsd_ratios: typing.Tuple[float, float] = (0.8, 3.0),  # scale from 80% to 300% of GSD
     ):
         """Initializes the fMoW data module.
 
@@ -64,8 +66,16 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             dataloader_configs: configuration dictionary of data loader settings, separated by data
                 subset type, which may contain for example batch sizes and worker counts.
             deeplake_kwargs: extra arguments forwarded to the deeplake dataset parser.
+            crop_size: default output size of the (possibly rescaled) crops loaded by the data
+                loaders created using this module.
+            train_gsd_ratios: relative ratios (applied on top of the original GSD values) to be
+                used when determining the target GSD values of train data loader crops.
         """
         self.save_hyperparameters(logger=False)
+        assert isinstance(crop_size, typing.Sequence) and len(crop_size) == 2
+        self.crop_size = crop_size
+        assert isinstance(train_gsd_ratios, typing.Sequence) and len(train_gsd_ratios) == 2
+        self.train_gsd_ratios = train_gsd_ratios
         super().__init__(dataparser_configs=dataparser_configs, dataloader_configs=dataloader_configs)
         data_dir = pathlib.Path(data_dir)
         assert data_dir.is_dir(), f"invalid fMoW dataset directory: {data_dir}"
@@ -82,7 +92,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             "_default_": {
                 "batch_transforms": {  # to enable batching, by default, we need to crop the images
                     "_target_": "ssl4rs.data.transforms.geo.fmow.InstanceCenterCrop",
-                    "size": (512, 512),
+                    "size": self.crop_size,
                     "output_gsd": None,  # keep intact, do not resize
                     "allow_auto_padding": True,
                 },
@@ -96,9 +106,9 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
                 "batch_transforms": [
                     {  # jpeg-decoder + random resized crop (with minimal input padding)
                         "_target_": "ssl4rs.data.transforms.geo.fmow.JPEGDecoderWithRandomResizedCrop",
-                        "min_crop_size": (512, 512),
-                        "output_size": (512, 512),
-                        "gsd_ratios": (0.8, 3.0),  # scale from 80% to 300% of original GSD
+                        "min_crop_size": self.crop_size,
+                        "output_size": self.crop_size,
+                        "gsd_ratios": self.train_gsd_ratios,
                         "use_fast_upsample": False,
                         "use_fast_dct": False,
                     },
