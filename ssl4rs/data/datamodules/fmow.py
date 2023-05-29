@@ -91,22 +91,20 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         return {
             "_default_": {
                 "batch_transforms": {  # to enable batching, by default, we need to crop the images
-                    "_target_": "ssl4rs.data.transforms.geo.fmow.InstanceCenterCrop",
+                    "_target_": "ssl4rs.data.transforms.geo.fmow.JPEGDecoderWithInstanceCenterCrop",
                     "size": self.crop_size,
-                    "output_gsd": None,  # keep intact, do not resize
-                    "allow_auto_padding": True,
+                    "output_gsd": None,
                 },
                 "parsing_strategy": "images",
-                "decompression_strategy": "libjpeg-turbo",
+                "decompression_strategy": "defer",
                 "keep_metadata_dict": False,
             },
             "train": {
-                "decompression_strategy": "defer",
                 "batch_id_prefix": "train",
                 "batch_transforms": [
                     {  # jpeg-decoder + random resized crop (with minimal input padding)
                         "_target_": "ssl4rs.data.transforms.geo.fmow.JPEGDecoderWithRandomResizedCrop",
-                        "min_crop_size": self.crop_size,
+                        "min_input_size": self.crop_size,
                         "output_size": self.crop_size,
                         "gsd_ratios": self.train_gsd_ratios,
                         "use_fast_upsample": False,

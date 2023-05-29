@@ -10,6 +10,7 @@ import lightning.pytorch as pl
 import numpy as np
 import omegaconf
 import torch.utils.data
+import tqdm.rich
 
 import ssl4rs
 
@@ -111,16 +112,26 @@ def data_profiler(config: omegaconf.DictConfig) -> None:
         tot_batch_count = 0
         for loop_idx in range(loop_count):
             with stopwatch_creator(name=f"loop{loop_idx:03d}") as loop_sw:
+                if max_batch_count == -1:
+                    max_iters = len(dataloader)
+                else:
+                    max_iters = min(len(dataloader), max_batch_count)
+                pbar = tqdm.rich.tqdm(
+                    desc=f"loop{loop_idx:03d}",
+                    total=max_iters,
+                )
                 batch_stopwatch.start()
                 for batch_idx, batch in enumerate(dataloader):
                     curr_elapsed_time, _ = batch_stopwatch.stop(), loop_sw.stop()
                     logger.debug(f"batch{batch_idx:04d} elapsed time: {curr_elapsed_time:0.4f} seconds")
+                    pbar.update(1)
                     tot_batch_count += ssl4rs.data.get_batch_size(batch)
                     if display_key:
                         _display_batched_tensor(batch, display_key, display_wait_time)
                     if max_batch_count != -1 and batch_idx + 1 == max_batch_count:
                         break
                     batch_stopwatch.start(), loop_sw.start()
+                pbar.close()
             loop_times.append(loop_sw.total())
         logger.info(f"loop time min: {np.min(loop_times)}")
         logger.info(f"loop time max: {np.max(loop_times)}")
