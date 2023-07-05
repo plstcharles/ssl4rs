@@ -37,7 +37,7 @@ segmentation-models-pytorch  # model architectures
 setuptools  # package install tool
 tensorboard  # visualization/logging
 torch~=2.0  # deep learning backbone
-torchmetrics~=0.11  # model evaluation
+torchmetrics~=1.0  # model evaluation
 torchvision~=0.15  # model architectures + data utilities
 tqdm  # logging and progress bars
 wandb  # visualization/logging
