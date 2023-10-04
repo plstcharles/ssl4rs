@@ -43,6 +43,7 @@ class RunIf:
         min_python: Optional[str] = None,
         skip_windows: bool = False,
         only_on_mila_cluster: bool = False,
+        has_mlflow_installed: bool = False,
         has_comet_api_key: bool = False,
         rpc: bool = False,
         deepspeed: bool = False,
@@ -57,6 +58,7 @@ class RunIf:
             min_python: minimum python version required to run test
             skip_windows: skip test for Windows platform
             only_on_mila_cluster: only run test on Mila cluster environment
+            has_mlflow_installed: requires MLFlow to be installed to run test
             has_comet_api_key: requires a comet api key env variable to run test
             rpc: requires Remote Procedure Call (RPC)
             deepspeed: if `deepspeed` module is required to run the test
@@ -91,6 +93,14 @@ class RunIf:
         if only_on_mila_cluster:
             conditions.append(not _IS_ON_MILA_CLUSTER)
             reasons.append("can only run on Mila cluster")
+
+        if has_mlflow_installed:
+            try:
+                import mlflow
+                conditions.append(False)
+            except ImportError:
+                conditions.append(True)
+                reasons.append("can only run if MLFlow is installed")
 
         if has_comet_api_key:
             # this one might be in a .dotenv file, so we'll load one if possible

@@ -20,7 +20,7 @@ lightning~=2.0  # pytorch training helper
 # lightning-bolts==0.6.0.post1  # @@@@ todo: bump!
 lz4  # data compression
 matplotlib  # visualization/logging
-mlflow  # visualization/logging
+# mlflow  # visualization/logging  # lots of vulnerabilities as of 2023-10-04
 nbstripout  # code formatting
 numpy  # generic data processing utility
 opencv-python  # generic image processing utility

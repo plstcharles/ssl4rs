@@ -75,6 +75,7 @@ def test_tboard_and_csv(tmpdir):
     assert any([file_name.startswith("events.out") for file_name in tboard_files])
 
 
+@tests.helpers.runif.RunIf(has_mlflow_installed=True)
 @pytest.mark.slow
 def test_mlflow(tmpdir):
     """Test mlflow logger outputs after running 2 epoch on CPU with the fast config."""
