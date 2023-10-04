@@ -12,6 +12,8 @@ import typing
 import unicodedata
 import zipfile
 
+import rootutils
+
 _hook_start_time = time.time()
 
 
@@ -186,17 +188,12 @@ def get_framework_root_dir() -> typing.Optional[pathlib.Path]:
 
     If the package was NOT installed from source, this function will return `None`.
     """
-    pkg_root_dir = get_package_root_dir()
-    assert pkg_root_dir.is_dir(), f"unexpected package root directory: {pkg_root_dir}"
-    expected_fw_root_dir = pkg_root_dir.parent
-    expected_fw_file_paths = [  # note: this might need to be updated if we rename these files!
-        expected_fw_root_dir / "setup.py",
-        expected_fw_root_dir / "test.py",
-        expected_fw_root_dir / "train.py",
-    ]
-    if any([not p.is_file() for p in expected_fw_file_paths]):
-        return None
-    return expected_fw_root_dir
+    framework_root = None
+    try:
+        framework_root = rootutils.find_root(__file__)
+    except FileNotFoundError:
+        pass  # could not locate any find that would indicate framework root (e.g. ".project-root")
+    return framework_root
 
 
 def rsync_folder(

@@ -27,7 +27,7 @@ opencv-python  # generic image processing utility
 pandas  # used to read/write some simple tabular data
 Pillow~=9.3  # basic image i/o + processing
 pre-commit # code formatting and static analysis
-pyrootutils # tooling for python proj
+rootutils # tooling for python proj
 pytest  # testing
 python-dotenv  # loads env variables from .env
 PyTurboJPEG @ git+https://github.com/plstcharles/PyTurboJPEG@master
