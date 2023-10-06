@@ -24,9 +24,11 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     """Implementation derived from the standard LightningDataModule for the AID dataset.
 
     This dataset contains large-scale aerial images that can be used for classification. There are
-    10,000 images (600x600, RGB) in this dataset, and these are given one of 30 class labels. See
-    https://captain-whu.github.io/AID/ for more information and download links. This dataset CANNOT
-    be downloaded on the spot by this data module, meaning we assume it is on disk at runtime.
+    10,000 images (600x600, RGB) in this dataset, and these are given one of 30 class labels.
+
+    See the following URL for more info on this dataset: https://captain-whu.github.io/AID/
+    This dataset CANNOT be downloaded on the spot by this data module, meaning we assume it
+    is on disk at runtime.
 
     Note that this dataset does NOT have a fixed Ground Sampling Distance (GSD); images contained
     herein are mixed across different sources with GSDs between 0.5m and 8m.

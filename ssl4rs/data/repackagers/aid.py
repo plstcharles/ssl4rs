@@ -18,8 +18,9 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
     """Repackages the Aerial Image Dataset (AID) into a deeplake-compatible format.
 
     This dataset contains large-scale aerial images that can be used for classification. There are
-    10,000 images (600x600, RGB) in this dataset, and these are given one of 30 class labels. See
-    https://captain-whu.github.io/AID/ for more information and download links.
+    10,000 images (600x600, RGB) in this dataset, and these are given one of 30 class labels.
+
+    See the following URL for more info on this dataset: https://captain-whu.github.io/AID/
 
     Note that this dataset does NOT have a fixed Ground Sampling Distance (GSD); images contained
     herein are mixed across different sources with GSDs between 0.5m and 8m.

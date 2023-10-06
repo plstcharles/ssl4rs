@@ -67,8 +67,8 @@ class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixi
         """Returns the total size (in terms of data batch count) of the dataset.
 
         This needs to be implemented in each derived class. It might be called fairly often to
-        validate indexing ranges, so try to not have to re-iterate over your entire dataset in
-        order to figure out its size each time this function is called.
+        validate indexing ranges, so try to not have to re-iterate over your entire dataset in order
+        to figure out its size each time this function is called.
         """
         raise NotImplementedError
 
@@ -169,9 +169,9 @@ class DataParser(torch.utils.data.dataset.Dataset, pl_mixins.HyperparametersMixi
     def summary(self, *args, **kwargs) -> None:
         """Prints a summary of the dataset using the default logger.
 
-        This function should be easy-to-call (parameter-free, if possible) and fast-to-return
-        (takes seconds or tens-of-seconds at most) in order to remain friendly to high-level users.
-        What it does specifically is totally up to the derived class.
+        This function should be easy-to-call (parameter-free, if possible) and fast-to-return (takes
+        seconds or tens-of-seconds at most) in order to remain friendly to high-level users. What it
+        does specifically is totally up to the derived class.
 
         All outputs should be sent to the default logger.
         """

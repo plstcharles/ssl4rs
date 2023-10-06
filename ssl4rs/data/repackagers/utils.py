@@ -119,10 +119,10 @@ class DeepLakeRepackager:
         instead verify that it is the same dataset with the same content, and throw an exception
         otherwise.
 
-        Note that with deeplake, the output path can be a local path or a remote (server) path
-        under the form `PROTOCOL://SERVERNAME/DATASETNAME`. Deeplake will take care of exporting
-        the data during the dataset creation. In-memory datasets can also be created using this
-        exporter; simply specify a dummy path with a `mem://` prefix, e.g. `mem://dummy/path`.
+        Note that with deeplake, the output path can be a local path or a remote (server) path under
+        the form `PROTOCOL://SERVERNAME/DATASETNAME`. Deeplake will take care of exporting the data
+        during the dataset creation. In-memory datasets can also be created using this exporter;
+        simply specify a dummy path with a `mem://` prefix, e.g. `mem://dummy/path`.
 
         Once exported, the dataset object that was created (or that was found) will be returned.
         """

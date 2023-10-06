@@ -2,7 +2,6 @@
 
 See the following URL(s) for more info on this dataset:
 http://weegee.vision.ucmerced.edu/datasets/landuse.html
-https://www.tensorflow.org/datasets/catalog/uc_merced
 http://weegee.vision.ucmerced.edu/datasets/UCMerced_LandUse.zip
 """
 

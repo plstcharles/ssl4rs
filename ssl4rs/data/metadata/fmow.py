@@ -70,7 +70,7 @@ class_names = [
     "wind_farm",
     "zoo",
 ]
-"""List of class names used in the fMoW dataset (still using a capital 1st letter for each noun)."""
+"""List of class names used in the fMoW dataset (using a capital 1st letter for each noun)."""
 
 subset_types = ["train", "val", "test", "seq", "all"]
 """List of supported fMoW split subsets that can be repackaged/parsed in this framework."""
@@ -78,8 +78,8 @@ subset_types = ["train", "val", "test", "seq", "all"]
 image_types = ["rgb", "full"]
 """List of supported fMoW image types.
 
-The 'RGB' dataset corresponds to multispectral or panchromatic-based RGB images. The 'full'
-dataset corresponds to the 4-band or 8-band multispectral images.
+The 'RGB' dataset corresponds to multispectral or panchromatic-based RGB images. The 'full' dataset
+corresponds to the 4-band or 8-band multispectral images.
 """
 
 min_image_shape = (162, 245)

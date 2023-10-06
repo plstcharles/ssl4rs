@@ -2,7 +2,6 @@
 
 See the following URL(s) for more info on this dataset:
 http://weegee.vision.ucmerced.edu/datasets/landuse.html
-https://www.tensorflow.org/datasets/catalog/uc_merced
 http://weegee.vision.ucmerced.edu/datasets/UCMerced_LandUse.zip
 """
 
@@ -32,13 +31,13 @@ class_distrib = {
 """Distribution (counts) of images across all UCMerced dataset categories."""
 
 class_names = list(class_distrib.keys())
-"""List of classes used in the UCMerced dataset (still using a capital 1st letter for each noun)."""
+"""List of classes used in the UCMerced dataset (using a capital 1st letter for each noun)."""
 
 image_shape = (256, 256, 3)
 """Shape of the image tensors in the UCMerced dataset (height, width, channels).
 
-Note that there are a handful of images in the dataset that are not 256x256; these will be
-resampled to the correct size by the data parsers defined in this framework.
+Note that there are a handful of images in the dataset that are not 256x256; these will be resampled
+to the correct size by the data parsers defined in this framework.
 """
 
 image_count = sum(class_distrib.values())

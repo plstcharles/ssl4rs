@@ -97,6 +97,7 @@ class RunIf:
         if has_mlflow_installed:
             try:
                 import mlflow
+
                 conditions.append(False)
             except ImportError:
                 conditions.append(True)

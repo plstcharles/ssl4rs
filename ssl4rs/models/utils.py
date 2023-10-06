@@ -648,16 +648,16 @@ class BaseModel(pl.LightningModule):
     ) -> typing.List[typing.Hashable]:
         """Returns the list of data sample ids that should be rendered/displayed/logged each epoch.
 
-        This function will rely on internal batch count/size attributes in order to figure out
-        how many of them should be rendered, and which. If the associated dataloader(s) contain(s)
-        fewer samples than the requested count, this function will return the maximum number of
-        sample IDs that can be rendered.
+        This function will rely on internal batch count/size attributes in order to figure out how
+        many of them should be rendered, and which. If the associated dataloader(s) contain(s) fewer
+        samples than the requested count, this function will return the maximum number of sample IDs
+        that can be rendered.
 
         Due to the naive approach used in this base class to identify/tag samples, it may also be
         possible that we return IDs that can never be seen (e.g. due to varying batch sizes). The
-        rendering function will just have to ignore those IDs on its own. Also, if the derived
-        class does not have a persistent way to get batch IDs without having access to batch data,
-        using shuffling on the data loader may result in the re-shuffling of IDs each run as well.
+        rendering function will just have to ignore those IDs on its own. Also, if the derived class
+        does not have a persistent way to get batch IDs without having access to batch data, using
+        shuffling on the data loader may result in the re-shuffling of IDs each run as well.
         """
         assert loop_type in ["train", "valid", "test"]
         picked_ids = []

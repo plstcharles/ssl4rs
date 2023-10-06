@@ -116,8 +116,8 @@ class DeepLakeParser(DataParser):
     def tensor_info(self) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
         """Returns the dictionary of tensor info objects (deeplake-defined) from the dataset.
 
-        The returned objects can help downstream processing stages figure out what kind of data
-        they will be receiving from this parser.
+        The returned objects can help downstream processing stages figure out what kind of data they
+        will be receiving from this parser.
         """
         return {k: v.info for k, v in self.dataset.tensors.items()}
 

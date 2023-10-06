@@ -1,4 +1,5 @@
 """Contains utilities related to raw data compression (lz4, jpg, png, ...)."""
+import ast
 import copy
 import typing
 
@@ -81,7 +82,7 @@ def decode(
     elif approach in ["jpg", "jpeg", "png"]:
         kwargs = copy.deepcopy(kwargs)
         if isinstance(kwargs["flags"], str):  # required arg by opencv
-            kwargs["flags"] = eval(kwargs["flags"])
+            kwargs["flags"] = ast.literal_eval(kwargs["flags"])
         return cv.imdecode(data, **kwargs)  # type: ignore
     else:
         raise NotImplementedError

@@ -6,8 +6,8 @@ import typing
 class PatchCoord:
     """Holds the N-dimensional coordinates of a patch.
 
-    This utility class is meant to simplify the conversion of top-left/bottom-right coordinates
-    into shape and center attributes.
+    This utility class is meant to simplify the conversion of top-left/bottom-right coordinates into
+    shape and center attributes.
     """
 
     def __init__(
@@ -68,14 +68,12 @@ class PatchCoord:
 
     @property
     def tl(self) -> typing.Tuple[int, ...]:
-        """Returns the coordinates of the 'top-left' (closest-to-the-origin) corner of the
-        patch."""
+        """Returns the coordinates of the 'top-left' (closest-to-the-origin) corner of the patch."""
         return self._top_left
 
     @property
     def top_left(self) -> typing.Tuple[int, ...]:
-        """Returns the coordinates of the 'top-left' (closest-to-the-origin) corner of the
-        patch."""
+        """Returns the coordinates of the 'top-left' (closest-to-the-origin) corner of the patch."""
         return self._top_left
 
     @property

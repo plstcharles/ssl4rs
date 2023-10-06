@@ -212,8 +212,8 @@ def get_installed_packages() -> typing.List[str]:
     """Returns a list of all packages installed in the current environment.
 
     If the required packages cannot be imported, the returned list will be empty. Note that some
-    packages may not be properly detected by this approach, and it is pretty hacky, so use it with
-    a grain of salt (i.e. just for logging is fine).
+    packages may not be properly detected by this approach, and it is pretty hacky, so use it with a
+    grain of salt (i.e. just for logging is fine).
     """
     try:
         import importlib.metadata
@@ -241,7 +241,7 @@ def get_params_hash(*args, **kwargs):
     """
     # by default, will use the repr of all params but remove the 'at 0x00000000' addresses
     clean_str = re.sub(r" at 0x[a-fA-F\d]+", "", str(args) + str(kwargs))
-    return hashlib.sha1(clean_str.encode()).hexdigest()
+    return hashlib.sha1(clean_str.encode(), usedforsecurity=False).hexdigest()
 
 
 def get_framework_dotenv_path(

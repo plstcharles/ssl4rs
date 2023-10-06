@@ -2,7 +2,6 @@
 
 See the following URL(s) for more info on this dataset:
 http://weegee.vision.ucmerced.edu/datasets/landuse.html
-https://www.tensorflow.org/datasets/catalog/uc_merced
 http://weegee.vision.ucmerced.edu/datasets/UCMerced_LandUse.zip
 """
 
@@ -33,8 +32,8 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     zip size is roughly 330MB.
 
     For more info, see the dataset pages here:
-        http://weegee.vision.ucmerced.edu/datasets/landuse.html
-        https://www.tensorflow.org/datasets/catalog/uc_merced
+    http://weegee.vision.ucmerced.edu/datasets/landuse.html
+    https://www.tensorflow.org/datasets/catalog/uc_merced
     """
 
     metadata = ssl4rs.data.metadata.ucmerced

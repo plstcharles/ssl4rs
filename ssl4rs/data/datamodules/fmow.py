@@ -28,8 +28,8 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     This dataset contains large-scale satellite imagery that can be used for object detection and
     classification. Version 1.2.1 of the dataset contains 523,846 images of 119421 unique objects,
     and each object instance has between 1 and 41 images. The images may be multispectral or RGB,
-    and may have different Ground Sampling Distances (GSDs). The shape of these images ranges from
-    a few hundred pixels to over 16,000 pixels in height/width.
+    and may have different Ground Sampling Distances (GSDs). The shape of these images ranges from a
+    few hundred pixels to over 16,000 pixels in height/width.
 
     This dataset CANNOT be downloaded on the spot by this data module, meaning we assume it is on
     disk at runtime. Since the repackaging of the raw data into a deeplake format also takes a
@@ -37,8 +37,8 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
     automatic repackaging.
 
     Under the default implementation, the training images will be loaded while applying a random
-    resized crop augmentation in order to enable batching. Non-training image sets will instead
-    rely on a center crop located on the object of interest.
+    resized crop augmentation in order to enable batching. Non-training image sets will instead rely
+    on a center crop located on the object of interest.
     """
 
     metadata = ssl4rs.data.metadata.fmow

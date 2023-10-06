@@ -22,14 +22,14 @@ logger = ssl4rs.utils.logging.get_logger(__name__)
 class DataModule(pl.LightningDataModule):
     """Wraps the standard LightningDataModule interface to combine it with Hydra.
 
-    Each derived data module will likely correspond to the combination of one dataset and one
-    target task. This interface provides common definitions regarding data parser and loader
-    creation, and helps document what functions should have an override in the derived classes
-    and why. The reason to use it is to simplify the creation of data parsers and loaders with
-    shared (and externally configurable) settings (e.g. data transformations).
+    Each derived data module will likely correspond to the combination of one dataset and one target
+    task. This interface provides common definitions regarding data parser and loader creation, and
+    helps document what functions should have an override in the derived classes and why. The reason
+    to use it is to simplify the creation of data parsers and loaders with shared (and externally
+    configurable) settings (e.g. data transformations).
 
     For more information on generic data modules, see:
-        https://lightning.ai/docs/pytorch/stable/data/datamodule.html
+    https://lightning.ai/docs/pytorch/stable/data/datamodule.html
     """
 
     _default_subset_types = tuple(["train", "valid", "test"])
@@ -163,11 +163,11 @@ class DataModule(pl.LightningDataModule):
         """Override this function to download and prepare data for the dataloaders.
 
         Downloading and saving data with multiple processes (distributed settings) will result in
-        corrupted data. Lightning ensures this method is called only within a single process, so
-        you can safely add your downloading logic within.
+        corrupted data. Lightning ensures this method is called only within a single process, so you
+        can safely add your downloading logic within.
 
         For more information, see:
-            https://lightning.ai/docs/pytorch/stable/data/datamodule.html#prepare-data
+        https://lightning.ai/docs/pytorch/stable/data/datamodule.html#prepare-data
         """
         pass
 

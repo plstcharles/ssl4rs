@@ -54,8 +54,8 @@ def setup_logging_for_analysis_script(level: int = logging.DEBUG) -> logging.Log
 
     THIS SHOULD NEVER BE USED IN GENERIC CODE OR OUTSIDE AN ENTRYPOINT; in other words, the only
     place you should ever see this function get called is close to a `if __name__ == "__main__":`
-    statement in standalone analysis scripts. It should also never be called more than once, and
-    it will reset the handlers attached to the root logger.
+    statement in standalone analysis scripts. It should also never be called more than once, and it
+    will reset the handlers attached to the root logger.
 
     The function returns a logger with the framework name which may be used/ignored as needed.
     """

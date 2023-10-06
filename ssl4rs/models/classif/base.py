@@ -123,10 +123,10 @@ class GenericClassifier(ssl4rs.models.BaseModel):
     ) -> typing.Dict[typing.AnyStr, typing.Any]:
         """Runs a generic version of the forward + evaluation step for the train/valid/test loops.
 
-        In comparison with the regular `forward()` function, this function will compute the loss
-        and return multiple outputs used to update the metrics based on the assumption that the
-        batch dictionary also contains info about the target labels. This means that it should
-        never be used in production, as we would then try to access labels that do not exist.
+        In comparison with the regular `forward()` function, this function will compute the loss and
+        return multiple outputs used to update the metrics based on the assumption that the batch
+        dictionary also contains info about the target labels. This means that it should never be
+        used in production, as we would then try to access labels that do not exist.
         """
         preds = self(batch)  # this will call the 'forward' implementation above and return preds
         assert self.label_key in batch, f"missing mandatory '{self.label_key}' tensor from batch"

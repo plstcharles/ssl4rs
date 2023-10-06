@@ -50,8 +50,8 @@ def _get_dataloader(
     """Returns the dataloader object we'll be profiling.
 
     The object that's actually returned will depend on which dataloader was originally targeted
-    (e.g. the 'train', 'valid', 'test', or 'predict' load), and whether we'll be profiling the
-    full dataloader object or just its dataset parser attribute.
+    (e.g. the 'train', 'valid', 'test', or 'predict' load), and whether we'll be profiling the full
+    dataloader object or just its dataset parser attribute.
 
     The PyTorch DataLoader and the framework's base data parser classes should have compatible
     interfaces in terms of how to fetch data batches.

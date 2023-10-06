@@ -132,6 +132,8 @@ def get_file_hash(
 ) -> str:
     """Computes and returns the hash (md5 checksum) of a file as a string of hex digits.
 
+    Note: this should NOT be used for real 'security' purposes, as it computes a weak hash.
+
     Args:
         file_path: location of the file to hash.
 
@@ -139,7 +141,7 @@ def get_file_hash(
         The hashing result as a string of hexadecimal digits.
     """
     with open(str(file_path), "rb") as f:
-        file_hash = hashlib.md5()
+        file_hash = hashlib.md5(usedforsecurity=False)
         for chunk in read_in_chunks(f):
             file_hash.update(chunk)
     return file_hash.hexdigest()
@@ -236,8 +238,7 @@ class WorkDirectoryContextManager:
         self.new_work_dir = str(new_work_dir)
 
     def __enter__(self):
-        """Changes the working directory to the specified one, saving the previous one for
-        later."""
+        """Changes the working directory to the specified one, saving the previous one for later."""
         self.old_work_dir = os.getcwd()
         os.chdir(self.new_work_dir)
 
