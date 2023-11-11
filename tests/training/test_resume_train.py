@@ -1,8 +1,10 @@
 import os
+import pathlib
 
 import pandas as pd
 import pytest
 
+import ssl4rs.utils.logging
 import tests.helpers.module_runner as module_runner
 
 
@@ -13,6 +15,7 @@ def test_resume_after_completion(tmpdir):
         "python",
         "train.py",
         "experiment=example_mnist_classif_fast",
+        "logger=debug",  # to use the debug logger instead of the default csv logger
         f"utils.output_root_dir='{tmpdir}'",
         "run_name=_pytest_resume_after_completion",
         "++trainer.max_steps=10",
@@ -24,32 +27,29 @@ def test_resume_after_completion(tmpdir):
     output = module_runner.run(command)
     if output.returncode != 0:
         pytest.fail(output.stderr)
-    expected_out_dir = os.path.join(
-        tmpdir,
-        "runs",
-        "mnist_with_micro_mlp",
-        "_pytest_resume_after_completion",
-    )
-    assert os.path.isdir(expected_out_dir)
-    expected_csv_log = os.path.join(expected_out_dir, "csv", "metrics.csv")
-    assert os.path.isfile(expected_csv_log)
-    old_csv_data = pd.read_csv(expected_csv_log)
-    assert "test/accuracy" in old_csv_data.columns and "step" in old_csv_data.columns
-    # just to convince ourselves we won't be reading the SAME, un-updated file, let's delete it
-    os.remove(expected_csv_log)
-    assert not os.path.isfile(expected_csv_log)
+    exp_dir = pathlib.Path(tmpdir) / "runs" / "mnist_with_micro_mlp"
+    expected_out_dir = exp_dir / "_pytest_resume_after_completion"
+    assert expected_out_dir.is_dir()
+    logs_dirs = list(expected_out_dir.glob("debug-logs-*"))
+    assert len(logs_dirs) == 1
+    old_logs_dir = list(expected_out_dir.glob("debug-logs-*"))[0]
+    old_metrics = ssl4rs.utils.logging.DebugLogger.parse_metric_logs(old_logs_dir)
+    assert "test/accuracy" in old_metrics.columns and "step" in old_metrics.columns
     # 2nd run with same args, plus the resume token:
     command.append("resume_from_latest_if_possible=True")
     output = module_runner.run(command)
     if output.returncode != 0:
         pytest.fail(output.stderr)
-    new_csv_data = pd.read_csv(expected_csv_log)
+    logs_dirs = list(expected_out_dir.glob("debug-logs-*"))
+    assert len(logs_dirs) == 2
+    new_logs_dir = next(d for d in logs_dirs if d != old_logs_dir)
+    new_metrics = ssl4rs.utils.logging.DebugLogger.parse_metric_logs(new_logs_dir)
     # should still have the same test metrics, and no new steps recorded beyond the last one
-    new_max_step = new_csv_data["step"].max()
-    old_max_step = old_csv_data["step"].max()
+    new_max_step = new_metrics["step"].max()
+    old_max_step = old_metrics["step"].max()
     assert new_max_step == old_max_step
-    new_final_output = new_csv_data[new_csv_data["step"] == new_max_step]
-    old_final_output = old_csv_data[old_csv_data["step"] == old_max_step]
+    new_final_output = new_metrics[new_metrics["step"] == new_max_step]
+    old_final_output = old_metrics[old_metrics["step"] == old_max_step]
     assert len(new_final_output) == 1 and len(old_final_output) == 1
     assert new_final_output["test/accuracy"].iloc[0] == old_final_output["test/accuracy"].iloc[0]
 
@@ -61,6 +61,7 @@ def test_resume_after_interruption(tmpdir):
         "python",
         "train.py",
         "experiment=example_mnist_classif_fast",
+        "logger=debug",  # to use the debug logger instead of the default csv logger
         f"utils.output_root_dir='{tmpdir}'",
         "run_name=_pytest_resume_after_interruption",
         "++trainer.max_steps=8",
@@ -72,19 +73,16 @@ def test_resume_after_interruption(tmpdir):
     output = module_runner.run(command)
     if output.returncode != 0:
         pytest.fail(output.stderr)
-    expected_out_dir = os.path.join(
-        tmpdir,
-        "runs",
-        "mnist_with_micro_mlp",
-        "_pytest_resume_after_interruption",
-    )
-    assert os.path.isdir(expected_out_dir)
+    exp_dir = pathlib.Path(tmpdir) / "runs" / "mnist_with_micro_mlp"
+    expected_out_dir = exp_dir / "_pytest_resume_after_interruption"
+    assert expected_out_dir.is_dir()
     with open(os.path.join(expected_out_dir, "console.log")) as fd:
         old_console_log = fd.read()
     assert "Will resume from 'latest' checkpoint" not in old_console_log
-    expected_csv_log = os.path.join(expected_out_dir, "csv", "metrics.csv")
-    assert os.path.isfile(expected_csv_log)
-    old_csv_data = pd.read_csv(expected_csv_log)
+    logs_dirs = list(expected_out_dir.glob("debug-logs-*"))
+    assert len(logs_dirs) == 1
+    old_logs_dir = list(expected_out_dir.glob("debug-logs-*"))[0]
+    old_metrics = ssl4rs.utils.logging.DebugLogger.parse_metric_logs(old_logs_dir)
     # 2nd run with same args, plus the resume token and increased step limits:
     command.append("resume_from_latest_if_possible=True")
     command.append("++trainer.max_steps=12")  # should get to 3rd epoch
@@ -96,6 +94,9 @@ def test_resume_after_interruption(tmpdir):
     assert len(old_console_log) < len(new_console_log)
     assert new_console_log.startswith(old_console_log)
     assert "Will resume from 'latest' checkpoint" in new_console_log
-    new_csv_data = pd.read_csv(expected_csv_log)
-    assert old_csv_data["step"].max() == new_csv_data["step"].min()
-    assert new_csv_data["step"].max() == 12
+    logs_dirs = list(expected_out_dir.glob("debug-logs-*"))
+    assert len(logs_dirs) == 2
+    new_logs_dir = next(d for d in logs_dirs if d != old_logs_dir)
+    new_metrics = ssl4rs.utils.logging.DebugLogger.parse_metric_logs(new_logs_dir)
+    assert old_metrics["step"].max() == new_metrics["step"].min()
+    assert new_metrics["step"].max() == 12

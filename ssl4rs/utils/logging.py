@@ -1,14 +1,18 @@
 """Contains utilities related to logging data to terminal or filesystem."""
 import datetime
+import functools
 import logging
 import pathlib
+import pickle
 import sys
+import time
 import typing
 
 import lightning.pytorch as pl
 import lightning.pytorch.loggers as pl_loggers
 import lightning.pytorch.utilities as pl_utils
 import omegaconf
+import pandas as pd
 import rich.syntax
 import rich.tree
 import torch
@@ -272,3 +276,126 @@ def finalize_logs(
             import wandb
 
             wandb.finish()
+
+
+class DebugLogger(pl_loggers.Logger):
+    """Implements a logger class used to test/check what is getting logged and when.
+
+    Everything given to this logger with be dumped to disk in PICKLE format, with a separate pickle
+    for each call. This is probably going to be a huge bottleneck in practice, so it should NEVER be
+    used in real experiments, and only for debugging and testing.
+    """
+
+    def __init__(self, output_root_path: typing.Union[typing.AnyStr, pathlib.Path]) -> None:
+        """Logs some metadata at the initialization of the logger and picks a subdirectory name."""
+        import ssl4rs.utils.config  # doing it here to avoid circular imports
+
+        super().__init__()
+        self._output_root_path = pathlib.Path(output_root_path)
+        self._output_root_path.mkdir(exist_ok=True)
+        tag_dict = ssl4rs.utils.config.get_runtime_tags(
+            with_gpu_info=True,
+            with_distrib_info=True,
+        )
+        self._output_path = self._output_root_path / f"debug-logs-{tag_dict['runtime_hash']}"
+        self._output_path.mkdir(exist_ok=False)
+        self._log_stuff(**tag_dict)
+
+    @property
+    def root_dir(self) -> str:
+        """Return the root directory where pickled logs get saved."""
+        return str(self._output_root_path)
+
+    @property
+    def log_dir(self) -> str:
+        """Return the directory where pickled logs for this particular logger get saved."""
+        return str(self._output_path)
+
+    @property
+    def save_dir(self) -> str:
+        """Return the directory where pickled logs for this particular logger get saved."""
+        return self.log_dir
+
+    @property
+    def experiment(self) -> None:
+        """Returns the experiment object associated with this logger."""
+        return None
+
+    @property
+    def name(self) -> str:
+        """Name of the logger."""
+        return ""  # empty to bypass default ckpt subfolder structure
+
+    @property
+    def version(self) -> str:
+        """Version of the logger."""
+        return ""  # empty to bypass default ckpt subfolder structure
+
+    @pl_utils.rank_zero_only
+    def log_hyperparams(self, params, *args, **kwargs) -> None:
+        """Records experiment hyperparameters."""
+        self._log_stuff(_log_func_name="log_hyperparams", params=params, *args, **kwargs)
+
+    @pl_utils.rank_zero_only
+    def log_metrics(self, metrics, step: typing.Optional[int] = None) -> None:
+        """Records metric values (a dict of names-to-value pairs) at a specific experiment step."""
+        self._log_stuff(_log_func_name="log_metrics", metrics=metrics, step=step)
+
+    @pl_utils.rank_zero_only
+    def log_graph(self, model, input_array: typing.Optional[torch.Tensor] = None) -> None:
+        """Records model graph."""
+        self._log_stuff(_log_func_name="log_graph", model=model, input_array=input_array)
+
+    def __getitem__(self, idx: int) -> "DebugLogger":
+        """Returns self to enable `self.logger[0].log_(...)`-style uses."""
+        return self
+
+    def __getattr__(self, name: str) -> typing.Callable:
+        """Allows the logger to be called with arbitrary logging methods."""
+        if name.startswith("log_"):
+            return functools.partial(self._log_stuff, _log_func_name=name)
+        else:
+            raise AttributeError
+
+    def _log_stuff(self, *args: typing.Any, _log_func_name=None, **kwargs: typing.Any) -> None:
+        """Logs any kind of stuff (passed as args and kwargs) to disk using pickle.
+
+        This will make sure that the log exists by selecting a proper log index suffix if needed.
+        """
+        curr_timestamp = time.strftime("%Y-%m-%d_%H-%M-%S")
+        base_log_idx = 0
+        expected_output_log_path = None
+        while expected_output_log_path is None or expected_output_log_path.is_file():
+            assert base_log_idx < 9999, "how is this even possible"
+            file_name = f"log.{curr_timestamp}.{base_log_idx:04}.pkl"
+            expected_output_log_path = pathlib.Path(self.log_dir) / file_name
+            base_log_idx += 1
+        with open(expected_output_log_path, "wb") as fd:
+            pickle.dump({"func_name": _log_func_name, "args": args, "kwargs": kwargs}, fd)
+
+    @staticmethod
+    def parse_metric_logs(logs_path: typing.Union[typing.AnyStr, pathlib.Path]) -> pd.DataFrame:
+        """Parses and returns the METRICS logs dumped as pickles in a particular directory.
+
+        All logged outputs that were NOT metrics will NOT be reloaded by this function. Here, we
+        assume all metrics are actually numerical values, and the ones that are not available at
+        a specific step will be filled with NaNs. The output is returned as a pandas dataframe,
+        indexed by the timestamps, with both metrics and steps as columns.
+        """
+        logs_path = pathlib.Path(logs_path)
+        assert logs_path.is_dir(), "invalid debug logs root dir"
+        logged_files = list(logs_path.glob("*.pkl"))
+        assert len(logged_files) > 0, "not logs found"
+        logged_metrics_data = []
+        for logged_file in logged_files:
+            with open(logged_file, "rb") as fd:
+                data = pickle.load(fd)
+                if data["func_name"] == "log_metrics":
+                    logged_metrics_data.append({
+                        "timestamp": "_".join(logged_file.name.split(".")[1:3]),
+                        "step": data["kwargs"]["step"],
+                        **data["kwargs"]["metrics"],
+                    })
+        assert len(logged_metrics_data) > 0, "no metrics logged"
+        output = pd.DataFrame(logged_metrics_data).sort_values("timestamp").set_index("timestamp")
+        return output

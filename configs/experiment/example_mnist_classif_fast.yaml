@@ -37,6 +37,7 @@ data:
 trainer:
   precision: 32-true
   max_epochs: 3
+  log_every_n_steps: 1
 
 target_metric: valid/accuracy # name of the metric we will be targeting for hparam optimization
 target_metric_mode: max # optimization mode of the target metric defined above

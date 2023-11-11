@@ -177,6 +177,8 @@ def get_runtime_tags(
     import ssl4rs  # used here to avoid circular dependencies  # noqa
     import ssl4rs.utils.filesystem
 
+    curr_time = time.time()
+    curr_local_time = time.localtime(curr_time)
     tags = {
         "framework_name": "ssl4rs",
         "framework_version": ssl4rs.__version__,
@@ -185,7 +187,9 @@ def get_runtime_tags(
         "curr_work_dir": os.getcwd(),
         "platform_name": get_platform_name(),
         "git_hash": get_git_revision_hash(),
-        "timestamp": time.strftime("%Y-%m-%d_%H-%M-%S"),
+        "time_since_epoch": curr_time,
+        "local_timestamp": time.strftime("%Y-%m-%d_%H-%M-%S", curr_local_time),
+        "runtime_hash": hashlib.sha1(str(curr_time).encode(), usedforsecurity=False).hexdigest(),
         "sys_argv": sys.argv,
     }
     if with_gpu_info:

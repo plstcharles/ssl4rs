@@ -1,0 +1,6 @@
+# do not use this logger for experiments that log a ton of stuff!
+# (it will create individual pickle files on disk for each call to the logger)
+
+csv:
+  _target_: ssl4rs.utils.logging.DebugLogger
+  output_root_path: ${hydra:runtime.output_dir} # location where the pickle files will be written
