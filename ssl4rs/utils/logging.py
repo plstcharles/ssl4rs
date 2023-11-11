@@ -378,8 +378,8 @@ class DebugLogger(pl_loggers.Logger):
         """Parses and returns the METRICS logs dumped as pickles in a particular directory.
 
         All logged outputs that were NOT metrics will NOT be reloaded by this function. Here, we
-        assume all metrics are actually numerical values, and the ones that are not available at
-        a specific step will be filled with NaNs. The output is returned as a pandas dataframe,
+        assume all metrics are actually numerical values, and the ones that are not available at a
+        specific step will be filled with NaNs. The output is returned as a pandas dataframe,
         indexed by the timestamps, with both metrics and steps as columns.
         """
         logs_path = pathlib.Path(logs_path)
@@ -391,11 +391,13 @@ class DebugLogger(pl_loggers.Logger):
             with open(logged_file, "rb") as fd:
                 data = pickle.load(fd)
                 if data["func_name"] == "log_metrics":
-                    logged_metrics_data.append({
-                        "timestamp": "_".join(logged_file.name.split(".")[1:3]),
-                        "step": data["kwargs"]["step"],
-                        **data["kwargs"]["metrics"],
-                    })
+                    logged_metrics_data.append(
+                        {
+                            "timestamp": "_".join(logged_file.name.split(".")[1:3]),
+                            "step": data["kwargs"]["step"],
+                            **data["kwargs"]["metrics"],
+                        }
+                    )
         assert len(logged_metrics_data) > 0, "no metrics logged"
         output = pd.DataFrame(logged_metrics_data).sort_values("timestamp").set_index("timestamp")
         return output

@@ -1,10 +1,10 @@
 import os
 import pathlib
 import pickle
+import time
 
 import numpy as np
 import pytest
-import time
 
 import ssl4rs.utils.logging
 
