@@ -1,7 +1,6 @@
 import os
 import pathlib
 
-import pandas as pd
 import pytest
 
 import ssl4rs.utils.logging
@@ -15,6 +14,7 @@ def test_resume_after_completion(tmpdir):
         "python",
         "train.py",
         "experiment=example_mnist_classif_fast",
+        "callbacks=[]",  # to remove the cpu monitor that logs its measurements, used by default
         "logger=debug",  # to use the debug logger instead of the default csv logger
         f"utils.output_root_dir='{tmpdir}'",
         "run_name=_pytest_resume_after_completion",
