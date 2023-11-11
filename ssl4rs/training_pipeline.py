@@ -87,9 +87,12 @@ def train(config: omegaconf.DictConfig) -> typing.Optional[float]:
                 "make sure the `target_metric` field in the config is correct!"
             )
             if best_ckpt_path:
-                best_model = model.load_from_checkpoint(best_ckpt_path)
+                model_type = type(model)
+                best_model = model_type.load_from_checkpoint(best_ckpt_path)
                 target_metric_val = best_model.compute_metric(target_metric_name)
                 logger.info(f"Best target metric: {target_metric_name}: {target_metric_val}")
+                assert type(best_model) == type(model), "unexpected model type when reloading ckpt"
+                model = best_model
         if "test" in run_type:
             logger.info("Running trainer.test()...")
             trainer.test(model=model, datamodule=datamodule, ckpt_path=best_ckpt_path)
