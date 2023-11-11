@@ -16,7 +16,7 @@ hydra-core~=1.3  # configuration/logging
 imagesize  # generic imgproc utility
 isort  # code formatting
 jupyter  # for data exploration notebooks
-lightning~=2.0  # pytorch training helper
+lightning~=2.1  # pytorch training helper
 lz4  # data compression
 matplotlib  # visualization/logging
 # mlflow  # visualization/logging  # lots of vulnerabilities as of 2023-10-04
@@ -35,8 +35,8 @@ rich  # better text formatting
 segmentation-models-pytorch  # model architectures
 setuptools  # package install tool
 tensorboard  # visualization/logging
-torch~=2.0  # deep learning backbone
+torch~=2.1  # deep learning backbone
 torchmetrics~=1.2  # model evaluation
-torchvision~=0.15  # model architectures + data utilities
+torchvision~=0.16  # model architectures + data utilities
 tqdm  # logging and progress bars
 wandb  # visualization/logging
