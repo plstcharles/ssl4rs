@@ -179,7 +179,7 @@ class DeepLakeParserBase(ssl4rs.data.parsers.utils.DeepLakeParser):
             decompression_strategy=self.decompression_strategy,
             keep_metadata_dict=self.keep_metadata_dict,
         )
-        batch[ssl4rs.data.batch_index_key] = batch_index
+        batch[self.batch_index_key] = batch_index
         return batch
 
     def get_dataloader(

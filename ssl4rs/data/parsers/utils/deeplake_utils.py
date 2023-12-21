@@ -3,13 +3,13 @@ import pathlib
 import typing
 
 import deeplake
-import deeplake.util.pretty_print
 import torch.utils.data
 
-import ssl4rs.utils.logging
 from ssl4rs.data.parsers.utils.base import DataParser
 
-logger = ssl4rs.utils.logging.get_logger(__name__)
+if typing.TYPE_CHECKING:
+    from ssl4rs.data import BatchTransformType
+
 DeepLakeParserDerived = typing.TypeVar("DeepLakeParserDerived")
 
 
@@ -45,9 +45,9 @@ class DeepLakeParser(DataParser):
 
     def __init__(
         self,
-        dataset_path_or_object: typing.Union[typing.AnyStr, pathlib.Path, deeplake.Dataset],
+        dataset_path_or_object: typing.Union[typing.AnyStr, pathlib.Path, "deeplake.Dataset"],
         save_hyperparams: bool = True,  # turn this off in derived classes
-        batch_transforms: "ssl4rs.data.BatchTransformType" = None,
+        batch_transforms: "BatchTransformType" = None,
         add_default_transforms: bool = True,
         batch_id_prefix: typing.Optional[typing.AnyStr] = None,
         batch_index_key: typing.Optional[str] = None,
@@ -109,7 +109,7 @@ class DeepLakeParser(DataParser):
         # should derive and implement your own version of this function to do your own unpacking!
         batch = {tensor_name: data[tensor_name].numpy() for tensor_name in self.tensor_names}
         # as a bonus, we provide the index used to fetch the batch with the default key
-        batch[ssl4rs.data.batch_index_key] = index
+        batch[self.batch_index_key] = index
         return batch
 
     @property
@@ -146,7 +146,12 @@ class DeepLakeParser(DataParser):
         Note: this might take a while (minutes) with huge datasets!
         """
         # note: this code is derived from the original deeplake dataset's "summary" implementation
+        from deeplake.util.pretty_print import summary_dataset
+
+        import ssl4rs.utils.logging
+
         pretty_print = deeplake.util.pretty_print.summary_dataset(self.dataset)
+        logger = ssl4rs.utils.logging.get_logger(__name__)
         logger.info(self.dataset)
         logger.info(self.dataset.info)
         logger.info(pretty_print)

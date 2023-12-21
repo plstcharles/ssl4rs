@@ -3,7 +3,7 @@ datamodule: # this corresponds to the main LightningDataModule we'll be getting 
   _target_: ??? # MANDATORY class to be instantiated (should be derived from a pl.DataModule)
   dataloader_configs: # note: subgroups here correspond to different loader types
     _default_: # this group provides shared (but overridable) settings for all data loader types
-      _target_: ssl4rs.data.parsers.utils.deeplake.get_dataloader
+      _target_: ssl4rs.data.parsers.utils.deeplake_utils.get_dataloader
       batch_size: 1 # sets the default batch size for all data loaders to 1
       shuffle: False # the base default loader will not shuffle its data, but check overrides below!
       buffer_size: 2048 # the size of the buffer used to shuffle data (in MBs)

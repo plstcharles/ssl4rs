@@ -89,8 +89,8 @@ def test_export_and_reopen_dataset(
 def test_get_dataloader(
     deeplake_on_disk_image_dataset,
 ):
-    dataparser = ssl4rs.data.parsers.utils.deeplake.DeepLakeParser(deeplake_on_disk_image_dataset)
-    dataloader = ssl4rs.data.parsers.utils.deeplake.get_dataloader(
+    dataparser = ssl4rs.data.parsers.utils.deeplake_utils.DeepLakeParser(deeplake_on_disk_image_dataset)
+    dataloader = ssl4rs.data.parsers.utils.deeplake_utils.get_dataloader(
         dataparser,
         num_workers=0,
         batch_size=8,

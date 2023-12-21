@@ -170,7 +170,7 @@ def decode_with_turbo_jpeg(
 
 
 def decode_jpeg(
-    encoded_jpg_data: typing.Union[deeplake.Tensor, np.ndarray, bytes],
+    encoded_jpg_data: typing.Union["deeplake.Tensor", np.ndarray, bytes],
     decompression_strategy: str,
 ) -> torch.Union[np.ndarray, torch.Tensor, bytes]:
     """Decompresses a the raw bytes array in an JPEG data sample."""

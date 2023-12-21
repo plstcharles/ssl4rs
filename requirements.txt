@@ -9,6 +9,7 @@ deeplake  # i/o library for activeloop datasets
 einops  # to simplify some tensor ops
 flake8  # code formatting
 flake8-docstrings  # code formatting
+geopandas  # to parse/transform georeferenced geometries
 gitpython  # for git i/o and hash tagging
 h5py  # i/o library for HDF5 datasets
 hydra-colorlog~=1.2  # configuration/logging
@@ -31,9 +32,11 @@ pytest  # testing
 python-dotenv  # loads env variables from .env
 PyTurboJPEG @ git+https://github.com/plstcharles/PyTurboJPEG@master
 pyyaml  # configuration/logging
+rasterio  # for geotiff (and other geo-image) i/o ops
 rich  # better text formatting
 segmentation-models-pytorch  # model architectures
 setuptools  # package install tool
+shapely  # to represent/store/manipulate geometries
 tensorboard  # visualization/logging
 torch~=2.1  # deep learning backbone
 torchmetrics~=1.2  # model evaluation

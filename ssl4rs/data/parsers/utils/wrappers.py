@@ -1,9 +1,9 @@
 import typing
 
-import ssl4rs.utils.logging
 from ssl4rs.data.parsers.utils.base import DataParser
 
-logger = ssl4rs.utils.logging.get_logger(__name__)
+if typing.TYPE_CHECKING:
+    from ssl4rs.data import BatchTransformType
 
 
 class ParserWrapper(DataParser):
@@ -35,7 +35,7 @@ class ParserWrapper(DataParser):
         self,
         dataset: typing.Any,
         dataset_name: typing.AnyStr = "AUTO",  # if 'AUTO', will use wrapped object class name
-        batch_transforms: "ssl4rs.data.BatchTransformType" = None,
+        batch_transforms: "BatchTransformType" = None,
         add_default_transforms: bool = True,
         batch_id_prefix: typing.Optional[typing.AnyStr] = None,
         batch_index_key: typing.Optional[str] = None,
@@ -44,6 +44,8 @@ class ParserWrapper(DataParser):
         self.save_hyperparameters(ignore="dataset", logger=False)
         self._dataset_size: typing.Optional[int] = None
         if dataset_name == "AUTO":
+            import ssl4rs.utils.filesystem
+
             dataset_name = ssl4rs.utils.filesystem.slugify(type(dataset).__name__)
         self._dataset_name = str(dataset_name)
         self._tensor_names: typing.List[str] = []  # will be filled when needed/available
@@ -91,9 +93,9 @@ class ParserWrapper(DataParser):
         # if this line fails, it means we do not have a PyTorch-Dataset-compatible object
         batch = self.dataset[index]
         # if the raw data is a dictionary, and if the default batch index key is not in there...
-        if isinstance(batch, typing.Dict) and ssl4rs.data.batch_index_key not in batch:
+        if isinstance(batch, typing.Dict) and self.batch_index_key not in batch:
             # ... add the index used to fetch the batch with the default key
-            batch[ssl4rs.data.batch_index_key] = index
+            batch[self.batch_index_key] = index
         return batch
 
     @property
@@ -130,5 +132,8 @@ class ParserWrapper(DataParser):
 
         All outputs should be sent to the default logger.
         """
+        import ssl4rs.utils.logging
+
+        logger = ssl4rs.utils.logging.get_logger(__name__)
         logger.info(self)
         logger.info(f"dataset_name={self.dataset_name}, length={len(self)}")
