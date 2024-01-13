@@ -41,8 +41,6 @@ def validate_or_convert_transform(
 ) -> BatchTransformType:
     """Validates or converts the given transform object to a proper (torchvision-style) object.
 
-    If the `add_default_transforms` argument is True, some
-
     Args:
         transform: a callable object, DictConfig of a callable object (or a list of those), or a
             list of such objects that constitute the transformation pipeline to be validated.

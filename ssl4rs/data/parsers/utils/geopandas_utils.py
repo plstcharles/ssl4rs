@@ -5,6 +5,7 @@ import typing
 
 import geopandas as gpd
 import numpy as np
+import pyproj
 import shapely
 
 from ssl4rs.data.parsers.utils.base import DataParser
@@ -21,7 +22,12 @@ class GeoPandasParser(DataParser):
     interface.
 
     Args:
-        file_path: path to the geometry data file to be loaded into memory using geopandas.
+        dataset_path_or_object: path to the geometry data file to be loaded into memory using
+            geopandas, or already-loaded geopandas geodataframe. If an already-opened dataframe
+            is provided, the dataset name must be specified (see the next argument).
+        dataset_name: name of the dataset that will be wrapped by this object. If not specified and
+            if a geopandas geodataframe will be opened by path, we will use its file name.
+        new_crs: new coordinate reference system (CRS) to project the geometries into, if needed.
         convert_tensors_to_base_type: toggles whether tensors should be converted into base data
             types in order to e.g. be batched by a pytorch data loader.
         save_hyperparams: toggles whether hyperparameters should be saved in this class. This
@@ -39,13 +45,15 @@ class GeoPandasParser(DataParser):
         batch_index_key: an attribute name (key) under which we should be able to find the "index"
             of the batch dictionaries. Will be ignored if a batch identifier is already present in
             the loaded batches.
-        extra_deeplake_kwargs: extra parameters sent to the deeplake dataset constructor.
-            Should not be used if an already-opened dataset is provided.
+        extra_geopandas_kwargs: extra parameters sent to the geopandas geodataframe constructor.
+            Should not be used if an already-opened dataframe is provided.
     """
 
     def __init__(
         self,
-        file_path: typing.Union[typing.AnyStr, pathlib.Path],
+        dataset_path_or_object: typing.Union[typing.AnyStr, pathlib.Path, gpd.GeoDataFrame],
+        dataset_name: typing.Optional[str] = None,  # can be left unspecified if a path is given
+        new_crs: typing.Optional[typing.AnyStr] = None,
         convert_tensors_to_base_type: bool = False,
         save_hyperparams: bool = True,  # turn this off in derived classes
         batch_transforms: "BatchTransformType" = None,
@@ -65,18 +73,26 @@ class GeoPandasParser(DataParser):
         """
         if save_hyperparams:
             self.save_hyperparameters(
-                ignore=["extra_geopandas_kwargs"],
+                ignore=["dataset_path_or_object", "extra_geopandas_kwargs"],
                 logger=False,
             )
-        file_path = pathlib.Path(file_path)
-        assert file_path.exists(), f"bad file path: {file_path}"
-        self.dataset_file_path = file_path
-        self.dataset = gpd.read_file(
-            filename=file_path,
-            **extra_geopandas_kwargs,
-        )
+        if isinstance(dataset_path_or_object, gpd.GeoDataFrame):
+            self._dataset_file_path = None
+            assert dataset_name is not None, "must specify a dataset name when providing an obj"
+            self._dataset_name = dataset_name
+        else:
+            file_path = pathlib.Path(dataset_path_or_object)
+            assert file_path.exists(), f"bad file path: {file_path}"
+            self._dataset_file_path = file_path
+            self._dataset_name = str(self._dataset_file_path.name)
+            self.dataset = gpd.read_file(
+                filename=file_path,
+                **extra_geopandas_kwargs,
+            )
         assert "geometry" in self.dataset, "missing expected geometry column?"
         assert isinstance(self.dataset.dtypes["geometry"], gpd.array.GeometryDtype)
+        if new_crs is not None:
+            self.dataset = self.dataset.to_crs(new_crs)
         self.convert_tensors_to_base_type = convert_tensors_to_base_type
         super().__init__(
             batch_transforms=batch_transforms,
@@ -144,8 +160,25 @@ class GeoPandasParser(DataParser):
     @property
     def dataset_name(self) -> typing.AnyStr:
         """Returns the dataset name used to identify this particular dataset."""
-        # since all we have is the dataset file name, return that
-        return str(self.dataset_file_path.name)
+        return self._dataset_name
+
+    @property
+    def crs(self) -> pyproj.crs.CRS:
+        """Returns the coord reference system (CRS) of the wrapped dataset."""
+        return self.dataset.crs
+
+    @property
+    def total_bounds(self) -> typing.Tuple[float, float, float, float]:
+        """Returns the tuple of the min/max coords of the geometries in the wrapped dataset.
+
+        The exact format is the tuple is ``minx``, ``miny``, ``maxx``, ``maxy``.
+        """
+        return self.dataset.total_bounds
+
+    @property
+    def spatial_index(self):
+        """Returns the spatial index of the dataset built by geopandas for bbox-based searches."""
+        return self.dataset.sindex
 
     def summary(self, *args, **kwargs) -> None:
         """Prints a summary of the geometry dataset using the default logger."""
