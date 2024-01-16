@@ -53,7 +53,7 @@ def get_logger(*args, **kwargs) -> logging.Logger:
 logger = get_logger(__name__)
 
 
-def setup_logging_for_analysis_script(level: int = logging.DEBUG) -> logging.Logger:
+def setup_logging_for_analysis_script(level: int = logging.INFO) -> logging.Logger:
     """Sets up logging with some console-only verbose settings for analysis scripts.
 
     THIS SHOULD NEVER BE USED IN GENERIC CODE OR OUTSIDE AN ENTRYPOINT; in other words, the only

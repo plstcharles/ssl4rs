@@ -152,9 +152,12 @@ class DeepLakeParser(DataParser):
 
         pretty_print = deeplake.util.pretty_print.summary_dataset(self.dataset)
         logger = ssl4rs.utils.logging.get_logger(__name__)
-        logger.info(self.dataset)
-        logger.info(self.dataset.info)
-        logger.info(pretty_print)
+        logger.info(
+            "PRINTING FULL DATASET SUMMARY:"
+            f"\ndataset object: {self.dataset}"
+            f"\ndataset metadata: {self.dataset.info}"
+            f"\ndataset content:\n{pretty_print}"
+        )
 
     def visualize(self, *args, **kwargs):
         """Forwards the call to show the dataset content (notebook-only)"""
