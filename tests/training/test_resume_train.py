@@ -98,5 +98,5 @@ def test_resume_after_interruption(tmpdir):
     assert len(logs_dirs) == 2
     new_logs_dir = next(d for d in logs_dirs if d != old_logs_dir)
     new_metrics = ssl4rs.utils.logging.DebugLogger.parse_metric_logs(new_logs_dir)
-    assert old_metrics["step"].max() == new_metrics["step"].min()
-    assert new_metrics["step"].max() == 12
+    assert old_metrics["epoch"].max() == 2
+    assert new_metrics["epoch"].max() == 3
