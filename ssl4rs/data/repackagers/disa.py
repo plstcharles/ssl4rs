@@ -1,5 +1,8 @@
-"""Implements a deeplake data repackager for the DISA dataset."""
-
+"""Implements a deeplake data repackager for the Mila-AI4H-DISA-India dataset."""
+import copy
+import dataclasses
+import functools
+import itertools
 import json
 import pathlib
 import typing
@@ -9,45 +12,177 @@ import rasterio
 import rasterio.features
 import rasterio.warp
 import shapely
+import shapely.ops
 import tqdm
 
 import ssl4rs.data.metadata.disa
 import ssl4rs.data.repackagers.utils
+import ssl4rs.data.parsers.utils.geopandas_utils as gpd_utils
 import ssl4rs.utils.logging
 
 logger = ssl4rs.utils.logging.get_logger(__name__)
 
 
-class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
-    """Repackages the DISA dataset into a deeplake-compatible format.
+@dataclasses.dataclass
+class PolygonData:
+    """Holds data related to a single polygon parsed from Sherrie Wang's dataset."""
 
-    The tensors that will be created are the following (see `tensor_info` for more details/types):
-        sample_id: unique identifier used to tag each data sample (field+image set).
-        image_preview: image used to give a quick preview of the input data (for demo/debug).
-        image_preview_roi: binary mask of valid pixels in the above preview image.
-        image_bbox: bounding box of the valid image region.
-        field_mask: binary mask encoding whether each pixel is labeled as a field.
-        field_geoms: original field geometries (polygons).
-        image_data: stack of N 4-band images (N, 4, H, W) taken at different times.
-        image_roi: stack of N binary masks (N, H, W) of valid pixels in the above stack.
-        image_metadata: information about each of the N images in the above stack.
+    shp_idx: int
+    """Index of the corresponding polygon in the original annotations shapefile."""
+
+    location_id: str
+    """Id of this polygon's parent location, derived from the idx in the original shapefile."""
+
+    geometry: shapely.geometry.Polygon
+    """Polygon in its original latlon coordinates format."""
+
+    _reproj_geometry: shapely.geometry.Polygon
+    """Polygon in a reprojected metric coordinates format (for internal use only)."""
+
+
+@dataclasses.dataclass
+class LocationData:
+    """Holds identifiers and data related to a single location in Sherrie Wang's dataset."""
+
+    identifier: str
+    """Identifier for this location, derived from the index in the original shapefile."""
+
+    polygons: typing.List[PolygonData]
+    """Annotated polygons at this location."""
+
+    centroid: shapely.geometry.point.Point
+    """Centroid coordinates computed based on all polygons at this location."""
+
+    max_polygon_distance: float
+    """Maximum distance between all polygons at this location."""
+
+    max_polygon_radius: float
+    """Maximum bounding radius of all polygons at this location."""
+
+    scatter_ratio: float
+    """Ratio of max polygon distance to max polygon diameter for this location.
+
+    May be used to filter this location so that it is NOT exported for later use.
+    """
+
+
+@dataclasses.dataclass
+class OrderInfo:
+    """Holds information about a fulfilled order and its resulting raster data."""
+
+    identifier: str
+    """Identifier for the order that was fulfilled, resulting in this raster data."""
+
+    full_id: str
+    """The 'full' id is the prefix data dirs + order id + product type + planet item id."""
+
+    planet_item_id: str
+    """The prefix used to identify the planet product items in this order.'"""
+
+    order_metadata: dict
+    """The metadata tied to this order (product acquisition parameters and attributes)."""
+
+    raster_metadata: str
+    """The XML (unparsed, str) metadata tied to the raster in this order."""
+
+    raster_centroid: shapely.geometry.point.Point
+    """The center x,y coords of the raster in this order, projected to the target CRS."""
+
+    raster_bbox: shapely.geometry.base.BaseGeometry
+    """The bounding box of the raster in this order, projected to the target CRS."""
+
+    root_dir: pathlib.Path
+    """The path to the directory where all order data can be found."""
+
+    raster_udm2_path: pathlib.Path
+    """The path to the UDM2 mask geotiff file provided in this order."""
+
+    raster_data_path: pathlib.Path
+    """The path to the raster data geotiff file provided in this order."""
+
+
+@dataclasses.dataclass
+class _OutputSampleData:
+    location: LocationData
+    orders: typing.List[OrderInfo]
+
+
+class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
+    """Repackages the Mila-AI4H-DISA-India dataset into a deeplake-compatible format.
+
+    This version of the repackager is meant to repackage the original (RAW) dataset, not the
+    sample-ready version. This means it will parse the field shapes directly from the original
+    shapefile provided by Sherrie Wang (https://zenodo.org/records/7315090) and associate them
+    with the PSScene images ordered from Planet.
+
+    Note that part of the locations may be skipped by this repackager based on whether a scatter
+    ratio threshold is provided to the constructor. Also, some of the orders can be ignored if
+    there are already many orders per location. See the constructor for more information.
+
+    For more information on the tensors contained in the repackaged dataset, see the `tensor_info`
+    function below.
     """
 
     metadata = ssl4rs.data.metadata.disa
 
     @property  # we need to provide this for the base class!
     def tensor_info(self) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
-        """Returns the dictionary of tensor info (declaration) arguments used during creation."""
+        """Returns the dictionary of tensor info (declaration) arguments used during creation.
+
+        These dicts correspond to tensors that will be saved in the deeplake dataset:
+            location_id: unique identifier (string) used to tag each target location, derived from
+                Sherrie Wang's original shapefile sample index.
+            location_preview_image: RGB image used to give a quick preview of each location, derived
+                from the raster of the first order found for each location. Each image is stored as
+                a (height, width, channels) array, where channels are in RGB order.
+            location_preview_roi: binary mask of valid pixels in the above preview image. Each mask
+                is stored as a (height, width) array of boolean values.
+            field_geoms: Sherrie Wang's field geometries (polygons) based on October 2020 SPOT
+                imagery. Each sample is stored as (#polygons, #points, #dimensions), where all
+                points are 2D (so #dimensions=2).
+            field_mask: binary mask encoding whether each pixel in all the registered images lies
+                in one of the above field polygons. The dimensions of this mask should be the same
+                as those of the image tensors for a given sample, i.e. (height, width).
+            field_centroid: coordinates of the centroid of all field polygons computed via shapely
+                and weighted according to each field's area, in the target CRS. This is given as
+                (longitude, latitude), or (x, y)-coordinates.
+            field_scatter: the 'scatter ratio' value defining how far away field polygons are from
+                each other with respect to their maximum diameter. Lower is a tighter group, larger
+                is more spread out. May have been used to filter out some very-spread-out locations.
+            image_count: total number of images available based on orders matched for each location.
+            image_transform: the transform used to map each pixel in the image data to a geospatial
+                location (derived from rasterio's Affine transform).
+            image_order_ids: list of unique order identifiers (strings) matched for each location
+                which resulted in the raster data available for each sample.
+            image_metadata: list of jsons (dicts) that contain the metadata associated with each
+                order and its raster/mask (note: includes acquisition timestamps).
+            image_data: stack of multi-band raster data for this location. Given as an array of
+                dimensions (#orders, #bands, height, width) with uint16 values, where all rasters
+                have already been registered to the same extent+CRS.
+            image_roi: stack of multi-band binary masks of valid pixels in the above image stack,
+                with dimensions (#orders, height, width). Similar to the udm2 array below, but
+                where all bands have been aggregated into a single band (or channel) indicating
+                whether any of the original image bands is usable or not, for any reason.
+            image_udm2: stack of usable data masks (UDM2) associated with each image in the above
+                image stack, with dimensions (#orders, 8, height, width). Note that this data is
+                reprojected (with nearest resampling) from its original CRS. The UDM2 format is
+                described here: https://developers.planet.com/docs/data/udm-2/
+        """
         return dict(
-            sample_id=dict(htype="text", dtype=str),
-            image_preview=dict(htype="image.rgb", dtype=np.uint8, sample_compression="jpg"),
-            image_preview_roi=dict(htype="binary_mask", dtype=bool, sample_compression="lz4"),
-            image_bbox=dict(htype="point", dtype=np.float64, sample_compression=None),
-            field_mask=dict(htype="binary_mask", dtype=bool, sample_compression="lz4"),
+            location_id=dict(htype="text", sample_compression=None),
+            location_preview_image=dict(htype="image.rgb", dtype=np.uint8, sample_compression="jpg"),
+            location_preview_roi=dict(htype="binary_mask", dtype=bool, sample_compression="lz4"),
             field_geoms=dict(htype="polygon", dtype=np.float64, sample_compression=None),
+            field_mask=dict(htype="binary_mask", dtype=bool, sample_compression="lz4"),
+            field_centroid=dict(htype="generic", dtype=np.float64, sample_compression=None),
+            field_scatter=dict(htype="generic", dtype=np.float64, sample_compression=None),
+            image_count=dict(htype="generic", dtype=int, sample_compression=None),
+            image_transform=dict(htype="generic", dtype=np.float64, sample_compression=None),
+            image_order_ids=dict(htype="sequence[text]", sample_compression=None),
+            image_metadata=dict(htype="sequence[json]", sample_compression=None),
             image_data=dict(htype="generic", dtype=np.uint16, sample_compression=None),
             image_roi=dict(htype="binary_mask", dtype=bool, sample_compression="lz4"),
-            image_metadata=dict(htype="json", sample_compression=None),
+            image_udm2=dict(htype="generic", dtype=np.uint8, sample_compression="lz4"),
         )
 
     @property  # we need to provide this for the base class!
@@ -55,196 +190,378 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         """Returns metadata information that will be exported in the deeplake object."""
         return dict(
             name=self.dataset_name,
-            band_count=self.metadata.band_count,
             dtype=self.metadata.raster_dtype.str,
             nodata_val=self.metadata.nodata_val,
+            band_count=self.raster_band_count,
             crs=self.metadata.crs,
-            image_count_per_sample=self.image_count_per_sample,
+            max_scatter_threshold=self.max_scatter_threshold,
+            max_order_count=self.max_order_count,
         )
 
     @property  # we need to provide this for the base class!
     def dataset_name(self) -> str:
         """Returns the dataset name used to identify this particular dataset."""
-        return "DISA"
+        return "ai4h-disa"
 
     def __len__(self) -> int:
-        """Returns the total number of images defined in this dataset."""
-        return self.sample_count
+        """Returns the total number of valid location covered in this dataset."""
+        return len(self.output_samples)
 
     def __init__(
         self,
         dataset_root_path: typing.Union[typing.AnyStr, pathlib.Path],
+        max_scatter_threshold: typing.Optional[float] = 10.0,
+        max_order_count: typing.Optional[int] = 12,
     ):
         """Parses the dataset structure and makes sure all the data is present.
 
         Args:
             dataset_root_path: path to the directory containing all the DISA data.
+            max_scatter_threshold: the maximum scatter ratio value that can be allowed for
+                locations in the dataset, beyond which the location is skipped. The 'scatter
+                ratio' defines how far away polygons are from each other for a single location.
+            max_order_count: the maximum number of orders to export per location in the dataset,
+                beyond which some orders will be ignored. If `None`, all orders are kept.
+
         """
         super().__init__()
+        assert max_scatter_threshold is None or max_scatter_threshold > 0, "invalid threshold"
+        self.max_scatter_threshold = max_scatter_threshold
+        assert max_order_count is None or max_order_count > 0, "invalid count"
+        self.max_order_count = max_order_count
         self.data_root_path = pathlib.Path(dataset_root_path)
         assert self.data_root_path.exists(), f"invalid dataset path: {self.data_root_path}"
-        annotations_file_path = self.data_root_path / "annotations.json"
-        assert annotations_file_path.is_file(), f"invalid annotations file: {annotations_file_path}"
-        with open(annotations_file_path) as annot_fd:
-            annotations = json.load(annot_fd)
-        annotations = self._deduplicate_annotations(annotations)
-        annotations = self._validate_annotations(annotations)
-        self.sample_count = len(annotations)
-        self.annotations = annotations
-        assert len(self.annotations) > 0, "no data?"
-        self.image_count_per_sample = len(self.annotations[0]["image_paths"])
-        # once we get here, we're ready to repackage the dataset!
-
-    @staticmethod
-    def _deduplicate_annotations(
-        annotations: typing.List[typing.Dict],
-    ) -> typing.List[typing.Dict]:
-        """Returns the list of sample-wise annotations without duplicates."""
-        # assumes samples with the same image id are always duplicates (simplest way to avoid leaks)
-        output_annotations_map = {}  # image-id to annotation
-        for annot in annotations:
-            assert "image_id" in annot, "missing mandatory 'image_id' field in annotation dict"
-            if annot["image_id"] not in output_annotations_map:
-                output_annotations_map[annot["image_id"]] = annot
+        shapefile_path = self.data_root_path / "boundary_polygons" / "india_10k_fields.shp"
+        shapefile_hash = ssl4rs.utils.filesystem.get_file_hash(shapefile_path)
+        assert shapefile_hash == self.metadata.shapefile_md5sum, f"md5sum mismatch: {shapefile_path}"
+        geom_parser = gpd_utils.GeoPandasParser(shapefile_path, new_crs=self.metadata.crs)
+        assert not geom_parser.has_duplicates()
+        target_crs = rasterio.crs.CRS.from_string(self.metadata.crs)  # noqa
+        target_crs_meters = rasterio.crs.CRS.from_string(self.metadata._crs_with_meter_units)  # noqa
+        assert geom_parser.crs == target_crs
+        assert len(geom_parser) == self.metadata.shapefile_polygon_count
+        location_ids = [self._convert_location_id(s) for s in geom_parser.dataset["sample"].unique().tolist()]
+        assert len(location_ids) == self.metadata.shapefile_location_count
+        polygon_data_array_per_location = {lid: [] for lid in location_ids}
+        gdf_converted = geom_parser.dataset.to_crs(target_crs_meters)
+        for polygon_idx in range(len(geom_parser)):
+            polygon_data = geom_parser[polygon_idx]
+            location_id = self._convert_location_id(polygon_data["sample"])
+            assert len(polygon_data["geometry"].exterior.coords) > 1
+            polygon_data_array_per_location[location_id].append(
+                PolygonData(
+                    shp_idx=polygon_idx,
+                    location_id=location_id,
+                    geometry=polygon_data["geometry"],  # in latlon coords in the target CRS
+                    _reproj_geometry=gdf_converted["geometry"][polygon_idx],  # in meter coords
+                )
+            )
+        polygon_counts_per_location = [len(p) for p in polygon_data_array_per_location.values()]
+        assert np.array_equal(np.unique(polygon_counts_per_location), [5, 6])
+        self.location_info, skipped_locations = {}, []
+        for location_id, polygon_data_array in polygon_data_array_per_location.items():
+            multipoly = shapely.geometry.MultiPolygon([p.geometry for p in polygon_data_array])
+            max_bounding_radius = max([
+                shapely.minimum_bounding_radius(p._reproj_geometry)
+                for p in polygon_data_array
+            ])
+            polygon_data_combos = list(itertools.combinations(polygon_data_array, 2))
+            max_distance_meters = max([
+                p1._reproj_geometry.distance(p2._reproj_geometry)
+                for p1, p2 in polygon_data_combos
+            ])
+            scatter_ratio = max_distance_meters / (max_bounding_radius * 2)
+            if self.max_scatter_threshold is not None and scatter_ratio >= self.max_scatter_threshold:
+                skipped_locations.append(location_id)
             else:
-                assert output_annotations_map[annot["image_id"]] == annot
-        return list(output_annotations_map.values())
+                self.location_info[location_id] = LocationData(
+                    identifier=location_id,
+                    polygons=polygon_data_array,
+                    centroid=multipoly.centroid,
+                    max_polygon_distance=max_distance_meters,
+                    max_polygon_radius=max_bounding_radius,
+                    scatter_ratio=scatter_ratio,
+                )
 
-    def _validate_annotations(
-        self,
-        annotations: typing.List[typing.Dict],
-    ) -> typing.List[typing.Dict]:
-        """Returns the list of sample-wie annotations, with all fields checked for validity."""
-        valid_annotations = []
-        expected_image_count = None
-        for annot in tqdm.tqdm(annotations, desc="Converting annotation geometries + paths"):
-            annot["sample_id"] = annot["image_id"]
-            del annot["image_id"]
-            try:
-                assert "bbox" in annot, "missing 'bbox' field in annotation dict"
-                annot["bbox"] = shapely.from_wkt(annot["bbox"])
-                assert isinstance(annot["bbox"], shapely.Polygon), "unrecognized bbox type"
-                assert "field_masks" in annot, "missing 'field_masks' field in annotation dict"
-                annot["field_masks"] = shapely.from_wkt(annot["field_masks"])
-                assert isinstance(annot["field_masks"], shapely.MultiPolygon), "unrecognized field masks type"
-                annot["field_geoms"] = [p for p in annot["field_masks"].geoms]
-                del annot["field_masks"]
-                assert "image_path_n" in annot, "missing 'image_path_n' field in annotation dict"
-                assert isinstance(annot["image_path_n"], list)
-                image_paths = []
-                for p in annot["image_path_n"]:
-                    full_image_path = self.data_root_path / p
-                    assert full_image_path.is_file(), f"missing image: {full_image_path}"
-                    image_paths.append(full_image_path)
-                if expected_image_count is None:
-                    expected_image_count = len(image_paths)
+        raw_data_root_path = self.data_root_path / "raw_data"
+        assert raw_data_root_path.is_dir(), f"invalid dataset path: {raw_data_root_path}"
+        order_manifest_paths = list(raw_data_root_path.rglob("manifest.json"))
+        assert len(order_manifest_paths) > 0
+        order_manifest_paths = order_manifest_paths[:1000]  # @@@@@ TODO remove me
+        self.order_info, skipped_orders, self.raster_band_count = {}, [], None
+        for order_manifest_path in tqdm.tqdm(order_manifest_paths, desc="parsing order data"):
+            order_result_dir = order_manifest_path.parent
+            with open(order_manifest_path) as order_manifest_fd:
+                order_manifest = json.load(order_manifest_fd)
+            planet_item_id, skip_order = None, False
+            for expected_file_suffix in self.metadata.psscene_file_names:
+                assert any([s["path"].endswith(expected_file_suffix) for s in order_manifest["files"]])
+            for order_file_info in order_manifest["files"]:
+                assert order_file_info["annotations"]["planet/item_type"] == "PSScene"
+                if planet_item_id is None:
+                    planet_item_id = order_file_info["annotations"]["planet/item_id"]
                 else:
-                    assert len(image_paths) == expected_image_count, "unexpected image count"
-                annot["image_paths"] = image_paths
-                del annot["image_path_n"]
-                valid_annotations.append(annot)
-            except AssertionError as e:
-                logger.warning(f"skipping annotation with id={annot['sample_id']}, reason: {e}")
-        return valid_annotations
+                    assert planet_item_id == order_file_info["annotations"]["planet/item_id"]
+                order_file_path = order_result_dir / order_file_info["path"]
+                if not order_file_path.is_file():
+                    logger.info(f"bad order: {order_result_dir} (missing file: {order_file_path.name})")
+                    skip_order = True
+                    break
+                expected_md5sum = order_file_info["digests"]["md5"]
+                md5sum = ssl4rs.utils.filesystem.get_file_hash(order_file_path)
+                assert md5sum == expected_md5sum, f"MD5 mismatch for {order_file_path}"
+                order_file_name = order_file_path.name
+                is_expected = any([order_file_name.endswith(s) for s in self.metadata.psscene_file_names])
+                assert is_expected, f"unexpected order file: {order_file_path}"
+            order_id = order_result_dir.name
+            if skip_order:
+                skipped_orders.append(order_id)
+                continue
+            # full id is the prefix dir(s) + order id + product type + planet item id
+            full_id = str(order_result_dir.relative_to(raw_data_root_path) / "PSScene" / planet_item_id)
+            order_product_path = order_result_dir / "PSScene"
+            order_metadata_path = order_product_path / (planet_item_id + "_metadata.json")
+            with open(order_metadata_path) as order_metadata_fd:
+                order_metadata = json.load(order_metadata_fd)
+            raster_metadata_path = order_product_path / (planet_item_id + "_3B_AnalyticMS_metadata_clip.xml")
+            with open(raster_metadata_path) as raster_metadata_fd:
+                raster_metadata = raster_metadata_fd.read()
+            udm2_mask_path = order_product_path / (planet_item_id + "_3B_udm2_clip.tif")
+            with rasterio.open(udm2_mask_path) as udm2_mask:
+                raster_data_path = order_product_path / (planet_item_id + "_3B_AnalyticMS_clip.tif")
+                with rasterio.open(raster_data_path) as raster_data:
+                    assert udm2_mask.crs == raster_data.crs
+                    assert udm2_mask.height == raster_data.height
+                    assert udm2_mask.width == raster_data.width
+                    assert udm2_mask.bounds == raster_data.bounds
+                    if self.raster_band_count is None:
+                        self.raster_band_count = raster_data.count
+                    else:
+                        assert self.raster_band_count == raster_data.count
+                    assert all([dt == self.metadata.raster_dtype for dt in raster_data.dtypes])
+                    assert raster_data.nodata == self.metadata.nodata_val
+                    raster_bbox = shapely.geometry.box(*raster_data.bounds)
+                    if raster_data.crs != target_crs:
+                        raster_bbox_geojson = rasterio.warp.transform_geom(
+                            src_crs=raster_data.crs,
+                            dst_crs=target_crs,
+                            geom=raster_bbox,
+                        )
+                        raster_bbox = shapely.geometry.shape(raster_bbox_geojson)
+                    raster_centroid = raster_bbox.centroid
+            self.order_info[order_id] = OrderInfo(
+                identifier=order_id,
+                full_id=full_id,
+                root_dir=order_result_dir,
+                planet_item_id=planet_item_id,
+                order_metadata=order_metadata,
+                raster_metadata=raster_metadata,
+                raster_centroid=raster_centroid,
+                raster_bbox=raster_bbox,
+                raster_udm2_path=udm2_mask_path,
+                raster_data_path=raster_data_path,
+            )
+
+        logger.info(f"order count: {len(self.order_info)}")
+        skipped_orders_str = "\n\t".join(skipped_orders)
+        logger.info(f"skipped orders ({len(skipped_orders)}):\n\t{skipped_orders_str}")
+        logger.info(f"location count: {len(self.location_info)}")
+        skipped_locations_str = "\n\t".join(skipped_locations)
+        logger.info(f"skipped locations ({len(skipped_locations)}):\n\t{skipped_locations_str}")
+
+        orders_with_matches, locations_with_matches = [], []
+        self.output_samples = []
+        for location_id, location in tqdm.tqdm(self.location_info.items(), desc="matching orders"):
+            matched_order_ids = [
+                order_id
+                for order_id, order in self.order_info.items()
+                if location.centroid.within(order.raster_bbox)
+            ]
+            if matched_order_ids:
+                # todo: keep only matched orders with some minimal coverage at the location?
+                if self.max_order_count is not None and len(matched_order_ids) > self.max_order_count:
+                    # todo: keep the best matches instead of the first N matches?
+                    matched_order_ids = matched_order_ids[:self.max_order_count]
+                locations_with_matches.append(location_id)
+                orders_with_matches.extend(matched_order_ids)
+                self.output_samples.append(
+                    _OutputSampleData(
+                        location=location,
+                        orders=[self.order_info[id] for id in matched_order_ids],
+                    )
+                )
+
+        useless_orders = [id for id in self.order_info if id not in orders_with_matches]
+        useless_orders_str = "\n\t".join(useless_orders)
+        logger.info(f"orders without location ({len(useless_orders)}):\n\t{useless_orders_str}")
+        orderless_locations = [id for id in self.location_info if id not in locations_with_matches]
+        orderless_locations_str = "\n\t".join(orderless_locations)
+        logger.info(f"locations without orders ({len(orderless_locations)}):\n\t{orderless_locations_str}")
+        logger.info(f"final sample (location-order pair) count: {len(self.output_samples)}")
+        orders_hist = np.histogram([len(s.orders) for s in self.output_samples])
+        logger.info(f"histogram of orders per location: {orders_hist}")
+        assert len(self.output_samples) > 0, "no valid samples found?"
 
     def __getitem__(self, item: int) -> typing.Dict[str, typing.Any]:
-        """Fetches and returns a data sample for this dataset."""
+        """Fetches and returns a data sample for a particular location of this dataset."""
         assert 0 <= item < len(self), f"invalid data sample index being queried: {item}"
-        sample_data = self.annotations[item]
-        sample_id = sample_data["sample_id"]
-        image_metadata = [{"name": p.name} for p in sample_data["image_paths"]]
-        image_shape, image_preview, image_preview_roi, image_transform = None, None, None, None
-        image_data, image_roi = [], []
-        for image_idx, image_path in enumerate(sample_data["image_paths"]):
-            with rasterio.open(image_path) as raster:
-                assert raster.nodata == 0.0
-                assert raster.crs == rasterio.crs.CRS.from_string(self.metadata.crs)  # noqa
-                image = raster.read()
-                reprojected = False
-                if image_shape is None:
-                    image_shape = image.shape
-                    image_preview = self._generate_preview_image(image)
-                    image_preview_roi = np.any(image != raster.nodata, axis=0)
-                    image_transform = raster.transform
+        location_data = self.output_samples[item].location
+        orders_info = self.output_samples[item].orders
+        location_id = location_data.identifier
+        field_geoms = [list(p.geometry.exterior.coords) for p in location_data.polygons]
+        field_centroid = np.asarray((location_data.centroid.x, location_data.centroid.y))  # (lon, lat)
+        field_scatter = location_data.scatter_ratio
+        image_count = len(orders_info)
+        image_order_ids = [o.identifier for o in orders_info]
+        image_metadata = [copy.deepcopy(o.order_metadata) for o in orders_info]
+        target_crs = rasterio.crs.CRS.from_string(self.metadata.crs)  # noqa
+        input_image_shape, input_image_transform, input_image_crs = None, None, None
+        output_image_shape, output_transform = None, None
+        image_data, image_roi, image_udm2 = None, None, None
+        for order_idx, order_info in enumerate(orders_info):
+            image_metadata[order_idx]["full_id"] = order_info.full_id
+            image_metadata[order_idx]["planet_item_id"] = order_info.planet_item_id
+            image_metadata[order_idx]["raster_centroid"] = shapely.geometry.mapping(order_info.raster_centroid)
+            image_metadata[order_idx]["raster_bbox"] = shapely.geometry.mapping(order_info.raster_bbox)
+            image_metadata[order_idx]["raster_xml_metadata"] = order_info.raster_metadata
+            with rasterio.open(order_info.raster_data_path) as raster:
+                assert raster.nodata == self.metadata.nodata_val
+                assert raster.count == self.raster_band_count
+                if input_image_shape is None:
+                    input_image_shape = raster.shape
+                    input_image_transform = raster.transform
+                    input_image_crs = raster.crs
                 else:
-                    if image_shape != image.shape or image_transform != raster.transform:
-                        logger.warning(
-                            f"found unexpected/mismatched image resolution for sample {sample_id}"
-                            f"\n\texpected shape: {image_shape}, found shape: {image.shape}"
-                            f"\n\texpected t: {tuple(image_transform)}, found t: {tuple(raster.transform)}"
-                            f"\n\t...will reproject this image: {image_path}"
-                        )
-                        target_image = np.empty(shape=image_shape, dtype=np.float32)
-                        rasterio.warp.reproject(
-                            image,
-                            target_image,
-                            src_transform=raster.transform,
-                            src_crs=raster.crs,
-                            src_nodata=raster.nodata,
-                            dst_transform=image_transform,
-                            dst_crs=raster.crs,
-                            dst_nodata=raster.nodata,
-                            resampling=rasterio.warp.Resampling.bilinear,
-                        )
-                        image = np.round(target_image).astype(np.uint16)
-                        reprojected = True
-                    assert image_shape == image.shape, "unexpected image shape mismatch"
-                    assert image.shape[0] == self.metadata.band_count, "unexpected band count"
-                assert image.dtype == np.uint16
-                image_metadata[image_idx] = {**raster.meta, **image_metadata[image_idx]}
-                image_metadata[image_idx]["crs"] = image_metadata[image_idx]["crs"].to_dict()
-                image_metadata[image_idx]["transform"] = tuple(image_metadata[image_idx]["transform"])
-                # note: to reconvert the above two attribs, use:
-                # crs = rasterio.crs.CRS.from_dict(crs_dict)
-                # transform = affine.Affine(*affine_tuple)
-                image_metadata[image_idx]["reprojected"] = reprojected
-                image_data.append(image)
-                image_roi.append(image != raster.nodata)
-        image_data = np.stack(image_data, axis=0)
-        image_roi = np.stack(image_roi, axis=0)
-        image_bbox = np.asarray(list(sample_data["bbox"].exterior.coords))
-        assert len(image_bbox) == 5 and np.allclose(image_bbox[0], image_bbox[-1])
-        field_geoms = [list(p.exterior.coords) for p in sample_data["field_geoms"]]
-        field_mask_shapes = [(poly, 1) for poly in sample_data["field_geoms"]]
+                    assert raster.shape == input_image_shape
+                    assert raster.transform == input_image_transform
+                    assert raster.crs == input_image_crs
+                image_metadata[order_idx]["orig_crs"] = input_image_crs.to_dict()
+                image_metadata[order_idx]["orig_transform"] = tuple(input_image_transform)
+                # note: to reconvert the above two attribs when reading the dataset, use:
+                #   crs = rasterio.crs.CRS.from_dict(crs_dict)
+                #   transform = affine.Affine(*affine_tuple)
+                if image_data is None:  # initialize output arrays + transformer obj
+                    raster_left, raster_bottom, raster_right, raster_top = raster.bounds
+                    output_transform, output_width, output_height = rasterio.warp.calculate_default_transform(
+                        src_crs=raster.crs,
+                        dst_crs=target_crs,
+                        width=raster.width,
+                        height=raster.height,
+                        left=raster_left,
+                        bottom=raster_bottom,
+                        right=raster_right,
+                        top=raster_top,
+                    )
+                    output_image_shape = (output_height, output_width)
+                    image_data = np.full(
+                        shape=(len(orders_info), self.raster_band_count, output_height, output_width),
+                        fill_value=self.metadata.nodata_val,
+                        dtype=np.float64,  # will be rounded and cast to np.uint16 later
+                    )
+                    image_roi = np.full(
+                        shape=(len(orders_info), output_height, output_width),
+                        fill_value=0,
+                        dtype=np.uint8,
+                    )
+                    image_udm2 = np.full(
+                        shape=(len(orders_info), 8, output_height, output_width),
+                        fill_value=0,
+                        dtype=np.uint8,
+                    )
+                    reprojector = functools.partial(
+                        rasterio.warp.reproject,
+                        src_transform=input_image_transform,
+                        src_crs=input_image_crs,
+                        dst_transform=output_transform,
+                        dst_crs=target_crs,
+                    )
+                raster_data = raster.read()
+                assert raster_data.shape == (self.raster_band_count, *input_image_shape)
+                with rasterio.open(order_info.raster_udm2_path) as udm2:
+                    assert udm2.shape == input_image_shape
+                    assert udm2.transform == input_image_transform
+                    assert udm2.crs == input_image_crs
+                    udm2_data = udm2.read()
+                    assert udm2_data.shape == (8, *input_image_shape) and udm2_data.dtype == np.uint8
+                    raster_has_usable_data = np.logical_and(
+                        np.any(raster_data != self.metadata.nodata_val, axis=0),
+                        udm2_data[7] == 0  # band #8 in udm2 = unusable pixel bits due to anomalies
+                    )
+                    reprojector(
+                        source=raster_has_usable_data.astype(np.uint8),
+                        destination=image_roi[order_idx],
+                        resampling=rasterio.warp.Resampling.min,
+                    )
+                    reprojector(
+                        source=udm2_data,
+                        destination=image_udm2[order_idx],
+                        resampling=rasterio.warp.Resampling.nearest,
+                    )
+                reprojector(
+                    source=raster_data,
+                    destination=image_data[order_idx],
+                    src_nodata=raster.nodata,
+                    dst_nodata=raster.nodata,
+                    resampling=rasterio.warp.Resampling.bilinear,
+                )
+
+        field_mask_shapes = [(poly.geometry, 1) for poly in location_data.polygons]
         field_mask = rasterio.features.rasterize(
             shapes=field_mask_shapes,
-            out_shape=image_shape[1:],
-            transform=image_transform,
+            out_shape=output_image_shape,
+            transform=output_transform,
         ).astype(bool)
         return dict(
-            sample_id=f"sample_{sample_id}",
-            image_preview=image_preview,
-            image_preview_roi=image_preview_roi,
-            image_bbox=image_bbox[:4],
-            field_mask=field_mask,
+            location_id=location_id,
+            location_preview_image=self._generate_preview_image(image_data),
+            location_preview_roi=image_roi[0].astype(bool),
             field_geoms=field_geoms,
-            image_data=image_data,
-            image_roi=image_roi,
+            field_mask=field_mask,
+            field_centroid=field_centroid,
+            field_scatter=field_scatter,
+            image_count=image_count,
+            image_transform=np.asarray(output_transform),
+            image_order_ids=image_order_ids,
             image_metadata=image_metadata,
+            image_data=np.round(image_data).astype(np.uint16),
+            image_roi=image_roi.astype(bool),
+            image_udm2=image_udm2,
         )
 
-    @classmethod
-    def _generate_preview_image(cls, image_raw: np.ndarray) -> np.ndarray:
-        """Generates a preview RGB image of the given 4-band raster image."""
-        # note: not using global stats for this!
-        assert image_raw.ndim == 3
-        assert image_raw.shape[0] == cls.metadata.band_count
-        assert cls.metadata.band_count >= 3
-        raster_data = image_raw[:3]
-        raster_roi = np.asarray(raster_data != 0.0)
-        raster_norm_data = np.zeros_like(raster_data, dtype=np.float32)
+    def _generate_preview_image(self, image_raw: np.ndarray) -> np.ndarray:
+        """Generates a preview RGB image of the given raster image stack."""
+        # note: not using global mean/std stats for this! (computing them using the full stack)
+        assert image_raw.ndim == 4
+        order_count, ch_count, height, width = image_raw.shape
+        # channel definitions info: https://developers.planet.com/docs/data/psscene/
+        if ch_count == 3:
+            # use as-is, it's already a red-green-blue data stack
+            pass
+        elif ch_count == 4:
+            image_raw = image_raw[:, [2, 1, 0], :, :]  # drops the NIR channel
+        elif ch_count == 8:
+            image_raw = image_raw[:, [5, 3, 1], :, :]  # drops the all but the RGB channels
+        valid_px_mask = np.any(image_raw != self.metadata.nodata_val, axis=1)
+        normalized_data = np.zeros_like(image_raw, dtype=np.float64)
         # normalize in a bandwise fashion while ignoring nodata values
         for bidx in range(3):
-            band_mean = raster_data[bidx][raster_roi[bidx]].mean()
-            band_std = max(raster_data[bidx][raster_roi[bidx]].std(), 1)
-            raster_norm_data[bidx][raster_roi[bidx]] = (raster_data[bidx][raster_roi[bidx]] - band_mean) / band_std
+            band_mean = image_raw[:, bidx][valid_px_mask].mean()
+            band_std = max(image_raw[:, bidx][valid_px_mask].std(), 1)
+            normalized_data[:, bidx][valid_px_mask] = \
+                (image_raw[:, bidx][valid_px_mask] - band_mean) / band_std
         # clamp to two std (95% of all data)
-        raster_norm_data[raster_norm_data > 2] = 2
-        raster_norm_data[raster_norm_data < -2] = -2
-        # scale to 8-bit range
-        preview_image = (((raster_norm_data + 2) / 4) * 255).astype(np.uint8)
-        preview_image = np.transpose(preview_image, (1, 2, 0))
+        normalized_data[normalized_data > 2] = 2
+        normalized_data[normalized_data < -2] = -2
+        # keep only the first image of the stack, and scale to 8-bit range
+        preview_image = (((normalized_data[0] + 2) / 4) * 255).astype(np.uint8)
+        preview_image = np.transpose(preview_image, (1, 2, 0))  # move ch dim to last position
         return preview_image
+
+    @staticmethod
+    def _convert_location_id(sample_idx: int) -> str:
+        """Converts a 'sample index' from Sherrie Wang's shapefile dataset to a unique str id."""
+        # note: this is used to simplify debugging and help comprehension for dataset users
+        return f"shp_location_{sample_idx:04}"
 
 
 def _repackage_disa(dataset_root_path: pathlib.Path):
@@ -258,4 +575,4 @@ def _repackage_disa(dataset_root_path: pathlib.Path):
 if __name__ == "__main__":
     ssl4rs.utils.logging.setup_logging_for_analysis_script()
     config_ = ssl4rs.utils.config.init_hydra_and_compose_config(config_name="profiler.yaml")
-    _repackage_disa(pathlib.Path(config_.utils.data_root_dir) / "disa")
+    _repackage_disa(pathlib.Path(config_.utils.data_root_dir) / "ai4h-disa" / "india")

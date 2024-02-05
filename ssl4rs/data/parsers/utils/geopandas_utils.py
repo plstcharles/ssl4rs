@@ -180,6 +180,13 @@ class GeoPandasParser(DataParser):
         """Returns the spatial index of the dataset built by geopandas for bbox-based searches."""
         return self.dataset.sindex
 
+    def has_duplicates(self, check_geometries_only: bool = False):
+        """Returns whether the dataset contains duplicate entries or not."""
+        if check_geometries_only:
+            return not self.dataset[self.dataset["geometry"].duplicated()].empty
+        else:
+            return not self.dataset[self.dataset.duplicated()].empty
+
     def summary(self, *args, **kwargs) -> None:
         """Prints a summary of the geometry dataset using the default logger."""
         import ssl4rs.utils.logging
