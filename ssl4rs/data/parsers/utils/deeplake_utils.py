@@ -237,6 +237,10 @@ class DeepLakeParser(DataParser):
         Derived classes may implement/use more complex collate, wrapper, or transform functions. By
         default, we simply forward the default settings to deeplake's dataloader creator.
         """
+        if collate_fn is None:
+            from ssl4rs.data import default_collate
+
+            collate_fn = default_collate
         if use_optimized_dataloader:
             dataloader = self.dataset.dataloader(ignore_errors=ignore_errors, verbose=verbose).batch(
                 batch_size=batch_size,
