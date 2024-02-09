@@ -84,8 +84,9 @@ class DeepLakeRepackager:
         # this default implementation assumes all tensor datasets have the same length; override this
         # function if this is not the case, as exportation will fail otherwise!
         sample_data = self[sample_index]  # this is where the __getitem__ is called...
-        assert isinstance(sample_data, dict) and all([tn in sample_data for tn in self.tensor_names])
-        sample_out.append(sample_data)  # this should add all the tensors at once...
+        if sample_data is not None:
+            assert isinstance(sample_data, dict) and all([tn in sample_data for tn in self.tensor_names])
+            sample_out.append(sample_data)  # this should add all the tensors at once...
         return sample_out
 
     @staticmethod
