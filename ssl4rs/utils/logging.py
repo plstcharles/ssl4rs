@@ -8,6 +8,7 @@ import sys
 import time
 import typing
 
+import dotenv
 import lightning.pytorch as pl
 import lightning.pytorch.loggers as pl_loggers
 import lightning.pytorch.utilities as pl_utils
@@ -16,7 +17,6 @@ import pandas as pd
 import rich.syntax
 import rich.tree
 import torch
-import torch.distributed
 import yaml
 
 default_print_configs = (
@@ -27,6 +27,9 @@ default_print_configs = (
     "trainer",
 )
 """This is the (ordered) list of configs that we'll print when asked to, by default."""
+
+_root_logger_is_setup_for_analysis_script = False
+"""Defines whether the setup_logging_for_analysis_script function has been called or not."""
 
 
 def get_logger(*args, **kwargs) -> logging.Logger:
@@ -58,27 +61,31 @@ def setup_logging_for_analysis_script(level: int = logging.INFO) -> logging.Logg
 
     THIS SHOULD NEVER BE USED IN GENERIC CODE OR OUTSIDE AN ENTRYPOINT; in other words, the only
     place you should ever see this function get called is close to a `if __name__ == "__main__":`
-    statement in standalone analysis scripts. It should also never be called more than once, and it
-    will reset the handlers attached to the root logger.
+    statement in standalone analysis scripts, or in the first cell of a notebook. It should also
+    never be called more than once, and it will reset the handlers attached to the root logger.
 
     The function returns a logger with the framework name which may be used/ignored as needed.
     """
-    root = logging.getLogger()
-    for h in root.handlers:  # reset all root handlers, in case this is called multiple times
-        root.removeHandler(h)
-    root.setLevel(level)
-    formatter = logging.Formatter("[%(asctime)s][%(name)s][%(levelname)s] - %(message)s")
-    stream_handler = logging.StreamHandler(stream=sys.stdout)
-    stream_handler.setFormatter(formatter)
-    root.addHandler(stream_handler)
-    logger_ = get_logger("ssl4rs")
-
     import ssl4rs.utils.config
 
+    global _root_logger_is_setup_for_analysis_script
+    if not _root_logger_is_setup_for_analysis_script:
+        root = logging.getLogger()
+        for h in root.handlers:  # reset all root handlers, in case this is called multiple times
+            root.removeHandler(h)
+        root.setLevel(level)
+        formatter = logging.Formatter("[%(asctime)s][%(name)s][%(levelname)s] - %(message)s")
+        stream_handler = logging.StreamHandler(stream=sys.stdout)
+        stream_handler.setFormatter(formatter)
+        root.addHandler(stream_handler)
+        dotenv_path = ssl4rs.utils.config.get_framework_dotenv_path()
+        if dotenv_path is not None:
+            dotenv.load_dotenv(dotenv_path=str(dotenv_path), override=True, verbose=True)
+        _root_logger_is_setup_for_analysis_script = True
+    logger_ = get_logger("qut01")
     logger_.info("Logging set up for analysis script; runtime info:")
     for key, value in ssl4rs.utils.config.get_runtime_tags(with_gpu_info=True).items():
         logger_.info(f"{key}: {value}")
-
     return logger_
 
 
