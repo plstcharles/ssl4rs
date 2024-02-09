@@ -17,6 +17,7 @@ from ssl4rs.data.transforms.batch import (
     batch_id_key,
     batch_index_key,
     batch_size_key,
+    default_collate,
     get_batch_id,
     get_batch_index,
     get_batch_size,

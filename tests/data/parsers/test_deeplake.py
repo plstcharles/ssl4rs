@@ -98,7 +98,7 @@ def test_get_dataloader(
         shuffle=False,
     )
     batch = next(iter(dataloader))
-    assert all([t in batch for t in ["batch_id", "batch_size", "index", "label", "image"]])
+    assert all([t in batch for t in ["batch_size", "index", "label", "image"]])
     assert ssl4rs.data.get_batch_size(batch) == 8
     images, labels = batch["image"], batch["label"]
     assert images.shape == (8, 512, 512, 3)

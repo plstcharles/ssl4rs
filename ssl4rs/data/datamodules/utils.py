@@ -389,32 +389,3 @@ class DataModule(pl.LightningDataModule):
             dataloader, torch.utils.data.DataLoader
         ), f"invalid dataloader type: {type(dataloader)} (...should be DataLoader-derived)"
         return dataloader
-
-
-def default_collate(
-    batches: typing.List["ssl4rs.data.BatchDictType"],
-    keys_to_batch_manually: typing.Sequence[typing.AnyStr] = (),
-) -> "ssl4rs.data.transforms.BatchDictType":
-    """Performs the default collate function while manually handling some given special cases."""
-    assert isinstance(batches, (list, tuple)) and all(
-        [isinstance(b, dict) for b in batches]
-    ), f"unexpected type for batch array provided to collate: {type(batches)}"
-    assert all(
-        [len(np.setxor1d(list(batches[idx].keys()), list(batches[0].keys()))) == 0 for idx in range(1, len(batches))]
-    ), "not all batches have the same sets of keys! (implement your own custom collate fn!)"
-    avail_batch_keys = list(batches[0].keys())
-    output = dict()
-    # first step: look for the keys that we need to batch manually, and handle those
-    default_keys_to_batch_manually = [
-        "batch_id",  # should correspond to hashable objects that might hurt torch's default_collate
-    ]
-    keys_to_batch_manually = set(*keys_to_batch_manually, *default_keys_to_batch_manually)
-    for key in keys_to_batch_manually:
-        if key in avail_batch_keys:
-            output[key] = [b[key] for b in batches]
-    output.update(
-        torch.utils.data.default_collate(
-            [{k: v for k, v in b.items() if k not in keys_to_batch_manually} for b in batches]
-        )
-    )
-    return output

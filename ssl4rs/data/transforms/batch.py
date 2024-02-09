@@ -2,6 +2,7 @@ import typing
 
 import numpy as np
 import torch
+import torch.utils.data
 
 if typing.TYPE_CHECKING:
     from ssl4rs.data import BatchDictType
@@ -288,3 +289,34 @@ def get_batch_index(
             batch_index = batch_index[0]
     assert isinstance(batch_index, typing.Hashable), f"invalid batch index type: {type(batch_index)}"
     return batch_index
+
+
+def default_collate(
+    batches: typing.List["BatchDictType"],
+    keys_to_batch_manually: typing.Sequence[typing.AnyStr] = (),
+) -> "BatchDictType":
+    """Performs the default collate function while manually handling some given special cases."""
+    assert isinstance(batches, (list, tuple)) and all(
+        [isinstance(b, dict) for b in batches]
+    ), f"unexpected type for batch array provided to collate: {type(batches)}"
+    assert all(
+        [len(np.setxor1d(list(batches[idx].keys()), list(batches[0].keys()))) == 0 for idx in range(1, len(batches))]
+    ), "not all batches have the same sets of keys! (implement your own custom collate fn!)"
+    avail_batch_keys = list(batches[0].keys())
+    output = dict()
+    # first step: look for the keys that we need to batch manually, and handle those
+    default_keys_to_batch_manually = [
+        "batch_id",  # should correspond to hashable objects that might hurt torch's default_collate
+    ]
+    keys_to_batch_manually = set(*keys_to_batch_manually, *default_keys_to_batch_manually)
+    for key in keys_to_batch_manually:
+        if key in avail_batch_keys:
+            output[key] = [b[key] for b in batches]
+    output.update(
+        torch.utils.data.default_collate(
+            [{k: v for k, v in b.items() if k not in keys_to_batch_manually} for b in batches]
+        )
+    )
+    if batch_size_key not in output:
+        output[batch_size_key] = len(batches)
+    return output
