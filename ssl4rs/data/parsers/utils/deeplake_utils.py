@@ -210,35 +210,71 @@ class DeepLakeParser(DataParser):
 
     def get_dataloader(
         self,
-        num_workers: int = 0,
+        # arguments for dataloader wrapper: deeplake.enterprise.dataloader.DeepLakeDataLoader.batch
         batch_size: int = 1,
         drop_last: bool = False,
-        collate_fn: typing.Optional[typing.Callable] = None,
-        pin_memory: bool = False,
+        # arguments for dataloader wrapper: deeplake.enterprise.dataloader.DeepLakeDataLoader.shuffle
         shuffle: bool = False,
-        buffer_size: int = 2048,
-        use_local_cache: bool = False,
-        **deeplake_pytorch_dataloader_kwargs,
+        shuffle_buffer_size: int = 2048,
+        # arguments for dataloader wrapper: deeplake.enterprise.dataloader.DeepLakeDataLoader.pytorch
+        num_workers: int = 0,
+        collate_fn: typing.Optional[typing.Callable] = None,
+        tensors: typing.Optional[typing.List[str]] = None,
+        num_threads: typing.Optional[int] = None,
+        prefetch_factor: int = 2,
+        distributed: bool = False,
+        return_index: bool = True,
+        decode_method: typing.Optional[typing.Dict[str, str]] = None,
+        persistent_workers: bool = False,
+        # arguments for dataloader construction: deeplake.enterprise.dataloader.dataloader
+        ignore_errors: bool = False,
+        verbose: bool = False,
+        # arguments to toggle the dataloader type
+        use_optimized_dataloader: bool = False,
     ) -> torch.utils.data.DataLoader:
         """Returns a deeplake data loader for this data parser object.
 
-        Derived classes may implement/use more complex collate or transform objects here. By
+        Derived classes may implement/use more complex collate, wrapper, or transform functions. By
         default, we simply forward the default settings to deeplake's dataloader creator.
         """
-        dataloader = deeplake.integrations.pytorch.pytorch.dataset_to_pytorch(
-            self.dataset,
-            num_workers=num_workers,
-            batch_size=batch_size,
-            drop_last=drop_last,
-            collate_fn=collate_fn,
-            pin_memory=pin_memory,
-            shuffle=shuffle,
-            buffer_size=buffer_size,
-            use_local_cache=use_local_cache,
-            transform=self.batch_transforms,
-            return_index=True,
-            **deeplake_pytorch_dataloader_kwargs,
-        )
+        if use_optimized_dataloader:
+            dataloader = self.dataset.dataloader(ignore_errors=ignore_errors, verbose=verbose).batch(
+                batch_size=batch_size,
+                drop_last=drop_last,
+            )
+            if shuffle:
+                dataloader = dataloader.shuffle(shuffle=shuffle, buffer_size=shuffle_buffer_size)
+            dataloader = dataloader.pytorch(
+                num_workers=num_workers,
+                collate_fn=collate_fn,
+                tensors=tensors,
+                num_threads=num_threads,
+                prefetch_factor=prefetch_factor,
+                distributed=distributed,
+                return_index=return_index,
+                decode_method=decode_method,
+                persistent_workers=persistent_workers,
+            )
+        else:
+            assert not distributed, "missing distributed implementation with fallback dataloader"
+            dataloader = deeplake.integrations.pytorch.pytorch.dataset_to_pytorch(
+                self.dataset,
+                num_workers=num_workers,
+                batch_size=batch_size,
+                drop_last=drop_last,
+                collate_fn=collate_fn,
+                pin_memory=False,
+                shuffle=shuffle,
+                buffer_size=shuffle_buffer_size,
+                use_local_cache=False,
+                # transforms=?
+                tensors=tensors,
+                return_index=return_index,
+                pad_tensors=False,
+                decode_method=decode_method,
+                persistent_workers=persistent_workers,
+                # cache_size=?
+            )
         return dataloader
 
 
