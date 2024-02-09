@@ -1,6 +1,7 @@
 """Implements a deeplake data repackager for the Mila-AI4H-DISA-India dataset."""
 import copy
 import dataclasses
+import datetime
 import functools
 import itertools
 import json
@@ -10,14 +11,15 @@ import typing
 import numpy as np
 import rasterio
 import rasterio.features
+import rasterio.plot
 import rasterio.warp
 import shapely
 import shapely.ops
 import tqdm
 
 import ssl4rs.data.metadata.disa
-import ssl4rs.data.repackagers.utils
 import ssl4rs.data.parsers.utils.geopandas_utils as gpd_utils
+import ssl4rs.data.repackagers.utils
 import ssl4rs.utils.logging
 
 logger = ssl4rs.utils.logging.get_logger(__name__)
@@ -77,12 +79,15 @@ class OrderInfo:
     """The 'full' id is the prefix data dirs + order id + product type + planet item id."""
 
     planet_item_id: str
-    """The prefix used to identify the planet product items in this order.'"""
+    """The prefix used to identify the planet product items in this order.'."""
 
     order_metadata: dict
     """The metadata tied to this order (product acquisition parameters and attributes)."""
 
-    raster_metadata: str
+    order_timestamp: datetime.datetime
+    """The datetime tied to this order (i.e. its acquisition timestamp)."""
+
+    raster_xml_metadata: str
     """The XML (unparsed, str) metadata tied to the raster in this order."""
 
     raster_centroid: shapely.geometry.point.Point
@@ -100,11 +105,20 @@ class OrderInfo:
     raster_data_path: pathlib.Path
     """The path to the raster data geotiff file provided in this order."""
 
+    raster_data_valid_ratio: float
+    """The fraction of valid pixels in the raster data for this order."""
 
-@dataclasses.dataclass
-class _OutputSampleData:
-    location: LocationData
-    orders: typing.List[OrderInfo]
+    raster_orig_data_shape: typing.Tuple[int, int]
+    """The original shape (height, width) of the pre-projection raster in this order."""
+
+    raster_orig_transform: typing.Tuple[float, float, float, float, float, float]
+    """The original affine transform of the pre-projection raster in this order."""
+
+    raster_orig_bounds: typing.Tuple[float, float, float, float]
+    """The original bounds of the pre-projection raster in this order."""
+
+    raster_orig_crs: rasterio.crs.CRS
+    """The original CRS of the pre-projection raster in this order."""
 
 
 class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
@@ -187,7 +201,12 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
 
     @property  # we need to provide this for the base class!
     def dataset_info(self) -> typing.Dict[str, typing.Any]:
-        """Returns metadata information that will be exported in the deeplake object."""
+        """Returns metadata information that will be exported in the deeplake object.
+
+        This metadata is a combination of information read from the dataset itself (e.g. the number
+        of bands/channels per raster image, which should be constant) and of information provided to
+        the constructor regarding how to filter locations/orders.
+        """
         return dict(
             name=self.dataset_name,
             dtype=self.metadata.raster_dtype.str,
@@ -196,6 +215,8 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             crs=self.metadata.crs,
             max_scatter_threshold=self.max_scatter_threshold,
             max_order_count=self.max_order_count,
+            minimum_valid_ratio_in_orders=self.minimum_valid_ratio_in_orders,
+            minimum_time_delta_between_orders=self.minimum_time_delta_between_orders.total_seconds(),
         )
 
     @property  # we need to provide this for the base class!
@@ -207,30 +228,8 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         """Returns the total number of valid location covered in this dataset."""
         return len(self.output_samples)
 
-    def __init__(
-        self,
-        dataset_root_path: typing.Union[typing.AnyStr, pathlib.Path],
-        max_scatter_threshold: typing.Optional[float] = 10.0,
-        max_order_count: typing.Optional[int] = 12,
-    ):
-        """Parses the dataset structure and makes sure all the data is present.
-
-        Args:
-            dataset_root_path: path to the directory containing all the DISA data.
-            max_scatter_threshold: the maximum scatter ratio value that can be allowed for
-                locations in the dataset, beyond which the location is skipped. The 'scatter
-                ratio' defines how far away polygons are from each other for a single location.
-            max_order_count: the maximum number of orders to export per location in the dataset,
-                beyond which some orders will be ignored. If `None`, all orders are kept.
-
-        """
-        super().__init__()
-        assert max_scatter_threshold is None or max_scatter_threshold > 0, "invalid threshold"
-        self.max_scatter_threshold = max_scatter_threshold
-        assert max_order_count is None or max_order_count > 0, "invalid count"
-        self.max_order_count = max_order_count
-        self.data_root_path = pathlib.Path(dataset_root_path)
-        assert self.data_root_path.exists(), f"invalid dataset path: {self.data_root_path}"
+    def _parse_location_info(self) -> typing.Dict[str, LocationData]:
+        """Parses and returns location data from Sherrie Wang's dataset (via its shapefile)."""
         shapefile_path = self.data_root_path / "boundary_polygons" / "india_10k_fields.shp"
         shapefile_hash = ssl4rs.utils.filesystem.get_file_hash(shapefile_path)
         assert shapefile_hash == self.metadata.shapefile_md5sum, f"md5sum mismatch: {shapefile_path}"
@@ -242,6 +241,8 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         assert len(geom_parser) == self.metadata.shapefile_polygon_count
         location_ids = [self._convert_location_id(s) for s in geom_parser.dataset["sample"].unique().tolist()]
         assert len(location_ids) == self.metadata.shapefile_location_count
+
+        logger.info(f"parsing data for {len(geom_parser)} polygons across {len(location_ids)} locations")
         polygon_data_array_per_location = {lid: [] for lid in location_ids}
         gdf_converted = geom_parser.dataset.to_crs(target_crs_meters)
         for polygon_idx in range(len(geom_parser)):
@@ -258,23 +259,26 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             )
         polygon_counts_per_location = [len(p) for p in polygon_data_array_per_location.values()]
         assert np.array_equal(np.unique(polygon_counts_per_location), [5, 6])
-        self.location_info, skipped_locations = {}, []
+
+        location_info = {}
         for location_id, polygon_data_array in polygon_data_array_per_location.items():
             multipoly = shapely.geometry.MultiPolygon([p.geometry for p in polygon_data_array])
-            max_bounding_radius = max([
-                shapely.minimum_bounding_radius(p._reproj_geometry)
-                for p in polygon_data_array
-            ])
+            max_bounding_radius = max(
+                [shapely.minimum_bounding_radius(p._reproj_geometry) for p in polygon_data_array]  # noqa
+            )
             polygon_data_combos = list(itertools.combinations(polygon_data_array, 2))
-            max_distance_meters = max([
-                p1._reproj_geometry.distance(p2._reproj_geometry)
-                for p1, p2 in polygon_data_combos
-            ])
+            max_distance_meters = max(
+                [p1._reproj_geometry.distance(p2._reproj_geometry) for p1, p2 in polygon_data_combos]  # noqa
+            )
             scatter_ratio = max_distance_meters / (max_bounding_radius * 2)
             if self.max_scatter_threshold is not None and scatter_ratio >= self.max_scatter_threshold:
-                skipped_locations.append(location_id)
+                logger.info(
+                    f"bad location: {location_id}\n\t"
+                    f"(did not meet maximum scatter threshold;"
+                    f" got {scatter_ratio:.2f}, needed less than {self.max_scatter_threshold:.2f})"
+                )
             else:
-                self.location_info[location_id] = LocationData(
+                location_info[location_id] = LocationData(
                     identifier=location_id,
                     polygons=polygon_data_array,
                     centroid=multipoly.centroid,
@@ -282,15 +286,20 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                     max_polygon_radius=max_bounding_radius,
                     scatter_ratio=scatter_ratio,
                 )
+        return location_info
 
+    def _parser_order_info(self) -> typing.Tuple[typing.Dict[str, OrderInfo], int]:
+        """Parses and returns the orders available on disk + the number of bands in all rasters."""
         raw_data_root_path = self.data_root_path / "raw_data"
         assert raw_data_root_path.is_dir(), f"invalid dataset path: {raw_data_root_path}"
         order_manifest_paths = list(raw_data_root_path.rglob("manifest.json"))
-        assert len(order_manifest_paths) > 0
-        order_manifest_paths = order_manifest_paths[:1000]  # @@@@@ TODO remove me
-        self.order_info, skipped_orders, self.raster_band_count = {}, [], None
-        for order_manifest_path in tqdm.tqdm(order_manifest_paths, desc="parsing order data"):
+        assert len(order_manifest_paths) > 0, f"no order manifests found in: {raw_data_root_path}"
+        target_crs = rasterio.crs.CRS.from_string(self.metadata.crs)  # noqa
+        logger.info(f"parsing order manifests and data for {len(order_manifest_paths)} orders")
+        order_info, raster_band_count = {}, None
+        for order_manifest_path in order_manifest_paths:
             order_result_dir = order_manifest_path.parent
+            order_id = order_result_dir.name
             with open(order_manifest_path) as order_manifest_fd:
                 order_manifest = json.load(order_manifest_fd)
             planet_item_id, skip_order = None, False
@@ -304,7 +313,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                     assert planet_item_id == order_file_info["annotations"]["planet/item_id"]
                 order_file_path = order_result_dir / order_file_info["path"]
                 if not order_file_path.is_file():
-                    logger.info(f"bad order: {order_result_dir} (missing file: {order_file_path.name})")
+                    logger.info(f"bad order: {order_id}\n\t(missing file: {order_file_path.name})")
                     skip_order = True
                     break
                 expected_md5sum = order_file_info["digests"]["md5"]
@@ -313,93 +322,198 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                 order_file_name = order_file_path.name
                 is_expected = any([order_file_name.endswith(s) for s in self.metadata.psscene_file_names])
                 assert is_expected, f"unexpected order file: {order_file_path}"
-            order_id = order_result_dir.name
             if skip_order:
-                skipped_orders.append(order_id)
-                continue
+                continue  # reason given in info message above, i.e. missing file(s)
             # full id is the prefix dir(s) + order id + product type + planet item id
             full_id = str(order_result_dir.relative_to(raw_data_root_path) / "PSScene" / planet_item_id)
             order_product_path = order_result_dir / "PSScene"
             order_metadata_path = order_product_path / (planet_item_id + "_metadata.json")
             with open(order_metadata_path) as order_metadata_fd:
                 order_metadata = json.load(order_metadata_fd)
-            raster_metadata_path = order_product_path / (planet_item_id + "_3B_AnalyticMS_metadata_clip.xml")
-            with open(raster_metadata_path) as raster_metadata_fd:
-                raster_metadata = raster_metadata_fd.read()
+            raster_xml_metadata_path = order_product_path / (planet_item_id + "_3B_AnalyticMS_metadata_clip.xml")
+            with open(raster_xml_metadata_path) as raster_xml_metadata_fd:
+                raster_xml_metadata = raster_xml_metadata_fd.read()
             udm2_mask_path = order_product_path / (planet_item_id + "_3B_udm2_clip.tif")
-            with rasterio.open(udm2_mask_path) as udm2_mask:
+            with rasterio.open(udm2_mask_path) as udm2:
                 raster_data_path = order_product_path / (planet_item_id + "_3B_AnalyticMS_clip.tif")
-                with rasterio.open(raster_data_path) as raster_data:
-                    assert udm2_mask.crs == raster_data.crs
-                    assert udm2_mask.height == raster_data.height
-                    assert udm2_mask.width == raster_data.width
-                    assert udm2_mask.bounds == raster_data.bounds
-                    if self.raster_band_count is None:
-                        self.raster_band_count = raster_data.count
-                    else:
-                        assert self.raster_band_count == raster_data.count
-                    assert all([dt == self.metadata.raster_dtype for dt in raster_data.dtypes])
-                    assert raster_data.nodata == self.metadata.nodata_val
-                    raster_bbox = shapely.geometry.box(*raster_data.bounds)
-                    if raster_data.crs != target_crs:
+                with rasterio.open(raster_data_path) as raster:
+                    if raster_band_count is None:
+                        raster_band_count = raster.count
+                    assert udm2.crs == raster.crs
+                    assert udm2.height == raster.height
+                    assert udm2.width == raster.width
+                    assert udm2.bounds == raster.bounds
+                    assert udm2.shape == raster.shape
+                    assert udm2.transform == raster.transform
+                    assert raster.nodata == self.metadata.nodata_val
+                    assert raster.count == raster_band_count
+                    assert all([dt == self.metadata.raster_dtype for dt in raster.dtypes])
+                    raster_data = raster.read()
+                    raster_data_shape = raster_data.shape[1:]
+                    raster_data_transform = raster.transform
+                    raster_data_bounds = raster.bounds
+                    raster_crs = raster.crs
+                    udm2_data = udm2.read()
+                    assert udm2_data.shape == (8, *raster_data_shape)
+                    usable_data_mask = np.logical_and(
+                        np.any(raster_data != self.metadata.nodata_val, axis=0),
+                        udm2_data[7] == 0,  # band #8 in udm2 = unusable pixel bits due to anomalies
+                    ).flatten()
+                    raster_data_valid_ratio = np.count_nonzero(usable_data_mask) / usable_data_mask.size
+                    if (
+                        self.minimum_valid_ratio_in_orders is not None
+                        and raster_data_valid_ratio < self.minimum_valid_ratio_in_orders
+                    ):
+                        logger.info(
+                            f"bad order: {order_id}\n\t"
+                            f"(did not meet minimum valid ratio;"
+                            f" got {raster_data_valid_ratio:.2%} valid pixels,"
+                            f" needed more than {self.minimum_valid_ratio_in_orders:.2%})"
+                        )
+                        continue
+                    raster_bbox = shapely.geometry.box(*raster_data_bounds)
+                    if raster_crs != target_crs:
                         raster_bbox_geojson = rasterio.warp.transform_geom(
-                            src_crs=raster_data.crs,
+                            src_crs=raster_crs,
                             dst_crs=target_crs,
                             geom=raster_bbox,
                         )
                         raster_bbox = shapely.geometry.shape(raster_bbox_geojson)
                     raster_centroid = raster_bbox.centroid
-            self.order_info[order_id] = OrderInfo(
+            order_timestamp = datetime.datetime.strptime(
+                order_metadata["properties"]["acquired"],
+                "%Y-%m-%dT%H:%M:%S.%fZ",
+            )
+            order_info[order_id] = OrderInfo(
                 identifier=order_id,
                 full_id=full_id,
                 root_dir=order_result_dir,
                 planet_item_id=planet_item_id,
                 order_metadata=order_metadata,
-                raster_metadata=raster_metadata,
+                order_timestamp=order_timestamp,
+                raster_xml_metadata=raster_xml_metadata,
                 raster_centroid=raster_centroid,
                 raster_bbox=raster_bbox,
                 raster_udm2_path=udm2_mask_path,
                 raster_data_path=raster_data_path,
+                raster_data_valid_ratio=raster_data_valid_ratio,
+                raster_orig_data_shape=raster_data_shape,
+                raster_orig_transform=raster_data_transform,
+                raster_orig_bounds=raster_data_bounds,
+                raster_orig_crs=raster_crs,
             )
+        return order_info, raster_band_count
 
-        logger.info(f"order count: {len(self.order_info)}")
-        skipped_orders_str = "\n\t".join(skipped_orders)
-        logger.info(f"skipped orders ({len(skipped_orders)}):\n\t{skipped_orders_str}")
-        logger.info(f"location count: {len(self.location_info)}")
-        skipped_locations_str = "\n\t".join(skipped_locations)
-        logger.info(f"skipped locations ({len(skipped_locations)}):\n\t{skipped_locations_str}")
+    def __init__(
+        self,
+        dataset_root_path: typing.Union[typing.AnyStr, pathlib.Path],
+        max_scatter_threshold: typing.Optional[float] = 10.0,
+        max_order_count: typing.Optional[int] = 12,
+        minimum_valid_ratio_in_orders: typing.Optional[float] = 0.50,
+        minimum_time_delta_between_orders: typing.Optional[datetime.timedelta] = datetime.timedelta(days=1),
+    ):
+        """Parses the dataset structure and makes sure all the data is present and valid.
 
+        This is where the filtering of locations and orders will be done, if required. The min/max
+        values provided to the constructor are all optional and control this filtering.
+
+        Args:
+            dataset_root_path: path to the directory containing all the DISA data.
+            max_scatter_threshold: the maximum scatter ratio value that can be allowed for
+                locations in the dataset, beyond which the location is skipped. The 'scatter
+                ratio' defines how far away polygons are from each other for a single location.
+            max_order_count: the maximum number of orders to export per location in the dataset,
+                beyond which some orders will be ignored. If `None`, all orders are kept.
+            minimum_valid_ratio_in_orders: the minimum ratio of valid pixels that needs to be
+                found in order data so that the order is kept. If `None`, all orders are kept.
+            minimum_time_delta_between_orders: the minimum time allowed between two orders
+                matched to the same location. If `None`, all orders are kept.
+        """
+        super().__init__()
+        assert max_scatter_threshold is None or max_scatter_threshold > 0, "invalid threshold"
+        self.max_scatter_threshold = max_scatter_threshold
+        assert max_order_count is None or max_order_count > 0, "invalid count"
+        self.max_order_count = max_order_count
+        assert (
+            minimum_valid_ratio_in_orders is None or 0 <= minimum_valid_ratio_in_orders <= 1
+        ), "invalid minimum valid pixel ratio for order data"
+        self.minimum_valid_ratio_in_orders = minimum_valid_ratio_in_orders
+        assert minimum_time_delta_between_orders is None or isinstance(
+            minimum_time_delta_between_orders, datetime.timedelta
+        ), "invalid minimum time delta between orders"
+        self.minimum_time_delta_between_orders = minimum_time_delta_between_orders
+        self.data_root_path = pathlib.Path(dataset_root_path)
+        assert self.data_root_path.exists(), f"invalid dataset path: {self.data_root_path}"
+        self.location_info = self._parse_location_info()
+        logger.info(f"valid location count: {len(self.location_info)}")
+        self.order_info, self.raster_band_count = self._parser_order_info()
+        logger.info(f"valid order count: {len(self.order_info)}")
+        logger.info(f"dataset rasters have {self.raster_band_count} bands")
+
+        # we match locations to their orders by looking for intersections across their geometries
         orders_with_matches, locations_with_matches = [], []
         self.output_samples = []
         for location_id, location in tqdm.tqdm(self.location_info.items(), desc="matching orders"):
+            # get the id of all orders whose bounds contain the centroid of the location's polygons
             matched_order_ids = [
-                order_id
-                for order_id, order in self.order_info.items()
-                if location.centroid.within(order.raster_bbox)
+                order_id for order_id, order in self.order_info.items() if location.centroid.within(order.raster_bbox)
             ]
-            if matched_order_ids:
-                # todo: keep only matched orders with some minimal coverage at the location?
-                if self.max_order_count is not None and len(matched_order_ids) > self.max_order_count:
-                    # todo: keep the best matches instead of the first N matches?
-                    matched_order_ids = matched_order_ids[:self.max_order_count]
-                locations_with_matches.append(location_id)
-                orders_with_matches.extend(matched_order_ids)
-                self.output_samples.append(
-                    _OutputSampleData(
-                        location=location,
-                        orders=[self.order_info[id] for id in matched_order_ids],
+            # sort the matched orders according to their timestamp (oldest to newest)
+            matched_order_ids = list(sorted(matched_order_ids, key=lambda oid_: self.order_info[oid_].order_timestamp))
+            # next, filter out orders that might be too close together in time
+            if self.minimum_time_delta_between_orders is not None and len(matched_order_ids) > 1:
+                kept_order_ids, last_timestamp = [], self.order_info[matched_order_ids[0]].order_timestamp
+                for oid in matched_order_ids[1:]:
+                    if (self.order_info[oid].order_timestamp - last_timestamp) > self.minimum_time_delta_between_orders:
+                        kept_order_ids.append(oid)
+                    last_timestamp = self.order_info[oid].order_timestamp
+                matched_order_ids = kept_order_ids
+            # finally, if we have too many matched orders for this location, we will drop some of them
+            if self.max_order_count is not None and len(matched_order_ids) > self.max_order_count:
+                # we drop the orders with the lowest valid ratios first
+                kept_order_ids = list(
+                    sorted(
+                        matched_order_ids,
+                        key=lambda oid_: self.order_info[oid_].raster_data_valid_ratio,
+                        reverse=True,
                     )
+                )[: self.max_order_count]
+                matched_order_ids = [oid for oid in matched_order_ids if oid in kept_order_ids]
+            # if we have not found any orders for this location, it is skipped
+            if not matched_order_ids:
+                continue
+            locations_with_matches.append(location_id)
+            orders_with_matches.extend(matched_order_ids)
+            output_orders = [self.order_info[oid] for oid in matched_order_ids]
+            # orders should still be sorted here, oldest acquisition to newest acquisition
+            last_timestamp = output_orders[0].order_timestamp
+            for order in output_orders[1:]:
+                assert last_timestamp <= order.order_timestamp
+                last_timestamp = order.order_timestamp
+            self.output_samples.append(
+                self._OutputSampleData(
+                    location=location,
+                    orders=output_orders,
                 )
+            )
 
-        useless_orders = [id for id in self.order_info if id not in orders_with_matches]
+        useless_orders = [oid for oid in self.order_info if oid not in orders_with_matches]
+        logger.info(f"found {len(useless_orders)} orders without location")
         useless_orders_str = "\n\t".join(useless_orders)
-        logger.info(f"orders without location ({len(useless_orders)}):\n\t{useless_orders_str}")
-        orderless_locations = [id for id in self.location_info if id not in locations_with_matches]
+        logger.debug(f"orders without location:\n\t{useless_orders_str}")
+        orderless_locations = [lid for lid in self.location_info if lid not in locations_with_matches]
+        logger.info(f"found {len(orderless_locations)} locations without orders")
         orderless_locations_str = "\n\t".join(orderless_locations)
-        logger.info(f"locations without orders ({len(orderless_locations)}):\n\t{orderless_locations_str}")
-        logger.info(f"final sample (location-order pair) count: {len(self.output_samples)}")
-        orders_hist = np.histogram([len(s.orders) for s in self.output_samples])
-        logger.info(f"histogram of orders per location: {orders_hist}")
+        logger.debug(f"locations without orders:\n\t{orderless_locations_str}")
+        logger.info(f"final sample (location-orders pair) count: {len(self.output_samples)}")
+        output_pairs_distrib = np.unique([len(s.orders) for s in self.output_samples], return_counts=True)
+        output_pairs_distrib_str = "\n\t".join(
+            [
+                f"{loc_count} location(s) with {order_count} order(s)"
+                for order_count, loc_count in zip(*output_pairs_distrib)
+            ]
+        )
+        logger.info(f"distribution of orders per location:\n\t{output_pairs_distrib_str}")
         assert len(self.output_samples) > 0, "no valid samples found?"
 
     def __getitem__(self, item: int) -> typing.Dict[str, typing.Any]:
@@ -415,102 +529,92 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         image_order_ids = [o.identifier for o in orders_info]
         image_metadata = [copy.deepcopy(o.order_metadata) for o in orders_info]
         target_crs = rasterio.crs.CRS.from_string(self.metadata.crs)  # noqa
-        input_image_shape, input_image_transform, input_image_crs = None, None, None
-        output_image_shape, output_transform = None, None
-        image_data, image_roi, image_udm2 = None, None, None
+
+        # we will keep the shape/transform of the LARGEST raster across all matched orders
+        max_image_shape_order = max(orders_info, key=lambda o: np.prod(o.raster_orig_data_shape))
+        output_transform, output_width, output_height = rasterio.warp.calculate_default_transform(
+            src_crs=max_image_shape_order.raster_orig_crs,
+            dst_crs=target_crs,
+            # height, width = shape
+            width=max_image_shape_order.raster_orig_data_shape[1],
+            height=max_image_shape_order.raster_orig_data_shape[0],
+            # left, bottom, right, top = bounds
+            left=max_image_shape_order.raster_orig_bounds[0],
+            bottom=max_image_shape_order.raster_orig_bounds[1],
+            right=max_image_shape_order.raster_orig_bounds[2],
+            top=max_image_shape_order.raster_orig_bounds[3],
+        )
+        output_image_shape = (output_height, output_width)
+
+        # the output arrays can be preallocated based on the shape we determined above
+        image_data = np.full(
+            shape=(len(orders_info), self.raster_band_count, output_height, output_width),
+            fill_value=self.metadata.nodata_val,
+            dtype=np.float64,  # will be rounded and cast to np.uint16 later
+        )
+        image_roi = np.full(
+            shape=(len(orders_info), output_height, output_width),
+            fill_value=0,
+            dtype=np.uint8,
+        )
+        image_udm2 = np.full(
+            shape=(len(orders_info), 8, output_height, output_width),
+            fill_value=0,
+            dtype=np.uint8,
+        )
+
+        # next, we fill in the metadata dict and output arrays based on the data we read+reproject from rasters
         for order_idx, order_info in enumerate(orders_info):
             image_metadata[order_idx]["full_id"] = order_info.full_id
             image_metadata[order_idx]["planet_item_id"] = order_info.planet_item_id
             image_metadata[order_idx]["raster_centroid"] = shapely.geometry.mapping(order_info.raster_centroid)
             image_metadata[order_idx]["raster_bbox"] = shapely.geometry.mapping(order_info.raster_bbox)
-            image_metadata[order_idx]["raster_xml_metadata"] = order_info.raster_metadata
+            image_metadata[order_idx]["raster_xml_metadata"] = order_info.raster_xml_metadata
             with rasterio.open(order_info.raster_data_path) as raster:
-                assert raster.nodata == self.metadata.nodata_val
-                assert raster.count == self.raster_band_count
-                if input_image_shape is None:
-                    input_image_shape = raster.shape
-                    input_image_transform = raster.transform
-                    input_image_crs = raster.crs
-                else:
-                    assert raster.shape == input_image_shape
-                    assert raster.transform == input_image_transform
-                    assert raster.crs == input_image_crs
-                image_metadata[order_idx]["orig_crs"] = input_image_crs.to_dict()
-                image_metadata[order_idx]["orig_transform"] = tuple(input_image_transform)
-                # note: to reconvert the above two attribs when reading the dataset, use:
-                #   crs = rasterio.crs.CRS.from_dict(crs_dict)
-                #   transform = affine.Affine(*affine_tuple)
-                if image_data is None:  # initialize output arrays + transformer obj
-                    raster_left, raster_bottom, raster_right, raster_top = raster.bounds
-                    output_transform, output_width, output_height = rasterio.warp.calculate_default_transform(
-                        src_crs=raster.crs,
-                        dst_crs=target_crs,
-                        width=raster.width,
-                        height=raster.height,
-                        left=raster_left,
-                        bottom=raster_bottom,
-                        right=raster_right,
-                        top=raster_top,
-                    )
-                    output_image_shape = (output_height, output_width)
-                    image_data = np.full(
-                        shape=(len(orders_info), self.raster_band_count, output_height, output_width),
-                        fill_value=self.metadata.nodata_val,
-                        dtype=np.float64,  # will be rounded and cast to np.uint16 later
-                    )
-                    image_roi = np.full(
-                        shape=(len(orders_info), output_height, output_width),
-                        fill_value=0,
-                        dtype=np.uint8,
-                    )
-                    image_udm2 = np.full(
-                        shape=(len(orders_info), 8, output_height, output_width),
-                        fill_value=0,
-                        dtype=np.uint8,
-                    )
-                    reprojector = functools.partial(
-                        rasterio.warp.reproject,
-                        src_transform=input_image_transform,
-                        src_crs=input_image_crs,
-                        dst_transform=output_transform,
-                        dst_crs=target_crs,
-                    )
-                raster_data = raster.read()
-                assert raster_data.shape == (self.raster_band_count, *input_image_shape)
-                with rasterio.open(order_info.raster_udm2_path) as udm2:
-                    assert udm2.shape == input_image_shape
-                    assert udm2.transform == input_image_transform
-                    assert udm2.crs == input_image_crs
-                    udm2_data = udm2.read()
-                    assert udm2_data.shape == (8, *input_image_shape) and udm2_data.dtype == np.uint8
-                    raster_has_usable_data = np.logical_and(
-                        np.any(raster_data != self.metadata.nodata_val, axis=0),
-                        udm2_data[7] == 0  # band #8 in udm2 = unusable pixel bits due to anomalies
-                    )
-                    reprojector(
-                        source=raster_has_usable_data.astype(np.uint8),
-                        destination=image_roi[order_idx],
-                        resampling=rasterio.warp.Resampling.min,
-                    )
-                    reprojector(
-                        source=udm2_data,
-                        destination=image_udm2[order_idx],
-                        resampling=rasterio.warp.Resampling.nearest,
-                    )
-                reprojector(
-                    source=raster_data,
-                    destination=image_data[order_idx],
-                    src_nodata=raster.nodata,
-                    dst_nodata=raster.nodata,
-                    resampling=rasterio.warp.Resampling.bilinear,
+                image_metadata[order_idx]["orig_crs"] = raster.crs.to_dict()
+                image_metadata[order_idx]["orig_shape"] = raster.shape
+                image_metadata[order_idx]["orig_bounds"] = tuple(raster.bounds)
+                image_metadata[order_idx]["orig_transform"] = tuple(raster.transform)
+                reprojector = functools.partial(
+                    rasterio.warp.reproject,
+                    src_transform=raster.transform,
+                    src_crs=raster.crs,
+                    dst_transform=output_transform,
+                    dst_crs=target_crs,
                 )
+                raster_data = raster.read()
+                with rasterio.open(order_info.raster_udm2_path) as udm2:
+                    udm2_data = udm2.read()
+                    usable_data_mask = np.logical_and(
+                        np.any(raster_data != self.metadata.nodata_val, axis=0),
+                        udm2_data[7] == 0,  # band #8 in udm2 = unusable pixel bits due to anomalies
+                    )
+            reprojector(
+                source=usable_data_mask.astype(np.uint8),
+                destination=image_roi[order_idx],
+                resampling=rasterio.warp.Resampling.min,
+            )
+            reprojector(
+                source=udm2_data,
+                destination=image_udm2[order_idx],
+                resampling=rasterio.warp.Resampling.nearest,
+            )
+            reprojector(
+                source=raster_data,
+                destination=image_data[order_idx],
+                src_nodata=self.metadata.nodata_val,
+                dst_nodata=self.metadata.nodata_val,
+                resampling=rasterio.warp.Resampling.bilinear,
+            )
 
+        # finally, create the field mask using the same shape/transform as the arrays above
         field_mask_shapes = [(poly.geometry, 1) for poly in location_data.polygons]
         field_mask = rasterio.features.rasterize(
             shapes=field_mask_shapes,
             out_shape=output_image_shape,
             transform=output_transform,
         ).astype(bool)
+
         return dict(
             location_id=location_id,
             location_preview_image=self._generate_preview_image(image_data),
@@ -528,7 +632,11 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             image_udm2=image_udm2,
         )
 
-    def _generate_preview_image(self, image_raw: np.ndarray) -> np.ndarray:
+    def _generate_preview_image(
+        self,
+        image_raw: np.ndarray,
+        transpose_to_hwc: bool = True,
+    ) -> np.ndarray:
         """Generates a preview RGB image of the given raster image stack."""
         # note: not using global mean/std stats for this! (computing them using the full stack)
         assert image_raw.ndim == 4
@@ -547,14 +655,14 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         for bidx in range(3):
             band_mean = image_raw[:, bidx][valid_px_mask].mean()
             band_std = max(image_raw[:, bidx][valid_px_mask].std(), 1)
-            normalized_data[:, bidx][valid_px_mask] = \
-                (image_raw[:, bidx][valid_px_mask] - band_mean) / band_std
+            normalized_data[:, bidx][valid_px_mask] = (image_raw[:, bidx][valid_px_mask] - band_mean) / band_std
         # clamp to two std (95% of all data)
         normalized_data[normalized_data > 2] = 2
         normalized_data[normalized_data < -2] = -2
         # keep only the first image of the stack, and scale to 8-bit range
         preview_image = (((normalized_data[0] + 2) / 4) * 255).astype(np.uint8)
-        preview_image = np.transpose(preview_image, (1, 2, 0))  # move ch dim to last position
+        if transpose_to_hwc:
+            preview_image = np.transpose(preview_image, (1, 2, 0))  # move ch dim to last position
         return preview_image
 
     @staticmethod
@@ -562,6 +670,13 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         """Converts a 'sample index' from Sherrie Wang's shapefile dataset to a unique str id."""
         # note: this is used to simplify debugging and help comprehension for dataset users
         return f"shp_location_{sample_idx:04}"
+
+    @dataclasses.dataclass
+    class _OutputSampleData:
+        """Output sample data structure, used internally do tied locations to orders."""
+
+        location: LocationData
+        orders: typing.List[OrderInfo]
 
 
 def _repackage_disa(dataset_root_path: pathlib.Path):

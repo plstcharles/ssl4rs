@@ -15,10 +15,10 @@ nodata_val = 0.0
 """No-data (invalid) pixel value in all raster bands."""
 
 three_band_descriptions = ["red", "green", "blue"]
-"""When using 3-band Planet PSScene rasters, this is the order/content of those bands."""
+"""When using 3-band Planet PSScene rasters, this is the description of those bands."""
 
 four_band_descriptions = ["blue", "green", "red", "nir"]
-"""When using 4-band Planet PSScene rasters, this is the order/content of those bands."""
+"""When using 4-band Planet PSScene rasters, this is the description of those bands."""
 
 eight_band_descriptions = [
     "coastal blue",
@@ -30,7 +30,7 @@ eight_band_descriptions = [
     "red edge",
     "nir",
 ]
-"""When using 8-band Planet PSScene rasters, this is the order/content of those bands (todo @@@@ validate!)."""
+"""When using 8-band Planet PSScene rasters, this is the description of those bands."""
 
 crs = "EPSG:4326"
 """EPSG code for the CRS of all rasters (post-repackaging)."""
