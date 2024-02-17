@@ -63,11 +63,11 @@ target_metric: valid/accuracy # name of the metric we will be targeting for hpar
 target_metric_mode: max # optimization mode of the target metric defined above
 
 utils:
-  print_config: True
+  print_config: true
   project_name: ai4h-disa
 
 profiler: # in case we run the data profiler, these are the modified setting to use
-  use_parser: False
+  use_parser: false
   batch_count:
   loop_count: 10
   display_key: # use 'field_boundary_mask' here to show the target masks while profiling

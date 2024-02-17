@@ -15,8 +15,8 @@ def generate_boundary_mask_from_class_label_map(
     """Generates a boundary mask from all regions of interest inside a given class label map.
 
     We will use the specified target class label to extract the regions of interest from the class
-    label map (which should be a 2-dim, HxW array). If a label index to ignore is specified, we
-    will make sure that the pixels assigned to that index will keep this assignment in the output
+    label map (which should be a 2-dim, HxW array). If a label index to ignore is specified, we will
+    make sure that the pixels assigned to that index will keep this assignment in the output
     boundary mask.
 
     The output will be provided as a 2-dim, HxW, int64 array with background (non-boundary) pixels
@@ -62,24 +62,3 @@ def generate_boundary_mask_from_class_label_map(
     if dontcare_mask is not None:
         output_mask[dontcare_mask] = ignore_index
     return output_mask
-
-
-def generate_distance_map_from_class_label_map(
-    # @@@@@@@@ TODO complete me
-    label,
-    min_val = 0,
-    max_val = 1,
-):
-    """
-    Converts an array of masked polygons to regions with 0-1 distance from center as floats.
-    """
-    # Ensure label is binary with values 0 or 255 and of type uint8
-    tlabel = np.where(label > 0, 255, 0).astype(np.uint8)
-
-    # Compute the distance transform
-    dist = cv2.distanceTransform(tlabel, cv2.DIST_L2, 0)
-
-    # Normalize the distance transform to range [0, 1]
-    dist = cv2.normalize(dist, None, min_val, max_val, cv2.NORM_MINMAX)
-
-    return dist
