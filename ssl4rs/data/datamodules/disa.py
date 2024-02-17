@@ -15,6 +15,7 @@ import ssl4rs.data.datamodules.utils
 import ssl4rs.data.metadata.disa
 import ssl4rs.data.parsers.disa
 import ssl4rs.data.repackagers.disa
+import ssl4rs.data.transforms.boundary
 import ssl4rs.utils.config
 import ssl4rs.utils.logging
 
@@ -158,10 +159,14 @@ def custom_collate(
 ) -> ssl4rs.data.BatchDictType:
     """Defines a custom collate function to deal with non-pytorch-compatible dataset elements."""
     # first, pad to the specified shape (if needed)
-    zero_pad_names = DataModule.metadata.tensor_names_to_zero_pad
+    pad_names = DataModule.metadata.tensor_names_to_pad
     for batch in batches:
         for tname in batch.keys():
-            if pad_to_shape is not None and tname in zero_pad_names:
+            if pad_to_shape is not None and tname in pad_names:
+                if tname not in ["field_mask", "field_boundary_mask"]:
+                    pad_value = 0
+                else:
+                    pad_value = DataModule.metadata.dontcare_label
                 assert batch[tname].shape[-2] <= pad_to_shape[0]
                 assert batch[tname].shape[-1] <= pad_to_shape[1]
                 batch[tname] = torch.nn.functional.pad(
@@ -172,6 +177,8 @@ def custom_collate(
                         0,  # do not pad before-last-dim (height) from the top
                         pad_to_shape[0] - batch[tname].shape[-2],  # pad to bottom
                     ),
+                    mode="constant",
+                    value=pad_value,
                 )
     # second, do the actual collate while bypassing torch for the funkier arrays
     output = ssl4rs.data.default_collate(
@@ -186,7 +193,7 @@ def convert_deeplake_tensors_to_pytorch_tensors(
     normalize_input_tensors: bool = False,
     mask_input_tensors: bool = False,
 ) -> ssl4rs.data.BatchDictType:
-    """Transform used in parser class to convert tensor formats."""
+    """Transform used in parser class to convert tensors to pytorch-model-ready format."""
     assert isinstance(batch, dict)
     convert_names = DataModule.metadata.tensor_names_to_convert
     ch_transp_names = DataModule.metadata.tensor_names_to_transpose_ch
@@ -231,6 +238,28 @@ def convert_deeplake_tensors_to_pytorch_tensors(
             assert isinstance(tval, np.ndarray)
             tval = torch.as_tensor(tval)
         batch[tname] = tval
+    return batch
+
+
+def generate_field_boundary_mask(
+    batch: ssl4rs.data.BatchDictType,
+    output_field_boundary_mask_name: str = "field_boundary_mask",
+) -> ssl4rs.data.BatchDictType:
+    """Transform used in parser class to generate field boundary (contour) masks."""
+    assert isinstance(batch, dict)
+    assert "field_mask" in batch
+    class_map = batch["field_mask"]
+    unannotated_mask = class_map == 0  # this is the real 'dontcare' which we reapply below
+    boundary_mask = ssl4rs.data.transforms.boundary.generate_boundary_mask_from_class_label_map(
+        class_label_map=class_map,
+        target_class_label=1,  # target the "positive" (field) class inside the binary mask
+        ignore_index=DataModule.metadata.dontcare_label,
+    )
+    boundary_mask[unannotated_mask] = DataModule.metadata.dontcare_label
+    if isinstance(class_map, torch.Tensor):
+        # need to convert the new mask to the same format
+        boundary_mask = torch.as_tensor(boundary_mask).to(device=class_map.device)
+    batch[output_field_boundary_mask_name] = boundary_mask
     return batch
 
 

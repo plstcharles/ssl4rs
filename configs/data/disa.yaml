@@ -13,6 +13,7 @@ datamodule:
         - _partial_: true
           _target_: ssl4rs.data.datamodules.disa.convert_deeplake_tensors_to_pytorch_tensors
           normalize_input_tensors: false
+          mask_input_tensors: false
   dataloader_configs:
     _default_: # this group provides shared (but overridable) settings for all data loader types
       # the default target to create a dataloader here will be the deeplake-based dataloader class
@@ -33,7 +34,7 @@ datamodule:
         _target_: ssl4rs.data.datamodules.disa.custom_collate
         pad_to_shape: [320, 320]
       decode_method:
-        location_preview_image: numpy  # gets rid of another annoying warning due to jpg compression
+        location_preview_image: numpy # gets rid of another annoying warning due to jpg compression
 
 num_input_ch: 4 # assuming we're loading the BGRNIR dataset above
 num_classes: 2

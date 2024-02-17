@@ -150,15 +150,16 @@ tensor_names_to_collate_manually = (
 )
 """List of tensors that will surely break pytorch if not handled manually during batch collate."""
 
-tensor_names_to_zero_pad = (
+tensor_names_to_pad = (
     "location_preview_image",
     "location_preview_roi",
     "field_mask",
+    "field_boundary_mask",
     "image_data",
     "image_roi",
     "image_udm2",
 )
-"""List of tensors that will surely need to be zero-padded during batch collate."""
+"""List of tensors that will surely need to be padded during batch collate."""
 
 tensor_names_to_convert = (
     "location_preview_image",

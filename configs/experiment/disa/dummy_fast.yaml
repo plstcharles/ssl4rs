@@ -34,30 +34,33 @@ model: # specified which LightningModule-derived implementation provides the tra
   num_output_classes: ${data.num_classes}
   num_input_channels: 3 # because we use the rgb preview images below
   input_key: location_preview_image # name associated with the input data tensor inside dataset
-  label_key: field_mask # name associated with the target data tensor inside dataset
+  label_key: field_boundary_mask # name associated with the target data tensor inside dataset
   ignore_index: ${data.ignore_index}
-  example_image_shape: [ 320, 320 ]
+  example_image_shape: [320, 320]
 
 data:
   datamodule:
     dataloader_configs:
       _default_: # this group provides shared (but overridable) settings for all data loader types
         batch_size: 32
+        num_workers: 0 # a good default should be given by ${utils.default_num_workers}
     dataparser_configs:
       _default_: # this group provides shared (but overridable) settings for all data parser types
         batch_transforms:
           - _partial_: true
             _target_: ssl4rs.data.datamodules.disa.convert_deeplake_tensors_to_pytorch_tensors
             normalize_input_tensors: true # we toggle this on to be able to actually train our model
-            mask_input_tensors: true  # we also zero-out the invalid pixels in input tensors
+            mask_input_tensors: true # we also zero-out the invalid pixels in input tensors
+          - _partial_: true
+            _target_: ssl4rs.data.datamodules.disa.generate_field_boundary_mask
 
 trainer:
   precision: 32-true
   max_epochs: 3
   log_every_n_steps: 1
 
-target_metric: valid/loss # name of the metric we will be targeting for hparam optimization
-target_metric_mode: min # optimization mode of the target metric defined above
+target_metric: valid/accuracy # name of the metric we will be targeting for hparam optimization
+target_metric_mode: max # optimization mode of the target metric defined above
 
 utils:
   print_config: True
@@ -67,3 +70,4 @@ profiler: # in case we run the data profiler, these are the modified setting to 
   use_parser: False
   batch_count:
   loop_count: 10
+  display_key: # use 'field_boundary_mask' here to show the target masks while profiling
