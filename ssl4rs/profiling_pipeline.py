@@ -77,6 +77,59 @@ def _get_dataloader(
     return dataparser
 
 
+def _profile_data_loader(
+    dataloader: typing.Union[torch.utils.data.DataLoader, ssl4rs.data.DataParser],
+    config: omegaconf.DictConfig,
+) -> None:
+    max_batch_count = config.profiler.get("batch_count", -1)
+    if max_batch_count is None:
+        max_batch_count = -1
+    assert max_batch_count == -1 or max_batch_count >= 0, "max_batch_count must be -1 (for all batches) or >= 0"
+    if max_batch_count == 0:
+        logger.info("max batch count set to zero, skipping data loader profiling")
+        return
+    display_key = config.profiler.get("display_key", None)
+    display_wait_time = config.profiler.get("display_wait_time", 0)  # in milliseconds
+    loop_count = config.profiler.get("loop_count", 1)
+    assert loop_count > 0
+    loop_times = []
+    tot_batch_count, tot_iter_count = 0, 0
+    logger.info(f"data loader prepared for up to {len(dataloader)} iterations per loop")
+    if max_batch_count > 0:
+        max_batch_count = min(len(dataloader), max_batch_count)
+    logger.info(f"will run a total of {loop_count}x{max_batch_count} iterations")
+    for loop_idx in range(loop_count):
+        with stopwatch_creator(name=f"loop{loop_idx:03d}") as loop_sw:
+            pbar = tqdm.rich.tqdm(
+                desc=f"loop{loop_idx:03d}",
+                total=max_batch_count,
+            )
+            batch_stopwatch = stopwatch_creator(
+                log_message_format="batch{idx:04d} elapsed time: {:0.4f} seconds",
+            )
+            batch_stopwatch.start()
+            for batch_idx, batch in enumerate(dataloader):
+                curr_elapsed_time, _ = batch_stopwatch.stop(), loop_sw.stop()
+                logger.debug(f"batch{batch_idx:04d} elapsed time: {curr_elapsed_time:0.4f} seconds")
+                pbar.update(1)
+                assert isinstance(batch, dict)
+                tot_batch_count += ssl4rs.data.get_batch_size(batch)
+                if display_key:
+                    _display_batched_tensor(batch, display_key, display_wait_time)
+                if max_batch_count != -1 and batch_idx + 1 == max_batch_count:
+                    break
+                batch_stopwatch.start(), loop_sw.start()
+            pbar.close()
+        loop_times.append(loop_sw.total())
+    logger.info(f"loop time min: {np.min(loop_times)}")
+    logger.info(f"loop time max: {np.max(loop_times)}")
+    logger.info(f"loop time avg: {np.mean(loop_times)}")
+    logger.info(f"loop time std: {np.std(loop_times)}")
+    tot_loop_time = np.sum(loop_times)
+    avg_batch_time = tot_loop_time / tot_batch_count
+    logger.info(f"average time per data sample: {avg_batch_time:0.6f} seconds")
+
+
 def data_profiler(config: omegaconf.DictConfig) -> None:
     """Runs the data (module, loader, and/or parser) profiling pipeline.
 
@@ -96,50 +149,7 @@ def data_profiler(config: omegaconf.DictConfig) -> None:
             target_dataloader_type=config.profiler.get("default_dataloader_type", "train"),
             return_parser=config.profiler.get("use_parser", False),
         )
-    max_batch_count = config.profiler.get("batch_count", -1)
-    assert max_batch_count is None or max_batch_count == -1 or max_batch_count >= 0
-    if max_batch_count is None:
-        max_batch_count = -1
-    display_key = config.profiler.get("display_key", None)
-    display_wait_time = config.profiler.get("display_wait_time", 0)  # in milliseconds
-    if max_batch_count != 0:
-        batch_stopwatch = stopwatch_creator(
-            log_message_format="batch{idx:04d} elapsed time: {:0.4f} seconds",
-        )
-        loop_count = config.profiler.get("loop_count", 1)
-        assert loop_count > 0
-        loop_times = []
-        tot_batch_count = 0
-        for loop_idx in range(loop_count):
-            with stopwatch_creator(name=f"loop{loop_idx:03d}") as loop_sw:
-                if max_batch_count == -1:
-                    max_iters = len(dataloader)
-                else:
-                    max_iters = min(len(dataloader), max_batch_count)
-                pbar = tqdm.rich.tqdm(
-                    desc=f"loop{loop_idx:03d}",
-                    total=max_iters,
-                )
-                batch_stopwatch.start()
-                for batch_idx, batch in enumerate(dataloader):
-                    curr_elapsed_time, _ = batch_stopwatch.stop(), loop_sw.stop()
-                    logger.debug(f"batch{batch_idx:04d} elapsed time: {curr_elapsed_time:0.4f} seconds")
-                    pbar.update(1)
-                    tot_batch_count += ssl4rs.data.get_batch_size(batch)
-                    if display_key:
-                        _display_batched_tensor(batch, display_key, display_wait_time)
-                    if max_batch_count != -1 and batch_idx + 1 == max_batch_count:
-                        break
-                    batch_stopwatch.start(), loop_sw.start()
-                pbar.close()
-            loop_times.append(loop_sw.total())
-        logger.info(f"loop time min: {np.min(loop_times)}")
-        logger.info(f"loop time max: {np.max(loop_times)}")
-        logger.info(f"loop time avg: {np.mean(loop_times)}")
-        logger.info(f"loop time std: {np.std(loop_times)}")
-        tot_loop_time = np.sum(loop_times)
-        avg_batch_time = tot_loop_time / tot_batch_count
-        logger.info(f"average time per data sample: {avg_batch_time:0.6f} seconds")
+    _profile_data_loader(dataloader, config)  # also displays rendered batches if needed
     with stopwatch_creator(name="datamodule.teardown()"):
         datamodule.teardown()
     logger.info(f"Done ({exp_name}: {run_name}, '{run_type}', job={job_name})")
@@ -173,8 +183,16 @@ def _get_trainer_override_settings(max_batch_count: int) -> omegaconf.DictConfig
             "max_epochs": 1,
             "limit_train_batches": max_batch_count if max_batch_count > 0 else None,
             "limit_val_batches": max_batch_count if max_batch_count > 0 else None,
-            "num_sanity_val_steps": 0,
             "barebones": True,
+            "enable_checkpointing": False,
+            "logger": None,
+            "enable_progress_bar": False,
+            "log_every_n_steps": None,
+            "enable_model_summary": False,
+            "num_sanity_val_steps": 0,
+            "fast_dev_run": False,
+            "detect_anomaly": False,
+            "profiler": None,
         }
     )
 
@@ -203,9 +221,9 @@ def model_profiler(config: omegaconf.DictConfig) -> None:
     with stopwatch_creator(name="model and trainer creation"):
         model = ssl4rs.utils.config.get_model(config)
     max_batch_count = config.profiler.get("batch_count", -1)
-    assert max_batch_count is None or max_batch_count == -1 or max_batch_count >= 0
     if max_batch_count is None:
         max_batch_count = -1
+    assert max_batch_count == -1 or max_batch_count > 0, "max_batch_count must be -1 (for all batches) or > 0"
     trainer_config = copy.deepcopy(config.trainer)
     trainer_override_config = _get_trainer_override_settings(max_batch_count)
     for key, val in trainer_override_config.items():
@@ -217,22 +235,21 @@ def model_profiler(config: omegaconf.DictConfig) -> None:
     logger.info("Final trainer settings for model profiling:")
     for key, val in trainer_config.items():
         logger.info(f"\t{key}: {val}")
-    if max_batch_count != 0:
-        loop_count = config.profiler.get("loop_count", 1)
-        assert loop_count > 0
-        loop_times = []
-        for loop_idx in range(loop_count):
-            trainer: pl.Trainer = hydra.utils.instantiate(trainer_config)
-            with stopwatch_creator(name=f"loop{loop_idx:03d}") as loop_sw:
-                trainer.fit(
-                    model=model,  # noqa
-                    train_dataloaders=train_dataloader,
-                    val_dataloaders=valid_dataloader,
-                )
-            loop_times.append(loop_sw.total())
-        logger.info(f"epoch time min: {np.min(loop_times)}")
-        logger.info(f"epoch time max: {np.max(loop_times)}")
-        logger.info(f"epoch time avg: {np.mean(loop_times)}")
-        logger.info(f"epoch time std: {np.std(loop_times)}")
+    loop_count = config.profiler.get("loop_count", 1)
+    assert loop_count > 0
+    loop_times = []
+    for loop_idx in range(loop_count):
+        trainer: pl.Trainer = hydra.utils.instantiate(trainer_config)
+        with stopwatch_creator(name=f"loop{loop_idx:03d}") as loop_sw:
+            trainer.fit(
+                model=model,  # noqa
+                train_dataloaders=train_dataloader,
+                val_dataloaders=valid_dataloader,
+            )
+        loop_times.append(loop_sw.total())
+    logger.info(f"epoch time min: {np.min(loop_times)}")
+    logger.info(f"epoch time max: {np.max(loop_times)}")
+    logger.info(f"epoch time avg: {np.mean(loop_times)}")
+    logger.info(f"epoch time std: {np.std(loop_times)}")
     datamodule.teardown()
     logger.info(f"Done ({exp_name}: {run_name}, '{run_type}', job={job_name})")
