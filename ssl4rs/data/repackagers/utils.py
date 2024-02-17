@@ -27,7 +27,7 @@ class DeepLakeRepackager:
     @property
     @abc.abstractmethod
     def tensor_info(self) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
-        """Returns the dictionary of tensor info (declaration) arguments used during creation.
+        """Returns the dictionary of tensor declarations used during repackaging.
 
         Note: the arguments used for each key in the returned dictionary should be usable directly
         in the `deeplake.Dataset.create_tensor` function; see

@@ -15,7 +15,7 @@ datamodule: # this corresponds to the main LightningDataModule we'll be getting 
       pin_memory: False # we also will not be pinning tensors to memory with the default setting
       # drop_last: False
       # timeout: 0.0
-      worker_init_fn: null # when `seed_workers=True`, will be auto-set to `pl_worker_init_function`
+      worker_init_fn: "auto" # when `seed_workers=True`, will be auto-set to `pl_worker_init_function`
       # generator: null
       # prefetch_factor: 2
       # persistent_workers: False

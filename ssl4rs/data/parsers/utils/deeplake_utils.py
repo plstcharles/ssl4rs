@@ -1,4 +1,5 @@
 """Implements parsing utilities for the ActiveLoop DeepLake format."""
+import functools
 import pathlib
 import typing
 
@@ -246,6 +247,8 @@ class DeepLakeParser(DataParser):
                 batch_size=batch_size,
                 drop_last=drop_last,
             )
+            if self.batch_transforms:
+                dataloader = dataloader.transform(self.batch_transforms)
             if shuffle:
                 dataloader = dataloader.shuffle(shuffle=shuffle, buffer_size=shuffle_buffer_size)
             dataloader = dataloader.pytorch(
@@ -271,7 +274,7 @@ class DeepLakeParser(DataParser):
                 shuffle=shuffle,
                 buffer_size=shuffle_buffer_size,
                 use_local_cache=False,
-                # transforms=?
+                transform=self.batch_transforms,
                 tensors=tensors,
                 return_index=return_index,
                 pad_tensors=False,

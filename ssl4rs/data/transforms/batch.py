@@ -308,7 +308,7 @@ def default_collate(
     default_keys_to_batch_manually = [
         "batch_id",  # should correspond to hashable objects that might hurt torch's default_collate
     ]
-    keys_to_batch_manually = set(*keys_to_batch_manually, *default_keys_to_batch_manually)
+    keys_to_batch_manually = {*keys_to_batch_manually, *default_keys_to_batch_manually}
     for key in keys_to_batch_manually:
         if key in avail_batch_keys:
             output[key] = [b[key] for b in batches]

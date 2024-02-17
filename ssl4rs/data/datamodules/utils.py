@@ -362,12 +362,13 @@ class DataModule(pl.LightningDataModule):
         logger.debug(f"Instantiating a new '{subset_type}' dataloader...")
         config = self._get_subconfig_for_subset(self.dataloader_configs, subset_type)
         if os.getenv("PL_SEED_WORKERS"):
-            if config.get("worker_init_fn", None) is not None:
+            worker_init_fn = config.get("worker_init_fn", None)
+            if worker_init_fn not in [None, "auto"]:
                 logger.warning(
                     "Using a custom worker init function with `seed_workers=True`! "
                     "(cannot use the lightning seed function here, make sure you use/call it yourself!)"
                 )
-            else:
+            elif worker_init_fn == "auto":
                 with omegaconf.open_dict(config):
                     # open_dict allows us to write through hydra's omegaconf struct
                     config.worker_init_fn = omegaconf.OmegaConf.create(

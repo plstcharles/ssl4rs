@@ -9,8 +9,6 @@ import pathlib
 import typing
 
 import hydra
-import omegaconf
-import torch
 import torch.utils.data
 
 import ssl4rs.data.datamodules.utils
@@ -114,7 +112,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
 
     def _is_preparation_complete(self) -> bool:
         """Returns whether the dataset is prepared for setup/loading or not."""
-        root_data_dir = self.hparams.data_dir
+        root_data_dir = pathlib.Path(self.hparams.data_dir)
         if root_data_dir.name == ".deeplake" and root_data_dir.is_dir():
             return True
         potential_deeplake_subdir = root_data_dir / ".deeplake"
@@ -126,7 +124,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         """Will download and repackage the raw UC Merced dataset, if necessary."""
         if self._is_preparation_complete():
             return
-        root_data_dir = self.hparams.data_dir
+        root_data_dir = pathlib.Path(self.hparams.data_dir)
         if not root_data_dir.exists():
             logger.warning(f"UC Merced Land Use dataset missing from: {root_data_dir}")
             logger.warning("will download and extract the zip contents in that location...")
@@ -151,7 +149,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         # load datasets only if they're not loaded already (no matter the requested stage)
         if self.data_train is None:
             deeplake_kwargs = self.hparams.deeplake_kwargs or {}
-            root_data_dir = self.hparams.data_dir
+            root_data_dir = pathlib.Path(self.hparams.data_dir)
             if root_data_dir.name != ".deeplake":
                 root_data_dir = root_data_dir / ".deeplake"
             assert root_data_dir.is_dir()

@@ -46,7 +46,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
 
     @property  # we need to provide this for the base class!
     def tensor_info(self) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
-        """Returns the dictionary of tensor info (declaration) arguments used during creation."""
+        """Returns the dictionary of tensor declarations used during repackaging."""
         if self.image_type != "rgb":
             raise NotImplementedError("non-rgb dataset types not supported yet!")
         return {

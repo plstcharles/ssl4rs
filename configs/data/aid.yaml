@@ -1,5 +1,5 @@
 defaults:
-  - default.yaml # reloads all the default data settings and overrides with those below
+  - default_with_deeplake_loaders.yaml # reloads the default settings and overrides with those below
   - _self_
 
 datamodule: # the aid dataset comes with its own custom data module for classification tasks

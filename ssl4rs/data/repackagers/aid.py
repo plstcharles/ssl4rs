@@ -30,7 +30,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
 
     @property  # we need to provide this for the base class!
     def tensor_info(self) -> typing.Dict[str, typing.Dict[str, typing.Any]]:
-        """Returns the dictionary of tensor info (declaration) arguments used during creation."""
+        """Returns the dictionary of tensor declarations used during repackaging."""
         return dict(
             image=dict(htype="image", dtype=np.uint8, sample_compression="jpg"),
             label=dict(htype="class_label", dtype=np.int16, class_names=self.metadata.class_names),

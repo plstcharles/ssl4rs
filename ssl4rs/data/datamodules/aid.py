@@ -7,7 +7,6 @@ import pathlib
 import typing
 
 import hydra
-import omegaconf
 import torch.utils.data
 
 import ssl4rs.data.datamodules.utils
@@ -96,7 +95,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
 
     def _is_preparation_complete(self) -> bool:
         """Returns whether the dataset is prepared for setup/loading or not."""
-        root_data_dir = self.hparams.data_dir
+        root_data_dir = pathlib.Path(self.hparams.data_dir)
         if root_data_dir.name == ".deeplake" and root_data_dir.is_dir():
             return True
         potential_deeplake_subdir = root_data_dir / ".deeplake"
@@ -113,7 +112,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             return
         # otherwise, let's do the repackaging now (`prepare_data` is called only once, ever)
         logger.info("Starting deep lake repackager for AID dataset...")
-        root_data_dir = self.hparams.data_dir
+        root_data_dir = pathlib.Path(self.hparams.data_dir)
         repackager = ssl4rs.data.repackagers.aid.DeepLakeRepackager(root_data_dir)
         deeplake_output_path = root_data_dir / ".deeplake"
         repackager.export(deeplake_output_path)
@@ -133,7 +132,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         # load datasets only if they're not loaded already (no matter the requested stage)
         if self.data_train is None:
             deeplake_kwargs = self.hparams.deeplake_kwargs or {}
-            root_data_dir = self.hparams.data_dir
+            root_data_dir = pathlib.Path(self.hparams.data_dir)
             if root_data_dir.name != ".deeplake":
                 root_data_dir = root_data_dir / ".deeplake"
             assert root_data_dir.is_dir()

@@ -802,7 +802,7 @@ class BaseModel(pl.LightningModule):
         outputs: typing.Dict[typing.AnyStr, typing.Any],
         dataloader_idx: int = 0,
     ) -> typing.Any:
-        """Renders and logs a specific data samples from the current batch using available loggers.
+        """Renders and logs specific samples from the current batch using available loggers.
 
         Note: by default, the base class has no idea what to render and how to properly log it, so
         this implementation does nothing. Derived classes are strongly suggested to implement this
@@ -861,7 +861,7 @@ class BaseModel(pl.LightningModule):
         metric_group = f"metrics/{loop_type}"
         if metric_group in self.metrics:
             metrics = self.metrics[metric_group]
-            target = outputs.get("target", None)
+            target = outputs.get("targets", None)
             preds = outputs.get("preds", None)
             assert (
                 target is not None and preds is not None
