@@ -51,6 +51,7 @@ class GenericClassifier(ssl4rs.models.BaseModel):
         label_key: typing.AnyStr = "label",
         ignore_index: typing.Optional[int] = None,
         example_image_shape: typing.Tuple[int, int] = (224, 224),  # height, width
+        save_hyperparams: bool = True,  # turn this off in derived classes
         **kwargs,
     ):
         """Initializes the LightningModule and its submodules, loss, metrics, and optimizer.
@@ -89,6 +90,9 @@ class GenericClassifier(ssl4rs.models.BaseModel):
             ignore_index: value used to indicate dontcare predictions. None = not used.
             example_image_shape: shape of the example image tensor to be created. Defaults to the
                 commonly used imagenet image shape (224x224), but which might not always be OK.
+            save_hyperparams: toggles whether hyperparameters should be saved in this class. This
+                should be `False` when this class is derived, and the `save_hyperparameters`
+                function should be called in the derived constructor.
         """
         assert num_output_classes >= 1, f"invalid number of output classes: {num_output_classes}"
         assert num_input_channels >= 1, f"invalid number of input channels: {num_input_channels}"
@@ -106,8 +110,9 @@ class GenericClassifier(ssl4rs.models.BaseModel):
             )
         assert isinstance(metrics, (dict, omegaconf.DictConfig)), f"incompatible metrics type: {type(metrics)}"
         self._metrics_config = metrics
-        # this line allows us to access hparams with `self.hparams` + auto-stores them in checkpoints
-        self.save_hyperparameters(logger=False)  # logger=False since we don't need duplicated logs
+        if save_hyperparams:
+            # this line allows us to access hparams with `self.hparams` + auto-stores them in checkpoints
+            self.save_hyperparameters(logger=False)  # logger=False since we don't need duplicated logs
         super().__init__(
             optimization=optimization,
             **kwargs,
@@ -125,8 +130,10 @@ class GenericClassifier(ssl4rs.models.BaseModel):
         assert isinstance(loss_fn, torch.nn.Module), f"incompatible loss_fn type: {type(loss_fn)}"
         self.loss_fn = loss_fn
         self._create_example_input_array(  # for easier tracing/profiling; fake tensors for 'forward'
-            data=torch.randn(4, num_input_channels, *example_image_shape),
-            batch_size=4,
+            **{
+                self.input_key: torch.randn(4, self.num_input_channels, *example_image_shape),
+                "batch_size": 4,
+            },
         )
 
     def configure_metrics(self) -> torchmetrics.MetricCollection:
@@ -275,6 +282,7 @@ class GenericSegmenter(GenericClassifier):
         label_key: typing.AnyStr = "label",
         ignore_index: typing.Optional[int] = None,
         example_image_shape: typing.Tuple[int, int] = (256, 256),  # height, width
+        save_hyperparams: bool = True,  # turn this off in derived classes
         **kwargs,
     ):
         """Initializes the LightningModule and its submodules, loss, metrics, and optimizer.
@@ -283,7 +291,9 @@ class GenericSegmenter(GenericClassifier):
             `ssl4rs.models.classif.base.GenericClassifier`
             `ssl4rs.models.utils.BaseModel`
         """
-        self.save_hyperparameters(logger=False)  # logger=False since we don't need duplicated logs
+        if save_hyperparams:
+            # this line allows us to access hparams with `self.hparams` + auto-stores them in checkpoints
+            self.save_hyperparameters(logger=False)  # logger=False since we don't need duplicated logs
         super().__init__(
             encoder=model,
             head=None,
@@ -296,6 +306,7 @@ class GenericSegmenter(GenericClassifier):
             label_key=label_key,
             ignore_index=ignore_index,
             example_image_shape=example_image_shape,
+            save_hyperparams=False,
             **kwargs,
         )
 
