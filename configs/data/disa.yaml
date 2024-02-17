@@ -1,0 +1,40 @@
+defaults:
+  - default_with_deeplake_loaders.yaml # reloads the default settings and overrides with those below
+  - _self_
+
+datamodule:
+  _target_: ssl4rs.data.datamodules.disa.DataModule
+  data_dir: ${utils.data_root_dir}/ai4h-disa/india/.deeplake
+  train_val_test_split: [0.8, 0.1, 0.1]
+  deeplake_kwargs: null
+  dataparser_configs:
+    _default_:
+      batch_transforms:
+        - _partial_: true
+          _target_: ssl4rs.data.datamodules.disa.convert_deeplake_tensors_to_pytorch_tensors
+          normalize_input_tensors: false
+  dataloader_configs:
+    _default_: # this group provides shared (but overridable) settings for all data loader types
+      # the default target to create a dataloader here will be the deeplake-based dataloader class
+      use_optimized_dataloader: false # as of 2024-02-16, you get segfaults with the optimized loader
+      batch_size: 4 # bump up the default batch size for all data loaders
+      tensors: # names of tensors we want to train/evaluate with, and that will be batched
+        - location_id
+        - location_preview_image
+        - location_preview_roi
+        - field_geoms
+        - field_mask
+        - field_centroid
+        - field_scatter
+        - image_data
+        - image_roi
+      collate_fn:
+        _partial_: true
+        _target_: ssl4rs.data.datamodules.disa.custom_collate
+        pad_to_shape: [320, 320]
+      decode_method:
+        location_preview_image: numpy  # gets rid of another annoying warning due to jpg compression
+
+num_input_ch: 4 # assuming we're loading the BGRNIR dataset above
+num_classes: 2
+ignore_index: -1 # class index to ignore in field segmentation masks
