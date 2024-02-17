@@ -17,4 +17,6 @@ device_monitor:
   # NOTE: this callback requires at least one logger to be passed to the trainer!
   cpu_stats: True # toggles whether to log CPU stats along other device stats, if not CPU-only
 
+# todo@@@@@: add ThroughputMonitor (lightning 2.2)
+
 # note: training sessions can also be limited to a wallclock time delta using the 'Timer' callback
