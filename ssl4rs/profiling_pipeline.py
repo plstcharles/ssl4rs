@@ -81,10 +81,10 @@ def _profile_data_loader(
     dataloader: typing.Union[torch.utils.data.DataLoader, ssl4rs.data.DataParser],
     config: omegaconf.DictConfig,
 ) -> None:
-    max_batch_count = config.profiler.get("batch_count", -1)
-    if max_batch_count is None:
-        max_batch_count = -1
-    assert max_batch_count == -1 or max_batch_count >= 0, "max_batch_count must be -1 (for all batches) or >= 0"
+    max_batch_count = config.profiler.get("batch_count", None)
+    if max_batch_count == -1:
+        max_batch_count = None
+    assert max_batch_count is None or max_batch_count >= 0, "invalid max_batch_count"
     if max_batch_count == 0:
         logger.info("max batch count set to zero, skipping data loader profiling")
         return
@@ -95,8 +95,7 @@ def _profile_data_loader(
     loop_times = []
     tot_batch_count, tot_iter_count = 0, 0
     logger.info(f"data loader prepared for up to {len(dataloader)} iterations per loop")
-    if max_batch_count > 0:
-        max_batch_count = min(len(dataloader), max_batch_count)
+    max_batch_count = min(len(dataloader), max_batch_count) if max_batch_count else len(dataloader)
     logger.info(f"will run a total of {loop_count}x{max_batch_count} iterations")
     for loop_idx in range(loop_count):
         with stopwatch_creator(name=f"loop{loop_idx:03d}") as loop_sw:
@@ -116,7 +115,7 @@ def _profile_data_loader(
                 tot_batch_count += ssl4rs.data.get_batch_size(batch)
                 if display_key:
                     _display_batched_tensor(batch, display_key, display_wait_time)
-                if max_batch_count != -1 and batch_idx + 1 == max_batch_count:
+                if batch_idx + 1 == max_batch_count:
                     break
                 batch_stopwatch.start(), loop_sw.start()
             pbar.close()
@@ -181,8 +180,8 @@ def _get_trainer_override_settings(max_batch_count: int) -> omegaconf.DictConfig
     return omegaconf.OmegaConf.create(
         {
             "max_epochs": 1,
-            "limit_train_batches": max_batch_count if max_batch_count > 0 else None,
-            "limit_val_batches": max_batch_count if max_batch_count > 0 else None,
+            "limit_train_batches": max_batch_count,
+            "limit_val_batches": max_batch_count,
             "barebones": True,
             "enable_checkpointing": False,
             "logger": None,
@@ -220,10 +219,10 @@ def model_profiler(config: omegaconf.DictConfig) -> None:
         )
     with stopwatch_creator(name="model and trainer creation"):
         model = ssl4rs.utils.config.get_model(config)
-    max_batch_count = config.profiler.get("batch_count", -1)
-    if max_batch_count is None:
-        max_batch_count = -1
-    assert max_batch_count == -1 or max_batch_count > 0, "max_batch_count must be -1 (for all batches) or > 0"
+    max_batch_count = config.profiler.get("batch_count", None)
+    if max_batch_count == -1:
+        max_batch_count = None
+    assert max_batch_count is None or max_batch_count > 0, "invalid max_batch_count"
     trainer_config = copy.deepcopy(config.trainer)
     trainer_override_config = _get_trainer_override_settings(max_batch_count)
     for key, val in trainer_override_config.items():
