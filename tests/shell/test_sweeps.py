@@ -32,7 +32,7 @@ def test_sweep_mnist_fast_hparams(tmpdir):
     command = _get_base_command(tmpdir, "example_mnist_classif_fast", "mnist_fast_hparams")
     command.extend(
         [
-            "model.encoder_config.hidden_channels='[5]','[8]'",
+            "model.encoder.hidden_channels='[5]','[8]'",
             "data.datamodule.dataloader_configs._default_.batch_size=16,24",
             "++trainer.fast_dev_run=true",
         ]

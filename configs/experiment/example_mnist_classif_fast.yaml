@@ -14,19 +14,25 @@ experiment_name: mnist_with_micro_mlp # experiment name used in output paths
 
 model: # specified which LightningModule-derived implementation provides the training/inference logic
   _recursive_: False
-  _target_: ssl4rs.models.mnist.MNISTClassifier
-  encoder_config:
+  _target_: ssl4rs.models.classif.base.GenericClassifier
+  encoder:
     _target_: ssl4rs.models.components.simple_mlp.SimpleMLP
     in_channels: 784 # = the pixel count in 28x28 MNIST images
     hidden_channels: [10]
     out_channels: 10
-  head_config:
+  head:
     _target_: ssl4rs.models.components.simple_mlp.SimpleMLP
     in_channels: 10
     hidden_channels: [10]
     out_channels: 10
-  loss_config: # in this case, we'll instantiate the cross-entropy loss module directly
+  loss_fn: # in this case, we'll instantiate the cross-entropy loss module directly
     _target_: torch.nn.CrossEntropyLoss
+  metrics: # with this base model class, leave empty = will define accuracy
+  num_output_classes: 10
+  num_input_channels: 1
+  input_key: data # name associated with the input data tensor inside dataset
+  label_key: target # name associated with the target data tensor inside dataset
+  example_image_shape: [28, 28]
 
 data:
   datamodule:
