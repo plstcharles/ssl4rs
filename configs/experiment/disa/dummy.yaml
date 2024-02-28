@@ -39,8 +39,8 @@ model: # specified which LightningModule-derived implementation provides the tra
   example_image_shape: ${data.example_image_shape}
 
 data:
-  target_mask_key: field_boundary_mask  # we add a data parser transform below to generate this mask
-  num_classes: 2  # the above mask contains two classes: 'notboundary' (id=0) and 'boundary' (id=1)
+  target_mask_key: field_boundary_mask # we add a data parser transform below to generate this mask
+  num_classes: 2 # the above mask contains two classes: 'notboundary' (id=0) and 'boundary' (id=1)
   datamodule:
     dataloader_configs:
       _default_: # this group provides shared (but overridable) settings for all data loader types
