@@ -214,7 +214,7 @@ def model_profiler(config: omegaconf.DictConfig) -> None:
         )
         valid_dataloader = _get_dataloader(
             datamodule=datamodule,
-            target_dataloader_type=config.profiler.get("valid_dataloader_type", "train"),
+            target_dataloader_type=config.profiler.get("valid_dataloader_type", "valid"),
             return_parser=config.profiler.get("use_parser", False),
         )
     with stopwatch_creator(name="model and trainer creation"):

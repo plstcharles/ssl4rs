@@ -42,7 +42,7 @@ class GenericClassifier(ssl4rs.models.BaseModel):
         self,
         encoder: TorchModuleOrDictConfig,
         head: typing.Optional[TorchModuleOrDictConfig],
-        loss_fn: TorchModuleOrDictConfig,
+        loss_fn: typing.Optional[TorchModuleOrDictConfig],
         metrics: typing.Optional[ssl4rs.utils.DictConfig],
         optimization: typing.Optional[ssl4rs.utils.DictConfig],
         num_output_classes: int,
@@ -71,10 +71,12 @@ class GenericClassifier(ssl4rs.models.BaseModel):
                 to create a `torch.nn.Module`-compatible object. If nothing is provided, we will
                 assume that the backbone encoder already possesses a classifier, and will
                 compute the loss directly on the backbone's output.
-            loss_fn: dict-based configuration or `torch.nn.Module`-compatible object that
+            loss_fn: optional dict-based configuration or `torch.nn.Module`-compatible object that
                 corresponds to the loss function of the model. If a config is provided, it
                 will be used to instantiate the loss function via `hydra.utils.instantiate`
-                to create a `torch.nn.Module`-compatible object.
+                to create a `torch.nn.Module`-compatible object. If nothing is provided, we will
+                assume that the model already implements its own loss, and a derived class will be
+                computing it in its own override of the `generic_step` function.
             metrics: dict-based configuration that corresponds to the metrics to be instantiated
                 during training/validation/testing. It must be possible to return the result
                 of instantiating this config via `hydra.utils.instantiate` directly to a
@@ -121,13 +123,15 @@ class GenericClassifier(ssl4rs.models.BaseModel):
             encoder = hydra.utils.instantiate(encoder)
         assert isinstance(encoder, torch.nn.Module), f"incompatible encoder type: {type(encoder)}"
         self.encoder = encoder
-        if isinstance(head, (dict, omegaconf.DictConfig)) and head:
-            head = hydra.utils.instantiate(head)
-        assert head is None or isinstance(head, torch.nn.Module), f"incompatible head type: {type(head)}"
+        if head is not None:  # if none, we will just not use it, and return encoder logits directly
+            if isinstance(head, (dict, omegaconf.DictConfig)):
+                head = hydra.utils.instantiate(head)
+            assert isinstance(head, torch.nn.Module), f"incompatible head type: {type(head)}"
         self.head = head
-        if isinstance(loss_fn, (dict, omegaconf.DictConfig)):
-            loss_fn = hydra.utils.instantiate(loss_fn)
-        assert isinstance(loss_fn, torch.nn.Module), f"incompatible loss_fn type: {type(loss_fn)}"
+        if loss_fn is not None:  # if none, user will have to override generic_step to provide their own
+            if isinstance(loss_fn, (dict, omegaconf.DictConfig)):
+                loss_fn = hydra.utils.instantiate(loss_fn)
+            assert isinstance(loss_fn, torch.nn.Module), f"incompatible loss_fn type: {type(loss_fn)}"
         self.loss_fn = loss_fn
         self._create_example_input_array(  # for easier tracing/profiling; fake tensors for 'forward'
             **{
@@ -183,6 +187,7 @@ class GenericClassifier(ssl4rs.models.BaseModel):
         single prediction tensor, or if the target labels need to be processed or transformed in any
         fashion before being sent to the loss.
         """
+        assert self.loss_fn is not None, "missing impl in derived class, no loss function defined!"
         preds = self(batch)  # this will call the 'forward' implementation above and return preds
         assert self.label_key in batch, f"missing mandatory '{self.label_key}' tensor from batch"
         target = batch[self.label_key]
@@ -246,12 +251,9 @@ class GenericSegmenter(GenericClassifier):
     loaded batch dictionaries. The exact keys should be specified to the constructor of this class.
 
     Note that we do not constrain the type of model backbone that can be used here; any should
-    work as long as they give an interface that is similar to the Segmentation PyTorch Model (SMP)
-    standard. We also skip the `head` attribute of the base classifier interface, and just use the
-    `encoder` attribute to store the entire encoder+decoder.
-
-    For more information on SMP, see:
-        https://github.com/qubvel/segmentation_models.pytorch
+    work as long as they give an interface that is similar to the PyTorch standard, i.e. they are
+    based on the `torch.nn.Module` interface. We also skip the `head` attribute of the base
+    classifier interface, and just use the `encoder` attribute to store the entire encoder+decoder.
 
     For more information on the role and responsibilities of the LightningModule, see:
         https://lightning.ai/docs/pytorch/stable/common/lightning_module.html
@@ -273,7 +275,7 @@ class GenericSegmenter(GenericClassifier):
     def __init__(
         self,
         model: TorchModuleOrDictConfig,
-        loss_fn: TorchModuleOrDictConfig,
+        loss_fn: typing.Optional[TorchModuleOrDictConfig],
         metrics: ssl4rs.utils.DictConfig,
         optimization: typing.Optional[ssl4rs.utils.DictConfig],
         num_output_classes: int,
