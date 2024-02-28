@@ -150,6 +150,9 @@ tensor_names_to_collate_manually = (
 )
 """List of tensors that will surely break pytorch if not handled manually during batch collate."""
 
+dontcare_label = -1
+"""Value that is used inside classification masks to indicate dontcare pixels (based on ROI)."""
+
 tensor_names_to_pad = (
     "location_preview_image",
     "location_preview_roi",
@@ -160,6 +163,17 @@ tensor_names_to_pad = (
     "image_udm2",
 )
 """List of tensors that will surely need to be padded during batch collate."""
+
+tensor_pad_values = {
+    "location_preview_image": 0,
+    "location_preview_roi": 0,
+    "field_mask": dontcare_label,
+    "field_boundary_mask": dontcare_label,
+    "image_data": 0,
+    "image_roi": 0,
+    "image_udm2": 0,
+}
+"""Mapping from tensor names to tensor values to use when padding arrays."""
 
 tensor_names_to_convert = (
     "location_preview_image",
@@ -210,6 +224,3 @@ tensor_normalization_stats = {
 
 tensor_names_to_normalize = tuple(tensor_normalization_stats.keys())
 """List of tensors that should have their channels normalized during tensor conversion."""
-
-dontcare_label = -1
-"""Value that is used inside classification masks to indicate dontcare pixels (based on ROI)."""

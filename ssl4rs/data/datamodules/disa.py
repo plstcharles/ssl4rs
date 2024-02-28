@@ -159,27 +159,12 @@ def custom_collate(
 ) -> ssl4rs.data.BatchDictType:
     """Defines a custom collate function to deal with non-pytorch-compatible dataset elements."""
     # first, pad to the specified shape (if needed)
-    pad_names = DataModule.metadata.tensor_names_to_pad
     for batch in batches:
-        for tname in batch.keys():
-            if pad_to_shape is not None and tname in pad_names:
-                if tname not in ["field_mask", "field_boundary_mask"]:
-                    pad_value = 0
-                else:
-                    pad_value = DataModule.metadata.dontcare_label
-                assert batch[tname].shape[-2] <= pad_to_shape[0]
-                assert batch[tname].shape[-1] <= pad_to_shape[1]
-                batch[tname] = torch.nn.functional.pad(
-                    batch[tname],
-                    pad=(
-                        0,  # do not pad last dim (width) from the left
-                        pad_to_shape[1] - batch[tname].shape[-1],  # pad to right
-                        0,  # do not pad before-last-dim (height) from the top
-                        pad_to_shape[0] - batch[tname].shape[-2],  # pad to bottom
-                    ),
-                    mode="constant",
-                    value=pad_value,
-                )
+        ssl4rs.data.transforms.pad.pad_arrays_in_batch(
+            batch=batch,
+            pad_tensor_names_and_values=DataModule.metadata.tensor_pad_values,
+            pad_to_shape=pad_to_shape,
+        )
     # second, do the actual collate while bypassing torch for the funkier arrays
     output = ssl4rs.data.default_collate(
         batches=batches,

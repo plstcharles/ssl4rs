@@ -294,6 +294,7 @@ def get_batch_index(
 def default_collate(
     batches: typing.List["BatchDictType"],
     keys_to_batch_manually: typing.Sequence[typing.AnyStr] = (),
+    keys_to_ignore: typing.Sequence[typing.AnyStr] = (),
 ) -> "BatchDictType":
     """Performs the default collate function while manually handling some given special cases."""
     assert isinstance(batches, (list, tuple)) and all(
@@ -312,9 +313,10 @@ def default_collate(
     for key in keys_to_batch_manually:
         if key in avail_batch_keys:
             output[key] = [b[key] for b in batches]
+    keys_to_skip_or_already_done = {*keys_to_ignore, *keys_to_batch_manually}
     output.update(
         torch.utils.data.default_collate(
-            [{k: v for k, v in b.items() if k not in keys_to_batch_manually} for b in batches]
+            [{k: v for k, v in b.items() if k not in keys_to_skip_or_already_done} for b in batches]
         )
     )
     if batch_size_key not in output:

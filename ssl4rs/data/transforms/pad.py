@@ -118,3 +118,30 @@ class PadIfNeeded(torch.nn.Module):
         )
         batch[self.target_key] = output_tensor
         return batch
+
+
+def pad_arrays_in_batch(
+    batch: "BatchDictType",
+    pad_tensor_names_and_values: typing.Dict[str, typing.Any],
+    pad_to_shape: typing.Tuple[int, int],
+    centered: bool = False,
+) -> "BatchDictType":
+    """Pads batch arrays to the specified shape and returns the (same) updated batch.
+
+    If the arrays to pad are not found, nothing happens. If the arrays are already padded or larger
+    than the requested shape, nothing happens.
+    """
+    if not pad_to_shape or not pad_tensor_names_and_values:
+        return batch
+    assert len(pad_to_shape) == 2
+    for tname in batch.keys():
+        if tname in pad_tensor_names_and_values:
+            pad_value = pad_tensor_names_and_values[tname]
+            batch[tname] = pad_if_needed(
+                batch[tname],
+                min_height=pad_to_shape[0],
+                min_width=pad_to_shape[1],
+                centered=centered,
+                mode="constant",
+                value=pad_value,
+            )
