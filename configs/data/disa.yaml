@@ -2,6 +2,29 @@ defaults:
   - default_with_deeplake_loaders.yaml # reloads the default settings and overrides with those below
   - _self_
 
+input_image_key: location_preview_image  # loads the 'preview' RGB image as input by default
+target_mask_key: field_mask  # this is the binary field mask (from october 2020 annotation)
+num_input_ch: 3 # assuming we're loading the preview images, as specified above
+num_classes: 2 # the default target mask contains two classes: 'notfield' (id=0) and 'field' (id=1)
+ignore_index: -1 # class index to ignore in field segmentation masks
+example_image_shape: [320, 320]  # this is the max expected shape in the entire dataset
+keys_to_batch_manually: # disa metadata: `tensor_names_to_collate_manually`
+  - location_id # string/identifier
+  - field_geoms # since both polygon counts and point counts can vary across locations
+  - image_order_ids # list of strings/identifiers
+  - image_metadata # list of dicts with lots of more-or-less useful stuff in them
+  - image_data # array whose first dimension varies (it's the number of matched orders)
+  - image_roi # array whose first dimension varies (it's the number of matched orders)
+  - image_udm2 # array whose first dimension varies (it's the number of matched orders)
+tensor_pad_values: # disa metadata: `tensor_pad_values`
+  location_preview_image: 0
+  location_preview_roi: 0
+  field_mask: ${data.ignore_index}
+  field_boundary_mask: ${data.ignore_index}
+  image_data: 0
+  image_roi: 0
+  image_udm2: 0
+
 datamodule:
   _target_: ssl4rs.data.datamodules.disa.DataModule
   data_dir: ${utils.data_root_dir}/ai4h-disa/india/.deeplake
@@ -32,10 +55,6 @@ datamodule:
       collate_fn:
         _partial_: true
         _target_: ssl4rs.data.datamodules.disa.custom_collate
-        pad_to_shape: [320, 320]
+        pad_to_shape: ${data.example_image_shape}
       decode_method:
         location_preview_image: numpy # gets rid of another annoying warning due to jpg compression
-
-num_input_ch: 4 # assuming we're loading the BGRNIR dataset above
-num_classes: 2
-ignore_index: -1 # class index to ignore in field segmentation masks

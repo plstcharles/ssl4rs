@@ -23,7 +23,7 @@ model: # specified which LightningModule-derived implementation provides the tra
     decoder_use_batchnorm: true
     decoder_channels: [64, 32, 16]
     decoder_attention_type: null
-    in_channels: 3 # because we use the rgb preview images below
+    in_channels: ${data.num_input_ch}
     classes: ${data.num_classes}
     activation: null
     aux_params: null
@@ -32,13 +32,15 @@ model: # specified which LightningModule-derived implementation provides the tra
     ignore_index: ${data.ignore_index}
   metrics:
   num_output_classes: ${data.num_classes}
-  num_input_channels: 3 # because we use the rgb preview images below
-  input_key: location_preview_image # name associated with the input data tensor inside dataset
-  label_key: field_boundary_mask # name associated with the target data tensor inside dataset
+  num_input_channels: ${data.num_input_ch}
+  input_key: ${data.input_image_key} # name associated with the input data tensor inside dataset
+  label_key: ${data.target_mask_key} # name associated with the target data tensor inside dataset
   ignore_index: ${data.ignore_index}
-  example_image_shape: [320, 320]
+  example_image_shape: ${data.example_image_shape}
 
 data:
+  target_mask_key: field_boundary_mask  # we add a data parser transform below to generate this mask
+  num_classes: 2  # the above mask contains two classes: 'notboundary' (id=0) and 'boundary' (id=1)
   datamodule:
     dataloader_configs:
       _default_: # this group provides shared (but overridable) settings for all data loader types
