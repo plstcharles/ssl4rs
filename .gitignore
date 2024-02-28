@@ -149,7 +149,7 @@ dmypy.json
 *.tar.gz
 
 # Lightning-Hydra-Template
-configs/local/default.yaml
+ssl4rs/configs/local/default.yaml
 /data
 /logs
 wandb/

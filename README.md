@@ -159,7 +159,7 @@ The structure of all configuration directories is detailed below:
 For experiment configurations, these will typically override settings across the full scope
 of the configuration tree, meaning that they will likely be defined with the `# @package _global_`
 line. A good starting point on how to write such a configuration is to copy and modify one of the
-examples, such as [this one](./configs/experiment/example_mnist_classif.yaml). This file can be
+examples, such as [this one](ssl4rs/configs/experiment/example_mnist_classif.yaml). This file can be
 used to define overrides as well as new settings that may affect any aspect of an experiment
 launched with the framework. Remember: to launch a training experiment for a file named
 `some_new_experiment_config.yaml` in the `<repository_root>/configs/experiment/` directory, you
