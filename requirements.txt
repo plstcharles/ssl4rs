@@ -1,6 +1,7 @@
 # Note: this is the list of dependencies that should be installed for the project.
 # It is recommended to install these in a Miniconda/Anaconda environment with Python 3.10.
 
+accelerate  # huggingface multi-device/platform accelerator
 albumentations  # data augmentations
 black  # code formatting
 comet_ml  # visualization/logging
@@ -41,5 +42,6 @@ tensorboard  # visualization/logging
 torch~=2.1  # deep learning backbone
 torchmetrics~=1.2  # model evaluation
 torchvision~=0.16  # model architectures + data utilities
+transformers~=4.38  # model architectures + data utilities
 tqdm  # logging and progress bars
 wandb  # visualization/logging
