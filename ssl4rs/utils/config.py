@@ -409,6 +409,7 @@ def init_hydra_and_compose_config(
     output_root_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
     overrides: typing.List[typing.AnyStr] = None,
     set_as_global_cfg: bool = True,
+    caller_stack_depth: int = 2,
 ) -> omegaconf.DictConfig:
     """Initializes hydra and returns a config as a composition output.
 
@@ -428,6 +429,8 @@ def init_hydra_and_compose_config(
             If not specified, the default will be used based on the environment variable.
         overrides: list of overrides to be provided to hydra's compose method.
         set_as_global_cfg: defines whether to store the loaded config as the global config or not.
+        caller_stack_depth: depth of the parent caller function; might need to be adjusted if
+            called from outside the framework itself.
 
     Returns:
         The result of the config composition.
@@ -454,7 +457,11 @@ def init_hydra_and_compose_config(
     if output_root_dir is not None:
         overrides.append(f"utils.output_root_dir={str(output_root_dir)}")
     # initialize hydra and return the resulting config
-    with hydra.initialize(version_base=version_base, config_path=str(configs_dir), caller_stack_depth=2):
+    with hydra.initialize(
+        version_base=version_base,
+        config_path=str(configs_dir),
+        caller_stack_depth=caller_stack_depth,
+    ):
         config = hydra.compose(config_name=config_name, overrides=overrides)
         extra_inits(config, set_as_global_cfg=set_as_global_cfg)
     return config
