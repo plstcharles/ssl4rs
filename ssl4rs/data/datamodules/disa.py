@@ -248,23 +248,21 @@ def generate_field_boundary_mask(
     return batch
 
 
-def _local_main(data_root_dir: pathlib.Path) -> None:
-    datamodule = DataModule(data_dir=data_root_dir / "ai4h-disa" / "india")
+def _local_main(config) -> None:
+    import hydra.utils
+
+    datamodule = hydra.utils.instantiate(config.data.datamodule)
     datamodule.prepare_data()
     datamodule.setup()
     train_dataloader = datamodule.train_dataloader()
     minibatch = next(iter(train_dataloader))
-    assert isinstance(minibatch, dict)
-    valid_dataloader = datamodule.val_dataloader()
-    minibatch = next(iter(valid_dataloader))
-    assert isinstance(minibatch, dict)
-    test_dataloader = datamodule.test_dataloader()
-    minibatch = next(iter(test_dataloader))
     assert isinstance(minibatch, dict)
     logger.info("all done")
 
 
 if __name__ == "__main__":
     ssl4rs.utils.logging.setup_logging_for_analysis_script()
-    config_ = ssl4rs.utils.config.init_hydra_and_compose_config(config_name="profiler.yaml")
-    _local_main(pathlib.Path(config_.utils.data_root_dir))
+    config_ = ssl4rs.utils.config.init_hydra_and_compose_config(
+        overrides=["data=disa.yaml"],
+    )
+    _local_main(config_)

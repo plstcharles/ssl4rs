@@ -404,7 +404,7 @@ def get_model(config: omegaconf.DictConfig) -> torch.nn.Module:
 def init_hydra_and_compose_config(
     version_base: typing.Optional[typing.AnyStr] = None,
     configs_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
-    config_name: typing.AnyStr = "train.yaml",
+    config_name: typing.AnyStr = "ssl4rs-profiler.yaml",
     data_root_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
     output_root_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
     overrides: typing.List[typing.AnyStr] = None,
@@ -438,14 +438,14 @@ def init_hydra_and_compose_config(
         dotenv.load_dotenv(dotenv_path=str(dotenv_path), override=True, verbose=True)
     # next, if the config dir is not provided, find it and get the relative path to it
     if configs_dir is None:
-        framework_dir = get_framework_root_dir()
-        assert framework_dir is not None, "cannot auto-locate framework directory!"
-        configs_dir = framework_dir / "configs"
+        pkg_root_dir = get_package_root_dir()
+        assert pkg_root_dir is not None, "cannot auto-locate package directory"
+        configs_dir = pkg_root_dir / "configs"
         configs_dir = pathlib.Path(os.path.relpath(str(configs_dir), str(pathlib.Path.cwd())))
         assert configs_dir.is_dir(), f"invalid configs dir: {configs_dir}"
         base_config_files = [f.name for f in configs_dir.iterdir() if f.is_file()]
         assert all(
-            [f in base_config_files for f in ["train.yaml", "test.yaml"]]
+            [f in base_config_files for f in ["ssl4rs-train.yaml", "ssl4rs-test.yaml"]]
         ), f"found invalid root config directory using relpath: {configs_dir}"
     # setup overrides based on provided args
     overrides = [] if overrides is None else [o for o in overrides]

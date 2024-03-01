@@ -13,7 +13,7 @@ except ImportError:
 dotenv.load_dotenv(override=True, verbose=True)
 
 
-@hydra.main(version_base=None, config_path="ssl4rs/configs/", config_name="train.yaml")
+@hydra.main(version_base=None, config_path="ssl4rs/configs/", config_name="ssl4rs-train.yaml")
 def main(config):
     """Main entrypoint for the training pipeline."""
     import ssl4rs  # importing here to avoid delay w/ hydra tab completion

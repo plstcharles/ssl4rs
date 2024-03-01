@@ -4,7 +4,7 @@ import hydra
 dotenv.load_dotenv(override=True, verbose=True)
 
 
-@hydra.main(version_base=None, config_path="ssl4rs/configs/", config_name="profiler.yaml")
+@hydra.main(version_base=None, config_path="ssl4rs/configs/", config_name="ssl4rs-profiler.yaml")
 def main(config):
     """Main entrypoint for the model profiler pipeline."""
     import ssl4rs  # importing here to avoid delay w/ hydra tab completion

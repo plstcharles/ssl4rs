@@ -399,5 +399,5 @@ def _repackage_fmow_rgb(dataset_root_path: pathlib.Path):
 
 if __name__ == "__main__":
     ssl4rs.utils.logging.setup_logging_for_analysis_script()
-    config_ = ssl4rs.utils.config.init_hydra_and_compose_config(config_name="profiler.yaml")
+    config_ = ssl4rs.utils.config.init_hydra_and_compose_config()
     _repackage_fmow_rgb(pathlib.Path(config_.utils.data_root_dir) / "fmow")
