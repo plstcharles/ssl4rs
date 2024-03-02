@@ -1,0 +1,12 @@
+# config/launcher/slurm_config.yaml
+cpus_per_task: 6
+mem_gb: 32
+timeout_min: 2880  # 48 hours converted to minutes
+slurm_partition: unkillable
+name: ssl4rs
+slurm_additional_parameters:
+  wckey: ssl4rs
+  gres: gpu:48gb:1
+  output: /network/projects/ai4h-disa/india/slurm-logs/%j.log.out
+  error: /network/projects/ai4h-disa/india/slurm-logs/%j.log.err
+

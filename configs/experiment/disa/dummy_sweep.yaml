@@ -1,0 +1,11 @@
+# config/experiment/exp1.yaml
+defaults:
+  - disa/dummy
+  - /launcher/slurm_config
+  - override /dataset: default
+  - override /hydra/launcher: submitit_slurm
+
+hydra:
+  sweeper:
+    params:
+      model.learning_rate: [0.001, 0.01, 0.1]

@@ -1,0 +1,81 @@
+# @package _global_
+
+# To execute this experiment, run one of the entrypoints while specifying this config, e.g.:
+#     python train.py experiment=disa/dummy_fast
+# This particular config is made to run fast on CPU for testing purposes!
+
+defaults:
+  - /model/optimization: default.yaml # use default optim settings (adam + step scheduler)
+  - override /data: disa.yaml # defines the datamodule for the AI4H-DISA dataset
+  - override /callbacks: classification.yaml # adds a few useful callbacks for classification tasks
+  - override /hydra/launcher: submitit_slurm
+  - _self_
+
+hydra:
+  sweeper:
+    params:
+      model.model.decoder_use_batchnorm: [true, false]
+
+experiment_name: disa_with_micro_unet # experiment name used in output paths
+
+model: # specified which LightningModule-derived implementation provides the training/inference logic
+  _recursive_: False
+  _target_: ssl4rs.models.classif.base.GenericSegmenter
+  model:
+    _target_: segmentation_models_pytorch.Unet
+    encoder_name: efficientnet-b0
+    encoder_depth: 3
+    encoder_weights: null
+    decoder_use_batchnorm: true
+    decoder_channels: [64, 32, 16]
+    decoder_attention_type: null
+    in_channels: ${data.num_input_ch}
+    classes: ${data.num_classes}
+    activation: null
+    aux_params: null
+  loss_fn: # in this case, we'll instantiate the cross-entropy loss module directly
+    _target_: torch.nn.CrossEntropyLoss
+    ignore_index: ${data.ignore_index}
+  metrics:
+  num_output_classes: ${data.num_classes}
+  num_input_channels: ${data.num_input_ch}
+  input_key: ${data.input_image_key} # name associated with the input data tensor inside dataset
+  label_key: ${data.target_mask_key} # name associated with the target data tensor inside dataset
+  ignore_index: ${data.ignore_index}
+  example_image_shape: ${data.example_image_shape}
+
+data:
+  target_mask_key: field_boundary_mask # we add a data parser transform below to generate this mask
+  num_classes: 2 # the above mask contains two classes: 'notboundary' (id=0) and 'boundary' (id=1)
+  datamodule:
+    dataloader_configs:
+      _default_: # this group provides shared (but overridable) settings for all data loader types
+        batch_size: 32
+        num_workers: 0 # a good default should be given by ${utils.default_num_workers}
+    dataparser_configs:
+      _default_: # this group provides shared (but overridable) settings for all data parser types
+        batch_transforms:
+          - _partial_: true
+            _target_: ssl4rs.data.datamodules.disa.convert_deeplake_tensors_to_pytorch_tensors
+            normalize_input_tensors: true # we toggle this on to be able to actually train our model
+            mask_input_tensors: true # we also zero-out the invalid pixels in input tensors
+          - _partial_: true
+            _target_: ssl4rs.data.datamodules.disa.generate_field_boundary_mask
+
+trainer:
+  precision: 32-true
+  max_epochs: 3
+  log_every_n_steps: 1
+
+target_metric: valid/accuracy # name of the metric we will be targeting for hparam optimization
+target_metric_mode: max # optimization mode of the target metric defined above
+
+utils:
+  print_config: true
+  project_name: ai4h-disa
+
+profiler: # in case we run the data profiler, these are the modified setting to use
+  use_parser: false
+  batch_count:
+  loop_count: 10
+  display_key: # use 'field_boundary_mask' here to show the target masks while profiling
