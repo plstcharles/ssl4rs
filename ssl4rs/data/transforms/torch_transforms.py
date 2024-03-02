@@ -15,6 +15,16 @@ from constants import tensor_normalization_stats
 if typing.TYPE_CHECKING:
     from ssl4rs.data import BatchDictType
 
+#TODO: CHW -> HWC?????
+
+class Convert4BandTo3Band(torch.nn.Module):
+    def forward(self, tensor):
+        # Assuming tensor shape is [C, H, W] and C=4 for BGR+NIR channels
+        R, G, B, NIR = tensor[2], tensor[1], tensor[0], tensor[3]  # Reorder to RGBN
+        band1 = (R + G) / 2
+        band2 = (R + NIR) / 2
+        band3 = (G + B) / 2
+        return torch.stack([band1, band2, band3], dim=0)  # Stack to form a new tensor
 
 class TorchTransforms(torch.nn.Module):
     def __init__(self):
@@ -22,11 +32,19 @@ class TorchTransforms(torch.nn.Module):
         # Define the transformations here; assuming tensors as input for now
         # Note: Some operations like RandomCrop are not directly applicable to tensors
         # without conversion to PIL Images
+        self.IMAGE_DATA_KEY = 4
+        self.mean = tensor_normalization_stats["image_data"][self.IMAGE_DATA_KEY]["mean"]
+        self.std = image_data_mean_values = tensor_normalization_stats["image_data"][self.IMAGE_DATA_KEY]["std"]
+
         self.transform = transforms.Compose([
+             Convert4BandTo3Band(), # Custom transformation to convert 4-band to 3-band
             transforms.ToPILImage(),  # Convert tensors to PIL Images to apply certain transforms
             transforms.RandomCrop(224),  # Random crop to 224x224
             transforms.ToTensor(),  # Convert back to tensor
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            #TODO: convert 4band image to 3band derivative with the following formula
+            # of BGR+NIR -> Band 1: avg(R,G), Band 2: avg(R, NIR), Band 3: avg(G,B)
+            #? - in 3band derivative, original image values cannot be inverted.
+            transforms.Normalize(mean=self.mean, std=self.std)
         ])
 
     def forward(self, batch: BatchDictType) -> BatchDictType:
