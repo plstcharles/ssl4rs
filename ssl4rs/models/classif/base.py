@@ -11,14 +11,14 @@ import torch.nn.functional
 import torchmetrics
 
 import ssl4rs.data
-import ssl4rs.models
 import ssl4rs.utils
+from ssl4rs.models.utils import BaseModel
 
 logger = ssl4rs.utils.logging.get_logger(__name__)
 TorchModuleOrDictConfig = typing.Union[torch.nn.Module, ssl4rs.utils.DictConfig]
 
 
-class GenericClassifier(ssl4rs.models.BaseModel):
+class GenericClassifier(BaseModel):
     """Example of LightningModule used for image classification tasks.
 
     This class is derived from the framework's base model interface, and it implements all the

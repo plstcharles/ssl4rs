@@ -117,14 +117,14 @@ There are three 'entrypoint'-type scripts in the framework off which we can easi
 experiment. These are:
 
 - `<repository_root>/train.py`: used to launch model training experiments; will load the
-  configuration file at `configs/train.yaml` by default.
+  configuration file at `ssl4rs/configs/train.yaml` by default.
 - `<repository_root>/test.py`: used to launch inference runs; will load the configuration file
-  at `configs/test.yaml` by default.
+  at `ssl4rs/configs/test.yaml` by default.
 - `<repository_root>/data_profiler.py`: used to profile datamodule creation, data loader
   initialization, and data sample loading; will load the configuration file at
-  `configs/profiler.yaml` by default.
+  `ssl4rs/configs/profiler.yaml` by default.
 - `<repository_root>/model_profiler.py`: used to profile model training and validation epochs;
-  will load the configuration file at `configs/profiler.yaml` by default.
+  will load the configuration file at `ssl4rs/configs/profiler.yaml` by default.
 
 ## Configuration Files
 
@@ -136,7 +136,7 @@ In this framework, most of the already-existing configuration files provide defa
 settings across different categories. An experiment with a custom model, a custom dataset, custom
 metrics, and/or other user-specified settings will likely rely on a new configuration file that
 loads the default values and overrides some of them. Such experiment configuration files should be
-placed in the `<repository_root>/configs/experiment/` directory.
+placed in the `<repository_root>/ssl4rs/configs/experiment/` directory.
 
 The structure of all configuration directories is detailed below:
 
@@ -162,8 +162,8 @@ line. A good starting point on how to write such a configuration is to copy and 
 examples, such as [this one](ssl4rs/configs/experiment/example_mnist_classif.yaml). This file can be
 used to define overrides as well as new settings that may affect any aspect of an experiment
 launched with the framework. Remember: to launch a training experiment for a file named
-`some_new_experiment_config.yaml` in the `<repository_root>/configs/experiment/` directory, you
-would run:
+`some_new_experiment_config.yaml` in the `<repository_root>/ssl4rs/configs/experiment/` directory,
+you would run:
 
 ```bash
 python train.py experiment=some_new_experiment_config

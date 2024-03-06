@@ -17,4 +17,5 @@ setuptools.setup(
     url="https://github.com/plstcharles/ssl4rs",
     install_requires=["lightning", "hydra-core"],
     packages=setuptools.find_packages(),
+    include_package_data=True,
 )

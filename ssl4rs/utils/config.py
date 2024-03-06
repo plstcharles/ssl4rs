@@ -441,10 +441,8 @@ def init_hydra_and_compose_config(
         dotenv.load_dotenv(dotenv_path=str(dotenv_path), override=True, verbose=True)
     # next, if the config dir is not provided, find it and get the relative path to it
     if configs_dir is None:
-        pkg_root_dir = get_package_root_dir()
-        assert pkg_root_dir is not None, "cannot auto-locate package directory"
-        configs_dir = pkg_root_dir / "configs"
-        configs_dir = pathlib.Path(os.path.relpath(str(configs_dir), str(pathlib.Path.cwd())))
+        configs_dir = (get_package_root_dir() / "configs").resolve()
+        configs_dir = pathlib.Path(os.path.relpath(str(configs_dir), start=str(pathlib.Path.cwd())))
         assert configs_dir.is_dir(), f"invalid configs dir: {configs_dir}"
         base_config_files = [f.name for f in configs_dir.iterdir() if f.is_file()]
         assert all(
