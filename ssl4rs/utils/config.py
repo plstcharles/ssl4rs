@@ -262,7 +262,8 @@ def get_framework_dotenv_path(
     """
     if framework_dir is None:
         framework_dir = get_framework_root_dir()
-    assert framework_dir is not None, "cannot auto-locate framework directory!"
+        if framework_dir is None:
+            return None
     framework_dir = pathlib.Path(framework_dir)
     assert framework_dir.is_dir(), f"invalid framework directory: {framework_dir}"
     dotenv_path = framework_dir / ".env"
