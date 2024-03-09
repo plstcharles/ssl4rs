@@ -8,7 +8,9 @@ import json
 import pathlib
 import typing
 
+import geopandas as gpd
 import numpy as np
+import pandas as pd
 import rasterio
 import rasterio.features
 import rasterio.plot
@@ -65,6 +67,12 @@ class LocationData:
     """Ratio of max polygon distance to max polygon diameter for this location.
 
     May be used to filter this location so that it is NOT exported for later use.
+    """
+
+    subset: typing.Optional[str]
+    """Subset for this particular location in Sherrie Wang's original data split.
+
+    May be `None` if no match was found for this location and Sherrie Wang's split CSV.
     """
 
 
@@ -186,8 +194,20 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         assert len(geom_parser) == self.metadata.shapefile_polygon_count
         location_ids = [self._convert_location_id(s) for s in geom_parser.dataset["sample"].unique().tolist()]
         assert len(location_ids) == self.metadata.shapefile_location_count
-
         logger.info(f"parsing data for {len(geom_parser)} polygons across {len(location_ids)} locations")
+        split_csv_path = self.data_root_path / "india_splits_grid20x20_v2.csv"
+        expected_split_df_cols = ["image_id", "lat", "lon", "fold"]
+        if split_csv_path.is_file():
+            split_data = pd.read_csv(split_csv_path)
+            assert all([col in split_data.columns for col in expected_split_df_cols])
+            split_points = [shapely.geometry.Point(xy) for xy in zip(split_data.lon, split_data.lat)]
+            split_data = gpd.GeoDataFrame(split_data, geometry=split_points)
+            logger.info(f"found split file with {len(split_data)} locations assigned to subsets")
+        else:
+            split_data = gpd.GeoDataFrame(columns=expected_split_df_cols, geometry=[])  # init w/ empty dataframe
+            logger.warning(f"found no split file at: {split_csv_path}")
+        split_data.crs = "EPSG:4326"  # set to same default as shapefile, as the CSV has no info on CRS
+        split_data = split_data.to_crs(self.metadata.crs)  # update to new CRS (from default) if needed
         polygon_data_array_per_location = {lid: [] for lid in location_ids}
         gdf_converted = geom_parser.dataset.to_crs(target_crs_meters)
         for polygon_idx in range(len(geom_parser)):
@@ -222,15 +242,39 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                     f"(did not meet maximum scatter threshold;"
                     f" got {scatter_ratio:.2f}, needed less than {self.max_scatter_threshold:.2f})"
                 )
-            else:
-                location_info[location_id] = LocationData(
-                    identifier=location_id,
-                    polygons=polygon_data_array,
-                    centroid=multipoly.centroid,
-                    max_polygon_distance=max_distance_meters,
-                    max_polygon_radius=max_bounding_radius,
-                    scatter_ratio=scatter_ratio,
+                continue
+            matched_split_locations = [
+                split_data.iloc[geom_idx]
+                for geom_idx, geom in enumerate(split_data.geometry)
+                if geom.distance(multipoly) <= self.maximum_split_location_distance
+            ]
+            if len(matched_split_locations) > 1:  # that's pretty close, but should be in same subset
+                if len({loc["fold"] for loc in matched_split_locations}) != 1:
+                    matched_image_ids = [str(loc["image_id"]) for loc in matched_split_locations]
+                    logger.warning(
+                        "matched more than one loc in more than one subset with the current dist threshold"
+                        f"\n\t({location_id} matched split csv ids: {', '.join(matched_image_ids)})"
+                    )
+                    if self.discard_subset_assignment_on_overlap:
+                        # we will drop this subset assignment in order to avoid any leak
+                        matched_split_locations = []
+                # we'll sort the results by distance and take the closest
+                matched_split_locations = sorted(
+                    matched_split_locations,
+                    key=lambda loc: loc.geometry.distance(multipoly),
                 )
+            matched_split_subset = None
+            if matched_split_locations:
+                matched_split_subset = matched_split_locations[0]["fold"]
+            location_info[location_id] = LocationData(
+                identifier=location_id,
+                polygons=polygon_data_array,
+                centroid=multipoly.centroid,
+                max_polygon_distance=max_distance_meters,
+                max_polygon_radius=max_bounding_radius,
+                scatter_ratio=scatter_ratio,
+                subset=matched_split_subset,
+            )
         return location_info
 
     def _parser_order_info(self) -> typing.Tuple[typing.Dict[str, OrderInfo], int]:
@@ -356,6 +400,8 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         max_order_count: typing.Optional[int] = 12,
         minimum_valid_ratio_in_orders: typing.Optional[float] = 0.50,
         minimum_time_delta_between_orders: typing.Optional[datetime.timedelta] = datetime.timedelta(days=1),
+        maximum_split_location_distance: float = 0.05,  # in degrees
+        discard_subset_assignment_on_overlap: bool = False,
     ):
         """Parses the dataset structure and makes sure all the data is present and valid.
 
@@ -373,6 +419,11 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                 found in order data so that the order is kept. If `None`, all orders are kept.
             minimum_time_delta_between_orders: the minimum time allowed between two orders
                 matched to the same location. If `None`, all orders are kept.
+            maximum_split_location_distance: maximum distance allowed between parsed locations
+                in shapefile and in split CSV to allow for subset matching (in degrees).
+            discard_subset_assignment_on_overlap: specifies whether to discard location subset
+                assignments in cases where the distance between two or more locations across
+                different subsets is less than the `maximum_split_location_distance` argument.
         """
         super().__init__()
         assert max_scatter_threshold is None or max_scatter_threshold > 0, "invalid threshold"
@@ -387,12 +438,16 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             minimum_time_delta_between_orders, datetime.timedelta
         ), "invalid minimum time delta between orders"
         self.minimum_time_delta_between_orders = minimum_time_delta_between_orders
+        assert maximum_split_location_distance > 0, "invalid maximum split location distance"
+        self.maximum_split_location_distance = maximum_split_location_distance
+        self.discard_subset_assignment_on_overlap = discard_subset_assignment_on_overlap
         self.data_root_path = pathlib.Path(dataset_root_path)
         assert self.data_root_path.exists(), f"invalid dataset path: {self.data_root_path}"
         self.location_info = self._parse_location_info()
-        logger.info(f"valid location count: {len(self.location_info)}")
+        loc_with_subset_count = sum([loc.subset is not None for loc in self.location_info.values()])
+        logger.info(f"valid locations: {len(self.location_info)} (with subset: {loc_with_subset_count})")
         self.order_info, self.raster_band_count = self._parser_order_info()
-        logger.info(f"valid order count: {len(self.order_info)}")
+        logger.info(f"valid orders: {len(self.order_info)}")
         logger.info(f"dataset rasters have {self.raster_band_count} bands")
 
         # we match locations to their orders by looking for intersections across their geometries
@@ -467,6 +522,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         location_data = self.output_samples[item].location
         orders_info = self.output_samples[item].orders
         location_id = location_data.identifier
+        location_subset_label = location_data.subset if location_data.subset is not None else "null"
         field_geoms = [list(p.geometry.exterior.coords) for p in location_data.polygons]
         field_centroid = np.asarray((location_data.centroid.x, location_data.centroid.y))  # (lon, lat)
         field_scatter = location_data.scatter_ratio
@@ -562,6 +618,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
 
         return dict(
             location_id=location_id,
+            location_subset=location_subset_label,
             location_preview_image=self._generate_preview_image(image_data),
             location_preview_roi=image_roi[0].astype(bool),
             field_geoms=field_geoms,

@@ -74,8 +74,20 @@ psscene_file_names = (
 )
 """List of file suffixes that are expected in the raw data folders for Planet PSScene orders."""
 
+location_subset_labels = (
+    "train",
+    "val",
+    "test",
+    "null",  # for locations that had multiple subset matches are were dropped as a result
+)
+"""List of subset labels that can be attributed to individual locations.
+
+These labels are derived from Sherrie Wang's data split CSV.
+"""
+
 tensor_info_dicts = dict(
     location_id=dict(htype="text", sample_compression=None),
+    location_subset=dict(htype="class_label", class_names=location_subset_labels, sample_compression=None),
     location_preview_image=dict(htype="image.rgb", dtype=np.uint8, sample_compression="jpg"),
     location_preview_roi=dict(htype="binary_mask", dtype=bool, sample_compression="lz4"),
     field_geoms=dict(htype="polygon", dtype=np.float64, sample_compression=None),
