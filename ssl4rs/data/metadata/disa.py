@@ -78,7 +78,7 @@ location_subset_labels = (
     "train",
     "val",
     "test",
-    "null",  # for locations that had multiple subset matches are were dropped as a result
+    "none",
 )
 """List of subset labels that can be attributed to individual locations.
 

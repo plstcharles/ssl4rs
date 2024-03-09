@@ -202,6 +202,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             assert all([col in split_data.columns for col in expected_split_df_cols])
             split_points = [shapely.geometry.Point(xy) for xy in zip(split_data.lon, split_data.lat)]
             split_data = gpd.GeoDataFrame(split_data, geometry=split_points)
+            assert set(split_data["fold"].unique()) == set(self.metadata.location_subset_labels)
             logger.info(f"found split file with {len(split_data)} locations assigned to subsets")
         else:
             split_data = gpd.GeoDataFrame(columns=expected_split_df_cols, geometry=[])  # init w/ empty dataframe
@@ -522,7 +523,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         location_data = self.output_samples[item].location
         orders_info = self.output_samples[item].orders
         location_id = location_data.identifier
-        location_subset_label = location_data.subset if location_data.subset is not None else "null"
+        location_subset_label = location_data.subset if location_data.subset is not None else "none"
         field_geoms = [list(p.geometry.exterior.coords) for p in location_data.polygons]
         field_centroid = np.asarray((location_data.centroid.x, location_data.centroid.y))  # (lon, lat)
         field_scatter = location_data.scatter_ratio
