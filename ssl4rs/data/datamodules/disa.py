@@ -36,7 +36,7 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         data_dir: typing.Union[typing.AnyStr, pathlib.Path],
         dataparser_configs: typing.Optional[ssl4rs.utils.DictConfig] = None,
         dataloader_configs: typing.Optional[ssl4rs.utils.DictConfig] = None,
-        train_val_test_split: typing.Tuple[float, float, float] = (0.8, 0.1, 0.1),
+        train_val_test_split: typing.Optional[typing.Tuple[float, float, float]] = None,
         deeplake_kwargs: typing.Optional[typing.Dict[typing.AnyStr, typing.Any]] = None,
     ):
         """Initializes the AI4H-DISA data module.
@@ -45,13 +45,17 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         automatically saving those to the `hparams` attribute (via the `save_hyperparameters`
         function) in order to use them later.
 
+        Note2: for the train-valid-test split, we actually use Sherrie Wang's original split by
+        default (if the `train_val_test_split` argument is left as `None`).
+
         Args:
             data_dir: directory where the AI4H-DISA dataset is located.
             dataparser_configs: configuration dictionary of data parser settings, separated by
                 data subset type, which may contain for example definitions for data transforms.
             dataloader_configs: configuration dictionary of data loader settings, separated by data
                 subset type, which may contain for example batch sizes and worker counts.
-            train_val_test_split: split proportions to use when separating the data.
+            train_val_test_split: split proportions to use when separating the data into subsets.
+                If `None`, will use Sherrie Wang's original split.
             deeplake_kwargs: extra arguments forwarded to the deeplake dataset parser.
         """
         self.save_hyperparameters(logger=False)
@@ -60,8 +64,9 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         assert data_dir.is_dir(), f"invalid AI4H-DISA dataset directory: {data_dir}"
         if data_dir.name != ".deeplake":
             deeplake_subdir = data_dir / ".deeplake"
-        logger.debug(f"AI4H-DISA dataset root: {data_dir}")
-        assert len(train_val_test_split) == 3 and sum(train_val_test_split) == 1.0
+        logger.info(f"AI4H-DISA dataset root: {data_dir}")
+        if train_val_test_split is not None:
+            assert len(train_val_test_split) == 3 and sum(train_val_test_split) == 1.0
         self.data_train: typing.Optional[ssl4rs.data.parsers.disa.DeepLakeParser] = None
         self.data_valid: typing.Optional[ssl4rs.data.parsers.disa.DeepLakeParser] = None
         self.data_test: typing.Optional[ssl4rs.data.parsers.disa.DeepLakeParser] = None
@@ -122,20 +127,36 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
             if root_data_dir.name != ".deeplake":
                 root_data_dir = root_data_dir / ".deeplake"
             assert root_data_dir.is_dir()
-            logger.debug(f"AI4H-DISA deeplake dataset root: {root_data_dir}")
             dataset = ssl4rs.data.parsers.disa.DeepLakeParser(root_data_dir, **deeplake_kwargs)
-            sample_idxs = list(range(len(dataset)))
-            train_idxs, valid_idxs, test_idxs = torch.utils.data.random_split(
-                dataset=sample_idxs,  # noqa
-                lengths=self.hparams.train_val_test_split,
-                generator=torch.Generator().manual_seed(self.split_seed),
-            )
+            if self.hparams.train_val_test_split is not None:
+                train_idxs, valid_idxs, test_idxs = torch.utils.data.random_split(
+                    dataset=list(range(len(dataset))),  # noqa
+                    lengths=self.hparams.train_val_test_split,
+                    generator=torch.Generator().manual_seed(self.split_seed),
+                )
+            else:  # if split not specified, default back to Sherrie Wang's split labels
+                subset_labels = dataset.dataset.location_subset.numpy().flatten()
+                assert subset_labels.size == len(dataset) and subset_labels.dtype == np.uint32
+                train_idxs, valid_idxs, test_idxs = (
+                    [
+                        sidx
+                        for sidx in range(len(dataset))
+                        if subset_labels[sidx] == self.metadata.location_subset_labels.index(subset)
+                    ]
+                    for subset in ["train", "val", "test"]
+                )
             train_parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "train")
             self.data_train = hydra.utils.instantiate(train_parser_config, dataset.dataset[list(train_idxs)])
             valid_parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "valid")
             self.data_valid = hydra.utils.instantiate(valid_parser_config, dataset.dataset[list(valid_idxs)])
             test_parser_config = self._get_subconfig_for_subset(self.dataparser_configs, "test")
             self.data_test = hydra.utils.instantiate(test_parser_config, dataset.dataset[list(test_idxs)])
+            logger.info(
+                "parser setup complete;"
+                f"\n\ttrain dataset size = {len(self.data_train)}"
+                f"\n\tvalid dataset size = {len(self.data_valid)}"
+                f"\n\ttest dataset size = {len(self.data_test)}"
+            )
 
     def train_dataloader(self) -> torch.utils.data.DataLoader:
         """Returns the AI4H-DISA training set data loader."""

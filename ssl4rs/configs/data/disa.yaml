@@ -28,7 +28,7 @@ tensor_pad_values: # disa metadata: `tensor_pad_values`
 datamodule:
   _target_: ssl4rs.data.datamodules.disa.DataModule
   data_dir: ${utils.data_root_dir}/ai4h-disa/india/.deeplake
-  train_val_test_split: [0.8, 0.1, 0.1]
+  train_val_test_split: null # null = Sherrie Wang's split, but could be e.g. [0.8, 0.1, 0.1] instead
   deeplake_kwargs: null
   dataparser_configs:
     _default_:
