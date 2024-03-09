@@ -66,7 +66,7 @@ class GenericClassifier(BaseModel):
                 will be used to instantiate the backbone encoder via `hydra.utils.instantiate`
                 to create a `torch.nn.Module`-compatible object.
             head: optional dict-based configuration or `torch.nn.Module`-compatible object that
-                corresponds to the backbone encoder of the model. If a config is provided, it
+                corresponds to the classification head of the model. If a config is provided, it
                 will be used to instantiate the classifier via `hydra.utils.instantiate`
                 to create a `torch.nn.Module`-compatible object. If nothing is provided, we will
                 assume that the backbone encoder already possesses a classifier, and will

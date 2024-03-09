@@ -3,7 +3,7 @@ import pytest
 import torch
 
 import ssl4rs.utils.config
-from ssl4rs.data import batch_size_key
+from ssl4rs.data import batch_id_key, batch_size_key
 from ssl4rs.data.datamodules.mnist import DataModule as MNISTDataModule
 
 
@@ -14,9 +14,9 @@ def _check_minibatch_content(minibatch, expected_batch_size: int = 0):
     assert isinstance(batch_size, int) and batch_size > 0
     if expected_batch_size != 0:
         assert batch_size == expected_batch_size
-    assert isinstance(minibatch["batch_id"], list)
-    assert len(minibatch["batch_id"]) == batch_size
-    assert len(set(minibatch["batch_id"])) == batch_size
+    assert isinstance(minibatch[batch_id_key], list)
+    assert len(minibatch[batch_id_key]) == batch_size
+    assert len(set(minibatch[batch_id_key])) == batch_size
     # the original data/target fields from the tensor remap wrapper should also be there
     assert all([key in minibatch for key in ["data", "target"]])
     assert isinstance(minibatch["data"], torch.Tensor) and minibatch["data"].dtype == torch.float32

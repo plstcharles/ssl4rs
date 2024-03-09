@@ -20,6 +20,7 @@ stopwatch_creator = functools.partial(ssl4rs.utils.Stopwatch, log_level=logging.
 
 def _common_init(
     config: omegaconf.DictConfig,
+    with_outputs: bool = False,
 ) -> typing.Tuple[
     typing.Tuple[str, str, str, str],
     ssl4rs.data.DataModule,
@@ -28,9 +29,11 @@ def _common_init(
     exp_name, run_name, run_type, job_name = config.experiment_name, config.run_name, config.run_type, config.job_name
     logger.info(f"Launching ({exp_name}: {run_name}, '{run_type}', job={job_name})")
 
-    hydra_config = ssl4rs.utils.config.get_hydra_config()
-    output_dir = pathlib.Path(hydra_config.runtime.output_dir)
-    logger.info(f"Output directory: {output_dir.absolute()}")
+    output_dir = None
+    if with_outputs:
+        hydra_config = ssl4rs.utils.config.get_hydra_config()
+        output_dir = pathlib.Path(hydra_config.runtime.output_dir)
+        logger.info(f"Output directory: {output_dir.absolute()}")
     ssl4rs.utils.config.extra_inits(config, output_dir=output_dir)
 
     logger.info(f"Instantiating datamodule: {config.data.datamodule._target_}")  # noqa
