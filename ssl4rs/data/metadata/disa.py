@@ -42,6 +42,18 @@ band_count_to_descriptions = {
 supported_band_counts = tuple(band_count_to_descriptions.keys())
 """Supported band counts for different versions of the dataset."""
 
+approx_px_resolution = 3.0
+"""The approximate pixel resolution (in meters) for the Planet PSScene rasters.
+
+For the exact resolution, refer to the resolution property in each order.
+"""
+
+max_image_shape = (320, 320)  # h, w
+"""The maximum image shape used in this particular dataset.
+
+Note that real images rarely reach this size, but most are pretty close to it.
+"""
+
 crs = "EPSG:4326"
 """EPSG code for the CRS of all rasters (post-repackaging)."""
 

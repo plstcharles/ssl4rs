@@ -69,6 +69,14 @@ class LocationData:
     May be used to filter this location so that it is NOT exported for later use.
     """
 
+    mask_valid_px_ratio: float
+    """Approximate ratio of annotated (field) pixels for non-annotated (background) pixels.
+
+    The approximation is done based on the expected image shape and resolution.
+
+    May be used to filter this location so that it is NOT exported for later use.
+    """
+
     subset: typing.Optional[str]
     """Subset for this particular location in Sherrie Wang's original data split.
 
@@ -166,10 +174,14 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             nodata_val=self.metadata.nodata_val,
             band_count=self.raster_band_count,
             crs=self.metadata.crs,
+            # orig input hyperparameters:
             max_scatter_threshold=self.max_scatter_threshold,
             max_order_count=self.max_order_count,
-            minimum_valid_ratio_in_orders=self.minimum_valid_ratio_in_orders,
-            minimum_time_delta_between_orders=self.minimum_time_delta_between_orders.total_seconds(),
+            max_split_location_distance=self.max_split_location_distance,
+            min_valid_pixel_ratio_in_orders=self.min_valid_pixel_ratio_in_orders,
+            min_valid_pixel_ratio_in_masks=self.min_valid_pixel_ratio_in_masks,
+            min_time_delta_between_orders=self.min_time_delta_between_orders.total_seconds(),
+            discard_subset_assignment_on_overlap=self.discard_subset_assignment_on_overlap,
         )
 
     @property  # we need to provide this for the base class!
@@ -244,10 +256,42 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                     f" got {scatter_ratio:.2f}, needed less than {self.max_scatter_threshold:.2f})"
                 )
                 continue
+            # below, we draw a preview of the field mask w/ default settings to compute the mask ratio
+            field_mask_shapes = [(poly._reproj_geometry, 1) for poly in polygon_data_array]
+            field_mask_multipoly = shapely.geometry.MultiPolygon([p._reproj_geometry for p in polygon_data_array])
+            field_mask_topleft = (  # based on expected max image shape + expected image resolution
+                field_mask_multipoly.centroid.y  # in meter coords due to reproj above
+                - (self.metadata.max_image_shape[0] / 2) * self.metadata.approx_px_resolution,
+                field_mask_multipoly.centroid.x  # in meter coords due to reproj above
+                - (self.metadata.max_image_shape[1] / 2) * self.metadata.approx_px_resolution,
+            )
+            field_mask_default_transform = rasterio.transform.from_bounds(
+                west=field_mask_topleft[1],
+                south=field_mask_topleft[0],
+                east=(field_mask_topleft[1] + self.metadata.max_image_shape[1] * self.metadata.approx_px_resolution),
+                north=(field_mask_topleft[0] + self.metadata.max_image_shape[1] * self.metadata.approx_px_resolution),
+                width=self.metadata.max_image_shape[1],
+                height=self.metadata.max_image_shape[0],
+            )
+            field_mask = rasterio.features.rasterize(
+                shapes=field_mask_shapes,
+                out_shape=self.metadata.max_image_shape,
+                transform=field_mask_default_transform,
+            ).astype(bool)
+            mask_valid_px_ratio = np.count_nonzero(field_mask) / field_mask.size
+            if (
+                self.min_valid_pixel_ratio_in_masks is not None
+                and mask_valid_px_ratio < self.min_valid_pixel_ratio_in_masks
+            ):
+                logger.info(
+                    f"bad location: {location_id}\n\t"
+                    f"(did not meet minimum mask pixel ratio threshold;"
+                    f" got {mask_valid_px_ratio:.5f}, needed more than {self.min_valid_pixel_ratio_in_masks:.5f})"
+                )
             matched_split_locations = [
                 split_data.iloc[geom_idx]
                 for geom_idx, geom in enumerate(split_data.geometry)
-                if geom.distance(multipoly) <= self.maximum_split_location_distance
+                if geom.distance(multipoly) <= self.max_split_location_distance
             ]
             if len(matched_split_locations) > 1:  # that's pretty close, but should be in same subset
                 if len({loc["fold"] for loc in matched_split_locations}) != 1:
@@ -274,11 +318,12 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                 max_polygon_distance=max_distance_meters,
                 max_polygon_radius=max_bounding_radius,
                 scatter_ratio=scatter_ratio,
+                mask_valid_px_ratio=mask_valid_px_ratio,
                 subset=matched_split_subset,
             )
         return location_info
 
-    def _parser_order_info(self) -> typing.Tuple[typing.Dict[str, OrderInfo], int]:
+    def _parse_order_info(self) -> typing.Tuple[typing.Dict[str, OrderInfo], int]:
         """Parses and returns the orders available on disk + the number of bands in all rasters."""
         raw_data_root_path = self.data_root_path / "raw_data"
         assert raw_data_root_path.is_dir(), f"invalid dataset path: {raw_data_root_path}"
@@ -351,14 +396,14 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                     ).flatten()
                     raster_data_valid_ratio = np.count_nonzero(usable_data_mask) / usable_data_mask.size
                     if (
-                        self.minimum_valid_ratio_in_orders is not None
-                        and raster_data_valid_ratio < self.minimum_valid_ratio_in_orders
+                        self.min_valid_pixel_ratio_in_orders is not None
+                        and raster_data_valid_ratio < self.min_valid_pixel_ratio_in_orders
                     ):
                         logger.info(
                             f"bad order: {order_id}\n\t"
                             f"(did not meet minimum valid ratio;"
                             f" got {raster_data_valid_ratio:.2%} valid pixels,"
-                            f" needed more than {self.minimum_valid_ratio_in_orders:.2%})"
+                            f" needed more than {self.min_valid_pixel_ratio_in_orders:.2%})"
                         )
                         continue
                     raster_bbox = shapely.geometry.box(*raster_data_bounds)
@@ -399,9 +444,10 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         dataset_root_path: typing.Union[typing.AnyStr, pathlib.Path],
         max_scatter_threshold: typing.Optional[float] = 10.0,
         max_order_count: typing.Optional[int] = 12,
-        minimum_valid_ratio_in_orders: typing.Optional[float] = 0.50,
-        minimum_time_delta_between_orders: typing.Optional[datetime.timedelta] = datetime.timedelta(days=1),
-        maximum_split_location_distance: float = 0.05,  # in degrees
+        max_split_location_distance: float = 0.05,  # in degrees
+        min_valid_pixel_ratio_in_orders: typing.Optional[float] = 0.50,
+        min_valid_pixel_ratio_in_masks: typing.Optional[float] = 0.001,
+        min_time_delta_between_orders: typing.Optional[datetime.timedelta] = datetime.timedelta(days=1),
         discard_subset_assignment_on_overlap: bool = False,
     ):
         """Parses the dataset structure and makes sure all the data is present and valid.
@@ -416,15 +462,17 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                 ratio' defines how far away polygons are from each other for a single location.
             max_order_count: the maximum number of orders to export per location in the dataset,
                 beyond which some orders will be ignored. If `None`, all orders are kept.
-            minimum_valid_ratio_in_orders: the minimum ratio of valid pixels that needs to be
-                found in order data so that the order is kept. If `None`, all orders are kept.
-            minimum_time_delta_between_orders: the minimum time allowed between two orders
-                matched to the same location. If `None`, all orders are kept.
-            maximum_split_location_distance: maximum distance allowed between parsed locations
+            max_split_location_distance: maximum distance allowed between parsed locations
                 in shapefile and in split CSV to allow for subset matching (in degrees).
+            min_valid_pixel_ratio_in_orders: the minimum ratio of valid pixels that needs to be
+                found in order data so that the order is kept. If `None`, all orders are kept.
+            min_valid_pixel_ratio_in_masks: the minimum ratio of valid pixels needed in field masks
+                so that the location is kept. If `None`, all locations are kept.
+            min_time_delta_between_orders: the minimum time allowed between two orders
+                matched to the same location. If `None`, all orders are kept.
             discard_subset_assignment_on_overlap: specifies whether to discard location subset
                 assignments in cases where the distance between two or more locations across
-                different subsets is less than the `maximum_split_location_distance` argument.
+                different subsets is less than the `max_split_location_distance` argument.
         """
         super().__init__()
         assert max_scatter_threshold is None or max_scatter_threshold > 0, "invalid threshold"
@@ -432,22 +480,26 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         assert max_order_count is None or max_order_count > 0, "invalid count"
         self.max_order_count = max_order_count
         assert (
-            minimum_valid_ratio_in_orders is None or 0 <= minimum_valid_ratio_in_orders <= 1
+            min_valid_pixel_ratio_in_orders is None or 0 <= min_valid_pixel_ratio_in_orders <= 1
         ), "invalid minimum valid pixel ratio for order data"
-        self.minimum_valid_ratio_in_orders = minimum_valid_ratio_in_orders
-        assert minimum_time_delta_between_orders is None or isinstance(
-            minimum_time_delta_between_orders, datetime.timedelta
+        self.min_valid_pixel_ratio_in_orders = min_valid_pixel_ratio_in_orders
+        assert (
+            min_valid_pixel_ratio_in_masks is None or 0 <= min_valid_pixel_ratio_in_masks <= 1
+        ), "invalid minimum valid pixel ratio for field masks"
+        self.min_valid_pixel_ratio_in_masks = min_valid_pixel_ratio_in_masks
+        assert min_time_delta_between_orders is None or isinstance(
+            min_time_delta_between_orders, datetime.timedelta
         ), "invalid minimum time delta between orders"
-        self.minimum_time_delta_between_orders = minimum_time_delta_between_orders
-        assert maximum_split_location_distance > 0, "invalid maximum split location distance"
-        self.maximum_split_location_distance = maximum_split_location_distance
+        self.min_time_delta_between_orders = min_time_delta_between_orders
+        assert max_split_location_distance > 0, "invalid maximum split location distance"
+        self.max_split_location_distance = max_split_location_distance
         self.discard_subset_assignment_on_overlap = discard_subset_assignment_on_overlap
         self.data_root_path = pathlib.Path(dataset_root_path)
         assert self.data_root_path.exists(), f"invalid dataset path: {self.data_root_path}"
         self.location_info = self._parse_location_info()
         loc_with_subset_count = sum([loc.subset is not None for loc in self.location_info.values()])
         logger.info(f"valid locations: {len(self.location_info)} (with subset: {loc_with_subset_count})")
-        self.order_info, self.raster_band_count = self._parser_order_info()
+        self.order_info, self.raster_band_count = self._parse_order_info()
         logger.info(f"valid orders: {len(self.order_info)}")
         logger.info(f"dataset rasters have {self.raster_band_count} bands")
 
@@ -462,10 +514,10 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             # sort the matched orders according to their timestamp (oldest to newest)
             matched_order_ids = list(sorted(matched_order_ids, key=lambda oid_: self.order_info[oid_].order_timestamp))
             # next, filter out orders that might be too close together in time
-            if self.minimum_time_delta_between_orders is not None and len(matched_order_ids) > 1:
+            if self.min_time_delta_between_orders is not None and len(matched_order_ids) > 1:
                 kept_order_ids, last_timestamp = [], self.order_info[matched_order_ids[0]].order_timestamp
                 for oid in matched_order_ids[1:]:
-                    if (self.order_info[oid].order_timestamp - last_timestamp) > self.minimum_time_delta_between_orders:
+                    if (self.order_info[oid].order_timestamp - last_timestamp) > self.min_time_delta_between_orders:
                         kept_order_ids.append(oid)
                     last_timestamp = self.order_info[oid].order_timestamp
                 matched_order_ids = kept_order_ids
@@ -547,6 +599,8 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
             top=max_image_shape_order.raster_orig_bounds[3],
         )
         output_image_shape = (output_height, output_width)
+        assert output_height <= self.metadata.max_image_shape[0], f"invalid image height: {output_height}"
+        assert output_width <= self.metadata.max_image_shape[1], f"invalid image width: {output_width}"
 
         # the output arrays can be preallocated based on the shape we determined above
         image_data = np.full(
