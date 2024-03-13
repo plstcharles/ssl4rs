@@ -172,20 +172,27 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         """Returns the AI4H-DISA testing set data loader."""
         assert self.data_test is not None, "parser unavailable, call `setup()` first!"
         return self._create_dataloader(self.data_test, subset_type="test")
-
-
+import pdb
 def custom_collate(
     batches: typing.List[ssl4rs.data.BatchDictType],
     pad_to_shape: typing.Optional[typing.Tuple[int, int]] = None,
 ) -> ssl4rs.data.BatchDictType:
     """Defines a custom collate function to deal with non-pytorch-compatible dataset elements."""
     # first, pad to the specified shape (if needed)
+    print ("custom collate")
+
     for batch in batches:
         ssl4rs.data.transforms.pad.pad_arrays_in_batch(
             batch=batch,
             pad_tensor_names_and_values=DataModule.metadata.tensor_pad_values,
             pad_to_shape=pad_to_shape,
         )
+    print(batches[0].keys())
+    print(batches[0]['image_data'].shape)
+    for batch in batches:
+        batch['image_data'] = batch['image_data'].squeeze()
+        batch['field_mask'] = batch['field_mask'].squeeze()
+    pdb.set_trace()
     # second, do the actual collate while bypassing torch for the funkier arrays
     output = ssl4rs.data.default_collate(
         batches=batches,

@@ -316,6 +316,9 @@ class GenericSegmenter(GenericClassifier):
         """Forwards batch data through the model, similar to `torch.nn.Module.forward()`."""
         assert self.input_key in batch, f"missing mandatory '{self.input_key}' tensor from batch"
         input_tensor = batch[self.input_key]
+        # input_tensor = torch.stack(input_tensor, dim=0)
+        print(input_tensor[0].shape)
+        #input_tensor = input_tensor[0].squeeze()
         assert input_tensor.ndim == 4, "unexpected 2D image tensor shape (should be BxCxHxW)"
         batch_size, ch, h, w = input_tensor.shape
         assert batch_size == ssl4rs.data.get_batch_size(batch)
