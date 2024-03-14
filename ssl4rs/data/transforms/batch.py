@@ -314,13 +314,16 @@ def default_collate(
         if key in avail_batch_keys:
             output[key] = [b[key] for b in batches]
     keys_to_skip_or_already_done = {*keys_to_ignore, *keys_to_batch_manually}
-    pdb.set_trace()
+    # pdb.set_trace()
     output.update(
         torch.utils.data.default_collate(
             [{k: v for k, v in b.items() if k not in keys_to_skip_or_already_done} for b in batches]
         )
     )
-    pdb.set_trace()
+    output['field_boundary_mask'] = torch.zeros((1, 128, 128))
+    output["field_boundary_mask"] = output["field_boundary_mask"].long()
+
+    # pdb.set_trace()
     output['image_data'] = torch.stack(output['image_data'], axis=0)
 
     if isinstance(output['field_mask'], list):
@@ -328,8 +331,8 @@ def default_collate(
     if output['field_mask'].dim() == 3:
         output['field_mask'] = output['field_mask'].unsqueeze(0)
 
-    pdb.set_trace()
+    # pdb.set_trace()
     if batch_size_key not in output:
         output[batch_size_key] = len(batches)
-    pdb.set_trace()
+    # pdb.set_trace()
     return output
