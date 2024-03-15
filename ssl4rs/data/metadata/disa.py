@@ -168,7 +168,7 @@ tensor_names_to_collate_manually = (
     "field_geoms",  # since both polygon counts and point counts can vary across locations
     "image_order_ids",  # list of strings/identifiers
     "image_metadata",  # list of dicts with lots of more-or-less useful stuff in them
-    "image_data",  # array whose first dimension varies (it's the number of matched orders)
+    #"image_data",  # array whose first dimension varies (it's the number of matched orders)
     "image_roi",  # array whose first dimension varies (it's the number of matched orders)
     "image_udm2",  # array whose first dimension varies (it's the number of matched orders)
 )
