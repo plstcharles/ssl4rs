@@ -45,7 +45,7 @@ data:
   datamodule:
     dataloader_configs:
       _default_: # this group provides shared (but overridable) settings for all data loader types
-        batch_size: 24
+        batch_size: 64
         num_workers: 8 # a good default should be given by ${utils.default_num_workers}
         collate_fn:
           # the maskformer requires a custom preprocessor applied in the collate function to work

@@ -50,7 +50,7 @@ class GenericClassifier(BaseModel):
         input_key: typing.AnyStr = "input",
         label_key: typing.AnyStr = "label",
         ignore_index: typing.Optional[int] = None,
-        example_image_shape: typing.Tuple[int, int] = (224, 224),  # height, width
+        example_image_shape: typing.Optional[typing.Tuple[int, int]] = (224, 224),  # height, width
         save_hyperparams: bool = True,  # turn this off in derived classes
         **kwargs,
     ):
@@ -133,12 +133,14 @@ class GenericClassifier(BaseModel):
                 loss_fn = hydra.utils.instantiate(loss_fn)
             assert isinstance(loss_fn, torch.nn.Module), f"incompatible loss_fn type: {type(loss_fn)}"
         self.loss_fn = loss_fn
-        self._create_example_input_array(  # for easier tracing/profiling; fake tensors for 'forward'
-            **{
-                self.input_key: torch.randn(4, self.num_input_channels, *example_image_shape),
-                "batch_size": 4,
-            },
-        )
+        self.example_input_array = None  # this is automatically used by pytorch lightning when not None
+        if example_image_shape is not None and example_image_shape:
+            self._create_example_input_array(  # for easier tracing/profiling; fake tensors for 'forward'
+                **{
+                    self.input_key: torch.randn(4, self.num_input_channels, *example_image_shape),
+                    "batch_size": 4,
+                },
+            )
 
     def configure_metrics(self) -> torchmetrics.MetricCollection:
         """Configures and returns the metric objects to update when given predictions + labels."""
@@ -283,7 +285,7 @@ class GenericSegmenter(GenericClassifier):
         input_key: typing.AnyStr = "input",
         label_key: typing.AnyStr = "label",
         ignore_index: typing.Optional[int] = None,
-        example_image_shape: typing.Tuple[int, int] = (256, 256),  # height, width
+        example_image_shape: typing.Optional[typing.Tuple[int, int]] = (256, 256),  # height, width
         save_hyperparams: bool = True,  # turn this off in derived classes
         **kwargs,
     ):

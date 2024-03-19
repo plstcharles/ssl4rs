@@ -129,7 +129,7 @@ class HFMaskFormerSegmenter(ssl4rs.models.classif.base.GenericSegmenter):
             input_key=orig_image_key,  # note: we actually use the "pixel_values" tensor prepared by the preprocessor
             label_key=orig_mask_key,  # note: we actually use the "class_labels" and "mask_labels" tensors
             ignore_index=ignore_index,
-            example_image_shape=example_image_shape,
+            example_image_shape=None,  # we override and create our own example input array (no need for this)
             save_hyperparams=False,
             **kwargs,
         )
@@ -139,6 +139,22 @@ class HFMaskFormerSegmenter(ssl4rs.models.classif.base.GenericSegmenter):
         if isinstance(preprocessor, (dict, omegaconf.DictConfig)):
             preprocessor = hydra.utils.instantiate(preprocessor)
         self.preprocessor = preprocessor
+
+    def _create_example_input_array(self, **kwargs) -> typing.Dict[typing.AnyStr, typing.Any]:
+        """Creates a fake batch dict to be used as the example (pre-preprocessing!) input.
+
+        The `self.example_input_array` attribute is actually used by Lightning to offer lots of
+        small debugging/logging features, but remains optional. This version fills a dummy image
+        and mask data batch so that the preprocessor can be applied and that its outputs can feed
+        the model directly.
+        """
+        assert not kwargs, f"unexpected ex input array kwargs: {kwargs}"
+        batch_data = {
+            self.input_key: torch.randn(4, 3, 320, 320, dtype=torch.float),
+            self.label_key: torch.zeros((4, 320, 320), dtype=torch.long),
+        }
+        self.example_input_array = dict(batch=batch_data)
+        return self.example_input_array
 
     def forward(self, batch: ssl4rs.data.BatchDictType) -> torch.Tensor:
         """Forwards batch data through the model, similar to `torch.nn.Module.forward()`."""
