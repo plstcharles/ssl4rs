@@ -23,6 +23,7 @@ model: # specified which LightningModule-derived implementation provides the tra
       0: notboundary
       1: boundary
     ignore_mismatched_sizes: true # will replace the class predictor, which is OK (we retrain it)
+    freeze_encoder: true
   preprocessor:
     _target_: transformers.MaskFormerImageProcessor
     do_resize: false

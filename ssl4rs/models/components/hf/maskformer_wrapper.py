@@ -20,6 +20,7 @@ TorchModuleOrDictConfig = typing.Union[torch.nn.Module, ssl4rs.utils.DictConfig]
 
 def create_maskformer_model_from_pretrained(
     id2label: typing.Dict[str, str],
+    freeze_encoder: bool = False,
     **kwargs,
 ) -> transformers.MaskFormerForInstanceSegmentation:
     """Creates and returns a maskformer model to use for instance segmentation.
@@ -28,10 +29,14 @@ def create_maskformer_model_from_pretrained(
     `id2label` argument.
     """
     id2label = {int(k): label for k, label in id2label.items()}
-    return transformers.MaskFormerForInstanceSegmentation.from_pretrained(
+    model = transformers.MaskFormerForInstanceSegmentation.from_pretrained(
         id2label=id2label,
         **kwargs,
     )
+    if freeze_encoder:  # freeze all parameters in the encoder, after loading it
+        for param in model.encoder.parameters():
+            param.requires_grad = False
+    return model
 
 
 def create_custom_collate_with_preproc(
