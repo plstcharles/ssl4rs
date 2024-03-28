@@ -47,6 +47,7 @@ class GenericClassifier(BaseModel):
         optimization: typing.Optional[ssl4rs.utils.DictConfig],
         num_output_classes: int,
         num_input_channels: int,
+        freeze_encoder: bool = False,
         input_key: typing.AnyStr = "input",
         label_key: typing.AnyStr = "label",
         ignore_index: typing.Optional[int] = None,
@@ -87,6 +88,8 @@ class GenericClassifier(BaseModel):
                 to Lightning's format. See the base class's `configure_optimizers` for more info.
             num_output_classes: number of unique classes (categories) to be predicted.
             num_input_channels: number of channels in the images to be loaded.
+            freeze_encoder: specifies whether to freeze (disable gradient computation) the encoder
+                parameters.
             input_key: key used to fetch the input data tensor from the loaded batch dictionaries.
             label_key: key used to fetch the class label tensor from the loaded batch dictionaries.
             ignore_index: value used to indicate dontcare predictions. None = not used.
@@ -123,6 +126,9 @@ class GenericClassifier(BaseModel):
             encoder = hydra.utils.instantiate(encoder)
         assert isinstance(encoder, torch.nn.Module), f"incompatible encoder type: {type(encoder)}"
         self.encoder = encoder
+        if freeze_encoder:  # freeze all parameters in the encoder, after loading it
+            for param in self.encoder.parameters():
+                param.requires_grad = False
         if head is not None:  # if none, we will just not use it, and return encoder logits directly
             if isinstance(head, (dict, omegaconf.DictConfig)):
                 head = hydra.utils.instantiate(head)
