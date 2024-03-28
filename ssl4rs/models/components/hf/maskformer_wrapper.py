@@ -34,7 +34,7 @@ def create_maskformer_model_from_pretrained(
         **kwargs,
     )
     if freeze_encoder:  # freeze all parameters in the encoder, after loading it
-        for param in model.encoder.parameters():
+        for param in model.pixel_level_module.encoder.parameters():
             param.requires_grad = False
     return model
 
