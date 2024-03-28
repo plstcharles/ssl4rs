@@ -11,11 +11,12 @@ rich_progress_bar:
   # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.RichProgressBar.html
   refresh_rate: 1 # frequency (in batches) at which the progress bar gets updated
 
-device_monitor:
-  _target_: lightning.pytorch.callbacks.DeviceStatsMonitor
-  # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.DeviceStatsMonitor.html
-  # NOTE: this callback requires at least one logger to be passed to the trainer!
-  cpu_stats: True # toggles whether to log CPU stats along other device stats, if not CPU-only
+# note, as of 2024-03-27: this logs TOO MUCH STUFF and it might become a bottleneck with e.g. Comet
+# device_monitor:
+#   _target_: lightning.pytorch.callbacks.DeviceStatsMonitor
+#   # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.DeviceStatsMonitor.html
+#   # NOTE: this callback requires at least one logger to be passed to the trainer!
+#   cpu_stats: True # toggles whether to log CPU stats along other device stats, if not CPU-only
 
 # todo@@@@@: add ThroughputMonitor (lightning 2.2)
 
