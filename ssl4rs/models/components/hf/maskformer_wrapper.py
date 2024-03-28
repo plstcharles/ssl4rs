@@ -29,14 +29,14 @@ def create_maskformer_model_from_pretrained(
     `id2label` argument.
     """
     id2label = {int(k): label for k, label in id2label.items()}
-    model = transformers.MaskFormerForInstanceSegmentation.from_pretrained(
+    hf_model = transformers.MaskFormerForInstanceSegmentation.from_pretrained(
         id2label=id2label,
         **kwargs,
     )
     if freeze_encoder:  # freeze all parameters in the encoder, after loading it
-        for param in model.pixel_level_module.encoder.parameters():
+        for param in hf_model.model.pixel_level_module.encoder.parameters():
             param.requires_grad = False
-    return model
+    return hf_model
 
 
 def create_custom_collate_with_preproc(
