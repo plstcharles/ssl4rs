@@ -3,8 +3,6 @@
 Ever wondered if it is possible to solve simple math equations in an OmegaConf config (or in a Hydra
 config)? well, this is the solution: simply import this module in your python app where you intend
 to use omegaconf (or Hydra), and then use the `{ast_eval:'EXPRESSION'}` resolver.
-
-Enjoy!
 """
 import ast
 import operator as op

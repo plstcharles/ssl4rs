@@ -21,7 +21,7 @@ import torch
 import torch.cuda
 import torch.distributed
 
-DictConfig = typing.Union[typing.Dict[typing.AnyStr, typing.Any], omegaconf.DictConfig]
+DictConfig = typing.Union[typing.Dict[str, typing.Any], omegaconf.DictConfig]
 """Type for configuration dictionaries that might be regular dicts or omegaconf dicts."""
 
 cfg: typing.Optional[omegaconf.DictConfig] = None
@@ -184,6 +184,8 @@ def get_runtime_tags(
         "framework_version": ssl4rs.__version__,
         "framework_dir": str(ssl4rs.utils.filesystem.get_framework_root_dir()),
         "package_dir": str(ssl4rs.utils.filesystem.get_package_root_dir()),
+        "data_root_dir": str(get_data_root_dir()),
+        "output_root_dir": str(get_output_root_dir()),
         "curr_work_dir": os.getcwd(),
         "platform_name": get_platform_name(),
         "git_hash": get_git_revision_hash(),
@@ -231,7 +233,7 @@ def get_installed_packages() -> typing.List[str]:
             pkgs = [f"{pkg.key}=={pkg.version}" for pkg in pip.get_installed_distributions()]
         except (ImportError, AttributeError):
             pkgs = []
-    return sorted(pkgs, key=str.casefold)
+    return sorted(pkgs, key=str.casefold)  # noqa
 
 
 def get_params_hash(*args, **kwargs):
@@ -260,9 +262,9 @@ def get_framework_dotenv_path(
     Returns:
         The path to the dotenv file, if it exists.
     """
-    if framework_dir is None:
+    if framework_dir is None:  # user did not specify the framework root dir, go look for it...
         framework_dir = get_framework_root_dir()
-        if framework_dir is None:
+        if framework_dir is None:  # we cannot locate it at all, assume its a pkg install?
             return None
     framework_dir = pathlib.Path(framework_dir)
     assert framework_dir.is_dir(), f"invalid framework directory: {framework_dir}"
@@ -281,7 +283,7 @@ def get_data_root_dir() -> pathlib.Path:
     load the framework's local dotenv config file to see if a local environment variable can be
     used. If all attempts fail, it will throw an exception.
     """
-    # first, check the globally registered cfg object
+    # first, check if a globally registered cfg object exists
     global cfg
     if cfg is not None:
         try:
@@ -293,14 +295,13 @@ def get_data_root_dir() -> pathlib.Path:
     if data_root_dir is not None:
         return pathlib.Path(data_root_dir)
     # check the framework directory for a local env file and load it manually
-    framework_dir = get_framework_root_dir()
-    assert framework_dir is not None and framework_dir.is_dir(), "could not locate framework dir!"
-    framework_dotenv_path = get_framework_dotenv_path(framework_dir)
-    assert framework_dotenv_path is not None, f"no dotenv config file found at: {framework_dir}"
-    dotenv_config = dotenv.dotenv_values(dotenv_path=framework_dotenv_path)
-    data_root_dir = dotenv_config.get("DATA_ROOT", None)
-    assert data_root_dir is not None, "could not find the data root dir anywhere!"
-    return pathlib.Path(data_root_dir)
+    framework_dotenv_path = get_framework_dotenv_path()
+    if framework_dotenv_path is not None:
+        dotenv_config = dotenv.dotenv_values(dotenv_path=framework_dotenv_path)
+        data_root_dir = dotenv_config.get("DATA_ROOT", None)
+        assert data_root_dir is not None, "mandatory 'DATA_ROOT' environment variable not set in .env file!"
+        return pathlib.Path(data_root_dir)
+    raise ValueError("mandatory 'DATA_ROOT' environment variable not set anywhere!")
 
 
 def get_output_root_dir() -> pathlib.Path:
@@ -312,7 +313,7 @@ def get_output_root_dir() -> pathlib.Path:
     load the framework's local dotenv config file to see if a local environment variable can be
     used. If all attempts fail, it will throw an exception.
     """
-    # first, check the globally registered cfg object
+    # first, check if a globally registered cfg object exists
     global cfg
     if cfg is not None:
         try:
@@ -324,14 +325,13 @@ def get_output_root_dir() -> pathlib.Path:
     if output_root_dir is not None:
         return pathlib.Path(output_root_dir)
     # check the framework directory for a local env file and load it manually
-    framework_dir = get_framework_root_dir()
-    assert framework_dir is not None and framework_dir.is_dir(), "could not locate framework dir!"
-    framework_dotenv_path = get_framework_dotenv_path(framework_dir)
-    assert framework_dotenv_path is not None, f"no dotenv config file found at: {framework_dir}"
-    dotenv_config = dotenv.dotenv_values(dotenv_path=framework_dotenv_path)
-    output_root_dir = dotenv_config.get("OUTPUT_ROOT", None)
-    assert output_root_dir is not None, "could not find the output root dir anywhere!"
-    return pathlib.Path(output_root_dir)
+    framework_dotenv_path = get_framework_dotenv_path()
+    if framework_dotenv_path is not None:
+        dotenv_config = dotenv.dotenv_values(dotenv_path=framework_dotenv_path)
+        output_root_dir = dotenv_config.get("OUTPUT_ROOT", None)
+        assert output_root_dir is not None, "mandatory 'OUTPUT_ROOT' environment variable not set in .env file!"
+        return pathlib.Path(output_root_dir)
+    raise ValueError("mandatory 'OUTPUT_ROOT' environment variable not set anywhere!")
 
 
 def get_latest_checkpoint(config: omegaconf.DictConfig) -> typing.Optional[pathlib.Path]:
@@ -384,7 +384,7 @@ def get_loggers(config: omegaconf.DictConfig) -> typing.List[pl_loggers.Logger]:
     return loggers
 
 
-def get_model(config: omegaconf.DictConfig) -> torch.nn.Module:
+def get_model(config: omegaconf.DictConfig) -> typing.Union[torch.nn.Module, pl.LightningModule]:
     """Returns the instantiated and potentially compiled model to pass to the trainer."""
     import ssl4rs.utils.logging  # used here to avoid circular dependencies
 
@@ -403,14 +403,13 @@ def get_model(config: omegaconf.DictConfig) -> torch.nn.Module:
 
 
 def init_hydra_and_compose_config(
-    version_base: typing.Optional[typing.AnyStr] = None,
+    version_base: typing.Optional[str] = None,
     configs_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
     config_name: typing.AnyStr = "ssl4rs-profiler.yaml",
     data_root_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
     output_root_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
-    overrides: typing.List[typing.AnyStr] = None,
+    overrides: typing.List[str] = None,
     set_as_global_cfg: bool = True,
-    caller_stack_depth: int = 2,
 ) -> omegaconf.DictConfig:
     """Initializes hydra and returns a config as a composition output.
 
@@ -421,8 +420,7 @@ def init_hydra_and_compose_config(
     Args:
         version_base: hydra version argument to forward to the initialization function (if any).
         configs_dir: Path to the `configs` directory that contains all the config files for the
-            framework. If not specified, we'll try to detect/find it automatically using the
-            relative path between the cwd and the framework directory (which is not super safe!).
+            framework. If not specified, we'll try to detect/find it automatically.
         config_name: name of the configuration file to load by default as the compose target.
         data_root_dir: path to the data root directory, if it needs to be specified or modified.
             If not specified, the default will be used based on the environment variable.
@@ -430,8 +428,6 @@ def init_hydra_and_compose_config(
             If not specified, the default will be used based on the environment variable.
         overrides: list of overrides to be provided to hydra's compose method.
         set_as_global_cfg: defines whether to store the loaded config as the global config or not.
-        caller_stack_depth: depth of the parent caller function; might need to be adjusted if
-            called from outside the framework itself.
 
     Returns:
         The result of the config composition.
@@ -443,7 +439,6 @@ def init_hydra_and_compose_config(
     # next, if the config dir is not provided, find it and get the relative path to it
     if configs_dir is None:
         configs_dir = (get_package_root_dir() / "configs").resolve()
-        configs_dir = pathlib.Path(os.path.relpath(str(configs_dir), start=str(pathlib.Path.cwd())))
         assert configs_dir.is_dir(), f"invalid configs dir: {configs_dir}"
         base_config_files = [f.name for f in configs_dir.iterdir() if f.is_file()]
         assert all(
@@ -456,10 +451,9 @@ def init_hydra_and_compose_config(
     if output_root_dir is not None:
         overrides.append(f"utils.output_root_dir={str(output_root_dir)}")
     # initialize hydra and return the resulting config
-    with hydra.initialize(
+    with hydra.initialize_config_dir(
         version_base=version_base,
-        config_path=str(configs_dir),
-        caller_stack_depth=caller_stack_depth,
+        config_dir=str(configs_dir),
     ):
         config = hydra.compose(config_name=config_name, overrides=overrides)
         extra_inits(config, set_as_global_cfg=set_as_global_cfg)

@@ -10,7 +10,7 @@ import lightning.pytorch as pl
 import numpy as np
 import omegaconf
 import torch.utils.data
-import tqdm.rich
+import tqdm
 
 import ssl4rs
 
@@ -47,10 +47,10 @@ def _common_init(
 
 def _get_dataloader(
     datamodule: ssl4rs.data.DataModule,
-    target_dataloader_type: typing.AnyStr,
+    target_dataloader_type: str,
     return_parser: bool,
-) -> typing.Union[torch.utils.data.DataLoader, ssl4rs.data.DataParser]:
-    """Returns the dataloader object we'll be profiling.
+) -> typing.Union[torch.utils.data.DataLoader, torch.utils.data.Dataset]:
+    """Returns the dataloader object we will be profiling.
 
     The object that's actually returned will depend on which dataloader was originally targeted
     (e.g. the 'train', 'valid', 'test', or 'predict' load), and whether we'll be profiling the full
@@ -70,18 +70,14 @@ def _get_dataloader(
     ), f"current data profiler impl does not support this loader type: {type(dataloader)}"
 
     if not return_parser:
+        logger.info(f"{target_dataloader_type} dataloader worker count: {dataloader.num_workers}")
         return dataloader
-
-    dataparser = dataloader.dataset
-    assert isinstance(
-        dataparser, ssl4rs.data.DataParser
-    ), f"current data profiler impl does not support this parser type: {type(dataparser)}"
-
-    return dataparser
+    logger.info(f"using {target_dataloader_type} dataset object directly, so without workers")
+    return dataloader.dataset
 
 
 def _profile_data_loader(
-    dataloader: typing.Union[torch.utils.data.DataLoader, ssl4rs.data.DataParser],
+    dataloader: typing.Union[torch.utils.data.DataLoader, torch.utils.data.Dataset],
     config: omegaconf.DictConfig,
 ) -> None:
     max_batch_count = config.profiler.get("batch_count", None)
@@ -96,16 +92,11 @@ def _profile_data_loader(
     loop_count = config.profiler.get("loop_count", 1)
     assert loop_count > 0
     loop_times = []
-    tot_batch_count, tot_iter_count = 0, 0
-    logger.info(f"data loader prepared for up to {len(dataloader)} iterations per loop")
-    max_batch_count = min(len(dataloader), max_batch_count) if max_batch_count else len(dataloader)
-    logger.info(f"will run a total of {loop_count}x{max_batch_count} iterations")
+    tot_batch_count = 0
+    logger.info(f"will loop data loader {loop_count} times")
     for loop_idx in range(loop_count):
         with stopwatch_creator(name=f"loop{loop_idx:03d}") as loop_sw:
-            pbar = tqdm.rich.tqdm(
-                desc=f"loop{loop_idx:03d}",
-                total=max_batch_count,
-            )
+            pbar = tqdm.tqdm(desc=f"loop{loop_idx:03d}")
             batch_stopwatch = stopwatch_creator(
                 log_message_format="batch{idx:04d} elapsed time: {:0.4f} seconds",
             )
@@ -127,9 +118,10 @@ def _profile_data_loader(
     logger.info(f"loop time max: {np.max(loop_times)}")
     logger.info(f"loop time avg: {np.mean(loop_times)}")
     logger.info(f"loop time std: {np.std(loop_times)}")
+    logger.info(f"total batched item count: {tot_batch_count}")
     tot_loop_time = np.sum(loop_times)
     avg_batch_time = tot_loop_time / tot_batch_count
-    logger.info(f"average time per data sample: {avg_batch_time:0.6f} seconds")
+    logger.info(f"average time per item: {avg_batch_time:0.6f} seconds")
 
 
 def data_profiler(config: omegaconf.DictConfig) -> None:

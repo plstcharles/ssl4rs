@@ -16,6 +16,7 @@ def _launch_experiment_and_return_out_dir(tmpdir, run_suffix, *extra_cmd_args):
         "experiment=example_mnist_classif_fast",
         f"utils.output_root_dir='{tmpdir}'",
         f"run_name=_pytest_{run_suffix}",
+        "run_type=train-test",
         f"logger={run_suffix}",
         "++trainer.max_epochs=2",
         "++trainer.limit_train_batches=5",

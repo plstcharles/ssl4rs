@@ -82,7 +82,7 @@ def setup_logging_for_analysis_script(level: int = logging.INFO) -> logging.Logg
         if dotenv_path is not None:
             dotenv.load_dotenv(dotenv_path=str(dotenv_path), override=True, verbose=True)
         _root_logger_is_setup_for_analysis_script = True
-    logger_ = get_logger("qut01")
+    logger_ = get_logger("ssl4rs")
     logger_.info("Logging set up for analysis script; runtime info:")
     for key, value in ssl4rs.utils.config.get_runtime_tags(with_gpu_info=True).items():
         logger_.info(f"{key}: {value}")

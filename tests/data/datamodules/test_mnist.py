@@ -28,7 +28,6 @@ def _check_minibatch_content(minibatch, expected_batch_size: int = 0):
 
 def test_mnist_datamodule_via_hydra(tmpdir, global_cfg_cleaner):
     config = ssl4rs.utils.config.init_hydra_and_compose_config(
-        configs_dir="../../../ssl4rs/configs",
         config_name="ssl4rs-train.yaml",
         output_root_dir=tmpdir,
         overrides=["data=mnist.yaml"],

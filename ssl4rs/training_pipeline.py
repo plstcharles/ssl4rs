@@ -93,6 +93,13 @@ def train(config: omegaconf.DictConfig) -> typing.Optional[float]:
                 logger.info(f"Best target metric: {target_metric_name}: {target_metric_val}")
                 assert type(best_model) is type(model), "unexpected model type when reloading ckpt"
                 model = best_model
+        if "valid" in run_type:
+            logger.info("Running trainer.validate()...")
+            trainer.validate(model=model, datamodule=datamodule, ckpt_path=best_ckpt_path)
+            if hasattr(model, "compute_metrics") and callable(model.compute_metrics):
+                metrics = model.compute_metrics(loop_type="valid")
+                for metric_name, metric_val in metrics.items():
+                    logger.info(f"best {metric_name}: {metric_val}")
         if "test" in run_type:
             logger.info("Running trainer.test()...")
             trainer.test(model=model, datamodule=datamodule, ckpt_path=best_ckpt_path)

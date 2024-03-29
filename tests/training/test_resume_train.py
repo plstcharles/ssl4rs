@@ -18,6 +18,7 @@ def test_resume_after_completion(tmpdir):
         "logger=debug",  # to use the debug logger instead of the default csv logger
         f"utils.output_root_dir='{tmpdir}'",
         "run_name=_pytest_resume_after_completion",
+        "run_type=train-test",
         "++trainer.max_steps=10",
         "++trainer.max_epochs=2",
         "++trainer.limit_train_batches=5",
