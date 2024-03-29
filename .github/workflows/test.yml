@@ -1,79 +1,43 @@
-name: Tests
+name: Framework Tests
 
 on:
-  push:
-    branches: [master]
   pull_request:
-    branches: [master, "release/*", "dev"]
+    branches: ["master", "release/*", "dev"]
+  push:
+    branches: ["master", "release/*", "dev"]
 
 env:
-  DATA_ROOT: /home/runner/work/ssl4rs/ssl4rs/data
-  OUTPUT_ROOT: /home/runner/work/ssl4rs/ssl4rs/logs
+  DATA_ROOT: "${{ github.workspace }}/data"
+  OUTPUT_ROOT: "${{ github.workspace }}/logs"
   HYDRA_FULL_ERROR: 1
   COMET_API_KEY: 12345 # fake key, online experiments in CI should be disabled
   COMET_WORKSPACE: fake
 
 jobs:
-  run_tests_ubuntu:
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        os: ["ubuntu-latest"]
-        python-version: ["3.10"]
-
+  run_tests:
+    runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v3
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
           sudo apt-get install -y libturbojpeg
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest
           pip install sh
 
       - name: List dependencies
         run: |
-          python -m pip list
+          pip list
 
       - name: Run pytest
         run: |
           pytest -v
-
-  # upload code coverage report
-  code-coverage:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
-
-      - name: Set up Python 3.10
-        uses: actions/setup-python@v2
-        with:
-          python-version: "3.10"
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get install -y libturbojpeg
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-          pip install pytest-cov[toml]
-          pip install sh
-
-      - name: Run tests and collect coverage
-        run: pytest --cov ssl4rs
-
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v3

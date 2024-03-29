@@ -1,29 +1,28 @@
-# This workflow runs pre-commit checks on all files.
-
-name: Pre-Commit Checks
+name: Code Quality Checks
 
 on:
   pull_request:
-    branches: ["master", "release/*"]
+    branches: ["master", "release/*", "dev"]
   push:
-    branches: ["master", "release/*"]
+    branches: ["master", "release/*", "dev"]
 
 jobs:
-  code-quality:
+  run_checks:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
-          python-version: 3.11
+          python-version: "3.11"
 
-      - name: Setup extra dependencies
+      - name: Install pre-commit runner
         run: |
-          python -m pip install setuptools
+          pip install pre-commit setuptools
 
-      - name: Run pre-commit checks
-        uses: pre-commit/action@v3.0.0
+      - name: Run pre-commit checks on all files
+        run: |
+          pre-commit run -a --show-diff-on-failure
