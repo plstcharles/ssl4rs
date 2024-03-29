@@ -32,5 +32,5 @@ profiler:
   use_parser: False # toggles whether to profile the dataset parser or the dataloader
   display_key: # if we want to try to render+display a tensor image while running, specify it here
   display_wait_time: 0 # time to display images for, when toggled above (in msecs, and 0 = block)
-  batch_count: 10 # batches to fetch before breaking off the loop (-1 or null = full run)
-  loop_count: 1 # number of loops to complete over the same dataloader to get average timings
+  batch_count: null # batches to fetch before breaking off the loop (-1 or null = full run)
+  loop_count: 3 # number of loops to complete over the same dataloader to get average timings
