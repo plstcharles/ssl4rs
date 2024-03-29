@@ -189,6 +189,7 @@ def log_runtime_tags(
     output_dir: typing.Union[typing.AnyStr, pathlib.Path],
     with_gpu_info: bool = True,
     with_distrib_info: bool = True,
+    with_slurm_info: bool = True,
     log_extension: typing.AnyStr = ".log",
 ) -> None:
     """Saves a list of all runtime tags to a log file.
@@ -210,6 +211,7 @@ def log_runtime_tags(
     tag_dict = ssl4rs.utils.config.get_runtime_tags(
         with_gpu_info=with_gpu_info,
         with_distrib_info=with_distrib_info,
+        with_slurm_info=with_slurm_info,
     )
     tag_dict = omegaconf.OmegaConf.create(tag_dict)  # type: ignore
     with open(str(output_log_path), "w") as fd:

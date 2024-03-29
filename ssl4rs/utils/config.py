@@ -172,6 +172,7 @@ def get_git_revision_hash() -> str:
 def get_runtime_tags(
     with_gpu_info: bool = False,
     with_distrib_info: bool = False,
+    with_slurm_info: bool = False,
 ) -> typing.Mapping[str, typing.Any]:
     """Returns a map (dictionary) of tags related to the current runtime."""
     import ssl4rs  # used here to avoid circular dependencies  # noqa
@@ -211,6 +212,9 @@ def get_runtime_tags(
             "rank": get_failsafe_rank(),
             "world_size": get_failsafe_worldsize(),
         }
+    if with_slurm_info:
+        found_slurm_env_vars = {k: v for k, v in os.environ.items() if k.startswith("SLURM_")}
+        tags["slurm"] = found_slurm_env_vars
     return tags
 
 
