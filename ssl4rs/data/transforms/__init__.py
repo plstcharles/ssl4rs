@@ -29,8 +29,12 @@ from ssl4rs.data.transforms.tuple_mapper import TupleMapper
 from ssl4rs.data.transforms.wrappers import BatchDictToArgsWrapper
 
 BatchDictType = typing.Dict[typing.AnyStr, typing.Any]
+"""Default type used to represent a data batch loaded by a data parser/loader and fed to a model."""
+
 _BatchTransformType = typing.Callable[[BatchDictType], BatchDictType]
+
 BatchTransformType = typing.Union[_BatchTransformType, typing.Sequence[_BatchTransformType], None]
+"""Default type used to represent a callable object or function that transforms a data batch."""
 
 
 def validate_or_convert_transform(

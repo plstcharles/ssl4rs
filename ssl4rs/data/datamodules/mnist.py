@@ -8,16 +8,15 @@ import pathlib
 import typing
 
 import hydra.utils
-import omegaconf
 import torch
 import torch.utils.data
 import torchvision
 
-import ssl4rs.data.datamodules.utils
 import ssl4rs.data.transforms
+from ssl4rs.data.datamodules.utils import DataModule as BaseDataModule
 
 
-class DataModule(ssl4rs.data.datamodules.utils.DataModule):
+class DataModule(BaseDataModule):
     """Example of LightningDataModule for the MNIST dataset.
 
     A DataModule implements 5 key methods:
