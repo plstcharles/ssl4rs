@@ -50,6 +50,7 @@ class GenericClassifier(BaseModel):
         freeze_encoder: bool = False,
         input_key: typing.AnyStr = "input",
         label_key: typing.AnyStr = "label",
+        ignore_mask_key: typing.Optional[str] = None,
         ignore_index: typing.Optional[int] = None,
         example_image_shape: typing.Optional[typing.Tuple[int, int]] = (224, 224),  # height, width
         save_hyperparams: bool = True,  # turn this off in derived classes
@@ -88,11 +89,14 @@ class GenericClassifier(BaseModel):
                 to Lightning's format. See the base class's `configure_optimizers` for more info.
             num_output_classes: number of unique classes (categories) to be predicted.
             num_input_channels: number of channels in the images to be loaded.
-            freeze_encoder: specifies whether to freeze (disable gradient computation) the encoder
-                parameters.
+            freeze_encoder: specifies whether to freeze the encoder parameters.
             input_key: key used to fetch the input data tensor from the loaded batch dictionaries.
             label_key: key used to fetch the class label tensor from the loaded batch dictionaries.
-            ignore_index: value used to indicate dontcare predictions. None = not used.
+            ignore_mask_key: key used to fetch the dontcare (ignore) mask tensor from the loaded
+                batch dictionaries. None = not used.
+            ignore_index: value used to indicate dontcare predictions in targetlabel arrays. If set
+                to None, it means it will not be considered. Can only be used when working with
+                "hard" labels, i.e. labels specified via class indices inside the target array.
             example_image_shape: shape of the example image tensor to be created. Defaults to the
                 commonly used imagenet image shape (224x224), but which might not always be OK.
             save_hyperparams: toggles whether hyperparameters should be saved in this class. This
@@ -103,7 +107,11 @@ class GenericClassifier(BaseModel):
         assert num_input_channels >= 1, f"invalid number of input channels: {num_input_channels}"
         self.num_output_classes = num_output_classes
         self.num_input_channels = num_input_channels
-        self.input_key, self.label_key, self.ignore_index = input_key, label_key, ignore_index
+        self.input_key, self.label_key = input_key, label_key
+        self.ignore_index, self.ignore_mask_key = ignore_index, ignore_mask_key
+        assert (
+            self.ignore_index is None or self.ignore_mask_key is None
+        ), "cannot use both ignore index and ignore masks at the same time!"
         if metrics is None or not metrics:
             metrics = dict(  # default: add a simple classification metric
                 accuracy=dict(
@@ -141,10 +149,11 @@ class GenericClassifier(BaseModel):
         self.loss_fn = loss_fn
         self.example_input_array = None  # this is automatically used by pytorch lightning when not None
         if example_image_shape is not None and example_image_shape:
+            fake_batch_size = 4
             self._create_example_input_array(  # for easier tracing/profiling; fake tensors for 'forward'
                 **{
-                    self.input_key: torch.randn(4, self.num_input_channels, *example_image_shape),
-                    "batch_size": 4,
+                    self.input_key: torch.randn(fake_batch_size, self.num_input_channels, *example_image_shape),
+                    "batch_size": fake_batch_size,
                 },
             )
 
@@ -199,11 +208,20 @@ class GenericClassifier(BaseModel):
         preds = self(batch)  # this will call the 'forward' implementation above and return preds
         assert self.label_key in batch, f"missing mandatory '{self.label_key}' tensor from batch"
         target = batch[self.label_key]
-        loss = self.loss_fn(preds, target)
+        ignore_mask = None
+        if self.ignore_mask_key is not None and self.ignore_mask_key in batch:
+            ignore_mask = batch[self.ignore_mask_key]
+        if ignore_mask is not None:
+            loss = self.loss_fn(preds, target, ignore_mask)
+        else:
+            # if we're using the ignore index, assume the loss already knows about it...
+            loss = self.loss_fn(preds, target)
         return {
             "loss": loss,  # mandatory for training loop, optional for validation/testing
             "preds": preds.detach(),  # used in metrics, logging, and potentially even returned to user
             "targets": target,  # so that metric update functions have access to the tensor itself
+            "ignore_mask": ignore_mask,
+            "ignore_index": self.ignore_index,
             ssl4rs.data.batch_size_key: ssl4rs.data.get_batch_size(batch),  # so that logging can use it
         }
 
@@ -223,6 +241,8 @@ class GenericClassifier(BaseModel):
         displaying their index. Derived classes are strongly suggested to reimplement this
         function, but it is not actually required in order to just train a model.
         """
+        if self.num_output_classes < 2:
+            return None  # not clear how to render here, let's let derived classes handle it
         assert len(sample_idxs) == len(sample_ids) and len(sample_idxs) > 0
         # we'll render the input tensors with their IDs, predicted, and target labels underneath
         pred_idxs, target_idxs = torch.argmax(outputs["preds"], dim=1), outputs["targets"]
@@ -283,14 +303,8 @@ class GenericSegmenter(GenericClassifier):
     def __init__(
         self,
         model: TorchModuleOrDictConfig,
-        loss_fn: typing.Optional[TorchModuleOrDictConfig],
-        metrics: ssl4rs.utils.DictConfig,
-        optimization: typing.Optional[ssl4rs.utils.DictConfig],
         num_output_classes: int,
         num_input_channels: int,
-        input_key: typing.AnyStr = "input",
-        label_key: typing.AnyStr = "label",
-        ignore_index: typing.Optional[int] = None,
         example_image_shape: typing.Optional[typing.Tuple[int, int]] = (256, 256),  # height, width
         save_hyperparams: bool = True,  # turn this off in derived classes
         **kwargs,
@@ -306,15 +320,8 @@ class GenericSegmenter(GenericClassifier):
             self.save_hyperparameters(logger=False)  # logger=False since we don't need duplicated logs
         super().__init__(
             encoder=model,
-            head=None,
-            loss_fn=loss_fn,
-            metrics=metrics,
-            optimization=optimization,
-            num_output_classes=num_output_classes,
-            num_input_channels=num_input_channels,
-            input_key=input_key,
-            label_key=label_key,
-            ignore_index=ignore_index,
+            head=None,  # cannot have a head since model ('encoder') = encoder+decoder branches
+            freeze_encoder=False,  # cannot freeze since model ('encoder') = encoder+decoder branches
             example_image_shape=example_image_shape,
             save_hyperparams=False,
             **kwargs,
@@ -348,14 +355,14 @@ class GenericSegmenter(GenericClassifier):
 
         Note: only available when using binary classification models/masks.
         """
-        if self.num_output_classes != 2:
+        preds, targets = outputs["preds"], outputs["targets"]
+        if self.num_output_classes != 2 or preds.ndim != 4 or targets.dtype != torch.long:
             return None  # not clear how to render here, let's let derived classes handle it
         assert len(sample_idxs) == len(sample_ids) and len(sample_idxs) > 0
         batch_size = ssl4rs.data.get_batch_size(batch)
-        preds, targets = outputs["preds"], outputs["targets"]
-        assert targets.ndim == 3 and targets.shape[0] == batch_size and targets.dtype == torch.long
+        assert targets.ndim == 3 and targets.shape[0] == batch_size
         tensor_shape = targets.shape[1:]
-        assert preds.ndim == 4 and preds.shape == (batch_size, self.num_output_classes, *tensor_shape)
+        assert preds.shape == (batch_size, self.num_output_classes, *tensor_shape)
         # we'll render the input tensors with a prediction mask and target mask side-by-side
         outputs = []
         for sample_idx, sample_id in zip(sample_idxs, sample_ids):
@@ -367,7 +374,13 @@ class GenericSegmenter(GenericClassifier):
             pred_prob = torch.softmax(preds[sample_idx], dim=0)[1].cpu().numpy()
             pred_image = cv.cvtColor((pred_prob * 255).astype(np.uint8), cv.COLOR_GRAY2BGR)
             target_mask = targets[sample_idx]
-            dontcare_mask = torch.logical_and(target_mask != 0, target_mask != 1).cpu().numpy()
+            if self.ignore_mask_key is not None and self.ignore_mask_key in batch:
+                dontcare_mask = batch[self.ignore_mask_key][sample_idx].cpu().numpy()
+            elif self.ignore_index is not None:
+                dontcare_mask = (target_mask == self.ignore_index).cpu().numpy()
+            else:
+                dontcare_mask = torch.logical_and(target_mask != 0, target_mask != 1).cpu().numpy()
+            assert dontcare_mask.shape == tensor_shape
             target_mask = (target_mask == 1).cpu().numpy().astype(np.uint8) * 255
             target_mask[dontcare_mask] = 128
             target_image = cv.cvtColor(target_mask, cv.COLOR_GRAY2BGR)
