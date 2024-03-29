@@ -44,7 +44,7 @@ def create_custom_collate_with_preproc(
     mask_key: str,
     pad_tensor_names_and_values: typing.Optional[typing.Dict[str, typing.Any]],
     pad_to_shape: typing.Optional[typing.Tuple[int, int]],
-    keys_to_batch_manually: typing.Sequence[typing.AnyStr],
+    keys_to_batch_manually: typing.Sequence[str],
     preprocessor: transformers.MaskFormerImageProcessor,
 ) -> typing.Callable[[typing.List[ssl4rs.data.BatchDictType]], ssl4rs.data.BatchDictType]:
     """Creates a callable object that can be used as a custom collate for maskformer models."""
@@ -108,8 +108,8 @@ class HFMaskFormerSegmenter(ssl4rs.models.classif.base.GenericSegmenter):
         optimization: typing.Optional[ssl4rs.utils.DictConfig],
         num_output_classes: int,
         num_input_channels: int,
-        orig_image_key: typing.AnyStr = "input",
-        orig_mask_key: typing.AnyStr = "label",
+        orig_image_key: str = "input",
+        orig_mask_key: str = "label",
         ignore_index: typing.Optional[int] = None,
         example_image_shape: typing.Tuple[int, int] = (256, 256),  # height, width
         save_hyperparams: bool = True,  # turn this off in derived classes
@@ -145,7 +145,7 @@ class HFMaskFormerSegmenter(ssl4rs.models.classif.base.GenericSegmenter):
             preprocessor = hydra.utils.instantiate(preprocessor)
         self.preprocessor = preprocessor
 
-    def _create_example_input_array(self, **kwargs) -> typing.Dict[typing.AnyStr, typing.Any]:
+    def _update_example_input_array(self, **kwargs) -> typing.Optional[typing.Dict[str, typing.Any]]:
         """Creates a fake batch dict to be used as the example (pre-preprocessing!) input.
 
         The `self.example_input_array` attribute is actually used by Lightning to offer lots of
@@ -190,7 +190,7 @@ class HFMaskFormerSegmenter(ssl4rs.models.classif.base.GenericSegmenter):
         self,
         batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
-    ) -> typing.Dict[typing.AnyStr, typing.Any]:
+    ) -> ssl4rs.data.BatchDictType:
         """Runs a generic version of the forward + evaluation step for the train/valid/test loops.
 
         We override the base class step implementation, as the MaskFormer provides its own loss.
@@ -218,7 +218,7 @@ class HFMaskFormerSegmenter(ssl4rs.models.classif.base.GenericSegmenter):
         batch_idx: int,
         sample_idxs: typing.List[int],
         sample_ids: typing.List[typing.Hashable],
-        outputs: typing.Dict[typing.AnyStr, typing.Any],
+        outputs: ssl4rs.data.BatchDictType,
         dataloader_idx: int = 0,
     ) -> typing.Any:
         """Renders and logs specific samples from the current batch using available loggers."""

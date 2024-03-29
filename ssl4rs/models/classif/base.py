@@ -48,8 +48,8 @@ class GenericClassifier(BaseModel):
         num_output_classes: int,
         num_input_channels: int,
         freeze_encoder: bool = False,
-        input_key: typing.AnyStr = "input",
-        label_key: typing.AnyStr = "label",
+        input_key: str = "input",
+        label_key: str = "label",
         ignore_mask_key: typing.Optional[str] = None,
         ignore_index: typing.Optional[int] = None,
         example_image_shape: typing.Optional[typing.Tuple[int, int]] = (224, 224),  # height, width
@@ -150,7 +150,7 @@ class GenericClassifier(BaseModel):
         self.example_input_array = None  # this is automatically used by pytorch lightning when not None
         if example_image_shape is not None and example_image_shape:
             fake_batch_size = 4
-            self._create_example_input_array(  # for easier tracing/profiling; fake tensors for 'forward'
+            self._update_example_input_array(  # for easier tracing/profiling; fake tensors for 'forward'
                 **{
                     self.input_key: torch.randn(fake_batch_size, self.num_input_channels, *example_image_shape),
                     "batch_size": fake_batch_size,
@@ -192,7 +192,7 @@ class GenericClassifier(BaseModel):
         self,
         batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
-    ) -> typing.Dict[typing.AnyStr, typing.Any]:
+    ) -> ssl4rs.data.BatchDictType:
         """Runs a generic version of the forward + evaluation step for the train/valid/test loops.
 
         In comparison with the regular `forward()` function, this function will compute the loss and
@@ -232,7 +232,7 @@ class GenericClassifier(BaseModel):
         batch_idx: int,
         sample_idxs: typing.List[int],
         sample_ids: typing.List[typing.Hashable],
-        outputs: typing.Dict[typing.AnyStr, typing.Any],
+        outputs: ssl4rs.data.BatchDictType,
         dataloader_idx: int = 0,
     ) -> typing.Any:
         """Renders and logs specific samples from the current batch using available loggers.
@@ -348,7 +348,7 @@ class GenericSegmenter(GenericClassifier):
         batch_idx: int,
         sample_idxs: typing.List[int],
         sample_ids: typing.List[typing.Hashable],
-        outputs: typing.Dict[typing.AnyStr, typing.Any],
+        outputs: ssl4rs.data.BatchDictType,
         dataloader_idx: int = 0,
     ) -> typing.Any:
         """Renders and logs specific samples from the current batch using available loggers.

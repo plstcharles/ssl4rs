@@ -32,14 +32,15 @@ class BaseModel(pl.LightningModule):
     The main (not-mandatory-but-still-useful) feature offered here is the ability to 'render' the
     same batches (with predictions) every epoch based on their IDs. The way this is done is by first
     trying to find out the data loader batch size and the expected batch count. Given this, we pick
-    a random set samples based on the total expected number of samples (batch size x data loader
+    a random set of samples based on the total expected number of samples (batch size x data loader
     length) we will see. Each time we see one of these picked samples for the first time, we
     memorize its real batch identifier, and render it. In subsequent epochs, we check for the batch
     identifier directly, and re-render the same samples we saw in the past. This might break with
-    variable-length or iterator-based data loaders, and should be disabled in that case (by setting
-    `sample_count_to_render=0` in the constructor). With combined data loaders or data loaders that
-    work with varying batch lengths, it might not always be able to find/render as many samples
-    as the requested number, so see the `sample_count_to_render` as an optimistic upper bound.
+    variable-length or iterator-based data loaders, and should be either disabled in those cases
+    (by setting `sample_count_to_render=0` in the constructor), or batch size/count hints should
+    be specified. With combined data loaders or data loaders that work with varying batch lengths,
+    it might not always be able to find/render as many samples as the requested number, so see
+    the `sample_count_to_render` as an optimistic upper bound.
 
     Note that regarding the usage of torchmetrics, there are some pitfalls to avoid e.g. when
     using multiple data loaders; refer to the following link for more information:
@@ -53,8 +54,11 @@ class BaseModel(pl.LightningModule):
         self,
         optimization: typing.Optional[ssl4rs.utils.DictConfig],
         log_train_metrics_each_step: bool = False,
+        log_train_batch_size_each_step: bool = False,
         sample_count_to_render: int = 10,
         log_metrics_in_loop_types: typing.Sequence[str] = ("train", "valid", "test"),
+        batch_size_hints: typing.Optional[typing.Dict[str, int]] = None,
+        batch_count_hints: typing.Optional[typing.Dict[str, int]] = None,
     ):
         """Initializes the base model interface and its attributes.
 
@@ -74,6 +78,9 @@ class BaseModel(pl.LightningModule):
                 of memory (e.g. when doing semantic image segmentation with many classes), it might
                 be best to turn this off to avoid out-of-memory errors when running long epochs, or
                 drastic slowdowns when complex metrics are used.
+            log_train_batch_size_each_step: toggles whether the batch size that are seen during
+                the training loop should be logged at every step or not. This is useful to monitor
+                varying batch sizes during training.
             sample_count_to_render: number of samples that should (ideally) be rendered using the
                 internal rendering function (if any is defined). Note that if the dataset is too
                 small or if we do not have a reliable way to get good persistent IDs for data
@@ -81,17 +88,29 @@ class BaseModel(pl.LightningModule):
             log_metrics_in_loop_types: defines the sequence of loop types (e.g. "train", "valid",
                 and "test") for which we should compute metrics. The default covers all loop types
                 where we can expect to have target labels.
+            batch_size_hints: for each data loader type, provides a hint for the batch sizes we
+                will encounter during experiments. If this is not specified or None, then we will
+                try to automatically determine the batch size based on the data loaders. Useful
+                for scenarios where dataloaders providing variable batch sizes are used.
+            batch_count_hints: for each data loader type, provides a hint for the batch counts we
+                will encounter during experiments. If this is not specified or None, then we will
+                try to automatically determine the batch count based on the data loader length.
+                Useful for scenarios where iterable dataloaders are used.
         """
         super().__init__()
         logger.debug("Instantiating LightningModule base class...")
         self.log_train_metrics_each_step = log_train_metrics_each_step
+        self.log_train_batch_size_each_step = log_train_batch_size_each_step
         assert sample_count_to_render >= 0, "invalid sample count to render (should be >= 0)"
         self.sample_count_to_render = sample_count_to_render
-        # remember to override the `_create_example_input_array` function if you ever want the base
-        # class to know how to e.g. convert the model to onnx/torchscript, trace it, or to give
-        # users an idea of the input tensors that are typically used in the `forward(...)` function!
-        self.example_input_array: typing.Optional[typing.Any] = None
+        self.example_input_array: typing.Optional[typing.Any] = self._update_example_input_array()
         self.metrics = self._instantiate_metrics(log_metrics_in_loop_types)  # auto-updated + reset
+        if not batch_size_hints:
+            batch_size_hints = {}
+        self.batch_size_hints = batch_size_hints
+        if not batch_count_hints:
+            batch_count_hints = {}
+        self.batch_count_hints = batch_count_hints
         self._ids_to_render: typing.Dict[str, typing.List[typing.Hashable]] = {}
         assert optimization is None or isinstance(
             optimization, (typing.Dict, omegaconf.DictConfig)
@@ -120,7 +139,7 @@ class BaseModel(pl.LightningModule):
         }
         return torch.nn.ModuleDict(metrics)
 
-    def has_metric(self, metric_name: typing.AnyStr) -> bool:
+    def has_metric(self, metric_name: str) -> bool:
         """Returns whether this model possesses a metric with a specific name.
 
         The metric name is expected to be in `<loop_type>/<metric_name>` format. For example, it
@@ -130,7 +149,7 @@ class BaseModel(pl.LightningModule):
         metric_group_name = f"metrics/{loop_type}"
         return metric_group_name in self.metrics and metric_name in self.metrics[metric_group_name]
 
-    def compute_metric(self, metric_name: typing.AnyStr) -> typing.Any:
+    def compute_metric(self, metric_name: str) -> typing.Any:
         """Returns the current value of a metric with a specific name.
 
         The metric name is expected to be in `<loop_type>/<metric_name>` format. For example, it
@@ -222,13 +241,18 @@ class BaseModel(pl.LightningModule):
             del output["freeze_no_grad_params"]
         return output
 
-    def _create_example_input_array(self, **kwargs) -> typing.Dict[typing.AnyStr, typing.Any]:
-        """Wraps the given kwargs inside a fake batch dict to be used as the example input.
+    def _update_example_input_array(self, **kwargs) -> typing.Optional[typing.Dict[str, typing.Any]]:
+        """Wraps the given kwargs inside a fake batch dict to be used as the example input array.
 
-        The `self.example_input_array` attribute is actually used by Lightning to offer lots of
-        small debugging/logging features, but remains optional.
+        If no kwargs are passed, then no `example_input_array` will be returned. When defined, this
+        attribute is used internally by Lightning to offer lots of small debugging/logging
+        features, but remains optional. In short, it is assumed to be an example input that the
+        model can process directly using its `forward` implementation.
         """
-        batch_data = dict(**kwargs)
+        if not kwargs:  # no example input array provided, it will not be initialized/used
+            self.example_input_array = None
+            return
+        batch_data = dict(**kwargs)  # otherwise, assume the kwargs are elements in the batch dict
         self.example_input_array = dict(batch=batch_data)
         return self.example_input_array
 
@@ -263,7 +287,7 @@ class BaseModel(pl.LightningModule):
         self,
         batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
-    ) -> typing.Dict[typing.AnyStr, typing.Any]:
+    ) -> ssl4rs.data.BatchDictType:
         """Runs a generic version of the forward + evaluation step for the train/valid/test loops.
 
         In comparison with the regular `forward()` function, this function will compute the loss
@@ -328,6 +352,7 @@ class BaseModel(pl.LightningModule):
         Returns:
             Nothing.
         """
+        assert isinstance(outputs, dict), f"unexpected outputs type: {type(outputs)}"
         assert (
             "loss" in outputs
         ), "loss tensor is NOT optional in training step end implementation (needed for backprop!)"
@@ -344,6 +369,8 @@ class BaseModel(pl.LightningModule):
         if self.log_train_metrics_each_step:
             assert metrics_val is not None and isinstance(metrics_val, dict)
             self.log_dict(metrics_val, batch_size=batch_size)
+        if self.log_train_batch_size_each_step and batch_size is not None:
+            self.log("train/batch_size", batch_size)  # noqa
         self._check_and_render_batch(
             loop_type="train",
             batch=batch,
@@ -409,6 +436,7 @@ class BaseModel(pl.LightningModule):
         Returns:
             Nothing.
         """
+        assert isinstance(outputs, dict), f"unexpected outputs type: {type(outputs)}"
         if "loss" in outputs:
             loss = outputs["loss"]
             batch_size = outputs.get(ssl4rs.data.batch_size_key, None)
@@ -484,6 +512,7 @@ class BaseModel(pl.LightningModule):
         Returns:
             Nothing.
         """
+        assert isinstance(outputs, dict), f"unexpected outputs type: {type(outputs)}"
         if "loss" in outputs:
             loss = outputs["loss"]
             batch_size = outputs.get(ssl4rs.data.batch_size_key, None)
@@ -597,49 +626,29 @@ class BaseModel(pl.LightningModule):
         if batch is not None and ssl4rs.data.batch_size_key in batch:
             batch_size = ssl4rs.data.get_batch_size(batch)
         else:
-            if loop_type == "train":
-                assert dataloader_idx == 0
-                dataloader = self.trainer.train_dataloader
-            elif loop_type == "valid":
-                dataloader = self.trainer.val_dataloaders
-            elif loop_type == "test":
-                dataloader = self.trainer.test_dataloaders
-            else:
-                raise NotImplementedError
-            batch_size = self._get_batch_size_from_data_loader(dataloader)
+            batch_size = self.batch_size_hints.get(loop_type, None)
+            if batch_size is None:
+                if loop_type == "train":
+                    assert dataloader_idx == 0
+                    dataloader = self.trainer.train_dataloader
+                elif loop_type == "valid":
+                    dataloader = self.trainer.val_dataloaders
+                elif loop_type == "test":
+                    dataloader = self.trainer.test_dataloaders
+                else:
+                    raise NotImplementedError
+                batch_size = self._get_batch_size_from_data_loader(dataloader)
         assert batch_size > 0
-        if loop_type == "train":
-            assert dataloader_idx == 0
-            assert 0 <= batch_idx < self.trainer.num_training_batches
-            return [
-                self._get_data_id(
-                    loop_type=loop_type,
-                    batch=batch,
-                    batch_idx=batch_idx,
-                    sample_idx=sample_idx,
-                    dataloader_idx=dataloader_idx,
-                )
-                for sample_idx in range(batch_size)
-            ]
-        elif loop_type in ["valid", "test"]:
-            if loop_type == "valid":
-                num_batches = self.trainer.num_val_batches
-            else:
-                num_batches = self.trainer.num_test_batches
-            assert 0 <= dataloader_idx < len(num_batches)
-            assert 0 <= batch_idx < num_batches[dataloader_idx]
-            return [
-                self._get_data_id(
-                    loop_type=loop_type,
-                    batch=batch,
-                    batch_idx=batch_idx,
-                    sample_idx=sample_idx,
-                    dataloader_idx=dataloader_idx,
-                )
-                for sample_idx in range(batch_size)
-            ]
-        else:
-            raise NotImplementedError
+        return [
+            self._get_data_id(
+                loop_type=loop_type,
+                batch=batch,
+                batch_idx=batch_idx,
+                sample_idx=sample_idx,
+                dataloader_idx=dataloader_idx,
+            )
+            for sample_idx in range(batch_size)
+        ]
 
     def _pick_ids_to_render(
         self,
@@ -657,79 +666,61 @@ class BaseModel(pl.LightningModule):
         possible that we return IDs that can never be seen (e.g. due to varying batch sizes). The
         rendering function will just have to ignore those IDs on its own. Also, if the derived class
         does not have a persistent way to get batch IDs without having access to batch data, using
-        shuffling on the data loader may result in the re-shuffling of IDs each run as well.
+        shuffling on the data loader may result in the re-shuffling of IDs each run as well. Finally,
+        when using iterable datasets, we cannot get a good estimate of the total batch count. In
+        order to avoid these issues, you may want to specify hints via the `batch_size_hints`
+        and `batch_count_hints` arguments in the constructor.
         """
         assert loop_type in ["train", "valid", "test"]
         picked_ids = []
         if seed is None:
             seed = os.environ.get("PL_GLOBAL_SEED", None)
         rng = np.random.default_rng(seed=seed)
+        batch_size = self.batch_size_hints.get(loop_type, None)
+        batch_count = self.batch_count_hints.get(loop_type, None)
         if loop_type == "train":
-            batch_size = self._get_batch_size_from_data_loader(self.trainer.train_dataloader)
-            selected_batch_idxs = rng.choice(
-                self.trainer.num_training_batches,
-                size=min(self.sample_count_to_render, self.trainer.num_training_batches),
-                replace=False,
-            )
-            for batch_idx in selected_batch_idxs:
-                picked_ids.append(
-                    self._get_data_id(
-                        loop_type=loop_type,
-                        batch=None,  # we do not have the actual batch data yet!
-                        batch_idx=batch_idx,
-                        sample_idx=rng.choice(batch_size),
-                        dataloader_idx=0,
-                    )
-                )
-        elif loop_type in ["valid", "test"]:
-            if loop_type == "valid":
-                num_batches = self.trainer.num_val_batches
-                dataloaders = self.trainer.val_dataloaders
-            else:
-                num_batches = self.trainer.num_test_batches
-                dataloaders = self.trainer.test_dataloaders
-            if len(num_batches) > 1:
-                selected_dataloader_idxs = rng.choice(
-                    len(num_batches),
-                    size=self.sample_count_to_render,
-                )
-                for dataloader_idx in range(len(num_batches)):
-                    curr_count = np.count_nonzero(selected_dataloader_idxs == dataloader_idx)
-                    batch_size = self._get_batch_size_from_data_loader(dataloaders[dataloader_idx])
-                    selected_batch_idxs = rng.choice(
-                        num_batches[dataloader_idx],
-                        size=min(curr_count, num_batches[dataloader_idx]),
-                        replace=False,
-                    )
-                    for batch_idx in selected_batch_idxs:
-                        picked_ids.append(
-                            self._get_data_id(
-                                loop_type=loop_type,
-                                batch=None,  # we do not have the actual batch data yet!
-                                batch_idx=batch_idx,
-                                sample_idx=rng.choice(batch_size),
-                                dataloader_idx=dataloader_idx,
-                            )
-                        )
-            else:
+            if batch_size is None:
+                # fallback to auto-detecting the batch size from the data loader (might break!)
+                batch_size = self._get_batch_size_from_data_loader(self.trainer.train_dataloader)
+            if batch_count is None:
+                # fallback to auto-detecting the batch count (might not work with iterable loaders)
+                batch_count = self.trainer.num_training_batches
+        else:  # if loop_type in ["valid", "test"]:
+            if batch_count is None:
+                # fallback to auto-detecting the batch count (might not work with iterable loaders)
+                if loop_type == "valid":
+                    batch_count = self.trainer.num_val_batches
+                else:
+                    batch_count = self.trainer.num_test_batches
+                assert (
+                    len(batch_count) == 1
+                ), "using multi-loader setup, missing impl for logging random samples across them..."
+                batch_count = batch_count[0]
+                assert batch_count != float(
+                    "inf"
+                ), "need to specify a batch count hint to the model if using iterable dataloaders"
+            if batch_size is None:
+                # fallback to auto-detecting the batch size from the data loader (might break!)
+                if loop_type == "valid":
+                    dataloaders = self.trainer.val_dataloaders
+                else:
+                    dataloaders = self.trainer.test_dataloaders
                 batch_size = self._get_batch_size_from_data_loader(dataloaders)
-                selected_batch_idxs = rng.choice(
-                    num_batches[0],
-                    size=min(self.sample_count_to_render, num_batches[0]),
-                    replace=False,
+        selected_batch_idxs = rng.choice(
+            int(batch_count),
+            size=min(self.sample_count_to_render, int(batch_count)),
+            replace=False,
+        )
+        for batch_idx in selected_batch_idxs:
+            picked_ids.append(
+                self._get_data_id(
+                    loop_type=loop_type,
+                    batch=None,  # we do not have the actual batch data yet!
+                    batch_idx=batch_idx,
+                    sample_idx=rng.choice(int(batch_size)),
+                    dataloader_idx=0,
                 )
-                for batch_idx in selected_batch_idxs:
-                    picked_ids.append(
-                        self._get_data_id(
-                            loop_type=loop_type,
-                            batch=None,  # we do not have the actual batch data yet!
-                            batch_idx=batch_idx,
-                            sample_idx=rng.choice(batch_size),
-                            dataloader_idx=0,
-                        )
-                    )
-        else:
-            raise NotImplementedError
+            )
         return picked_ids
 
     def _check_and_render_batch(
@@ -737,7 +728,7 @@ class BaseModel(pl.LightningModule):
         loop_type: str,  # 'train', 'valid', or 'test'
         batch: ssl4rs.data.BatchDictType,
         batch_idx: int,
-        outputs: typing.Dict[typing.AnyStr, typing.Any],
+        outputs: ssl4rs.data.BatchDictType,
         dataloader_idx: int = 0,
     ) -> typing.Any:
         """Extracts and renders data samples from the current batch (if any match is found).
@@ -799,7 +790,7 @@ class BaseModel(pl.LightningModule):
         batch_idx: int,
         sample_idxs: typing.List[int],
         sample_ids: typing.List[typing.Hashable],
-        outputs: typing.Dict[typing.AnyStr, typing.Any],
+        outputs: ssl4rs.data.BatchDictType,
         dataloader_idx: int = 0,
     ) -> typing.Any:
         """Renders and logs specific samples from the current batch using available loggers.
@@ -853,9 +844,9 @@ class BaseModel(pl.LightningModule):
     def _update_metrics(
         self,
         loop_type: str,  # 'train', 'valid', or 'test'
-        outputs: typing.Dict[typing.AnyStr, typing.Any],
+        outputs: ssl4rs.data.BatchDictType,
         return_vals: bool = False,  # in case we want to log the metric for the current outputs
-    ) -> typing.Optional[typing.Dict[typing.AnyStr, typing.Any]]:
+    ) -> typing.Optional[typing.Dict[str, typing.Any]]:
         """Updates the metrics for a particular metric collection (based on loop type)."""
         metric_vals = None
         metric_group = f"metrics/{loop_type}"
@@ -875,7 +866,7 @@ class BaseModel(pl.LightningModule):
     def compute_metrics(
         self,
         loop_type: str,  # 'train', 'valid', or 'test'
-    ) -> typing.Dict[typing.AnyStr, typing.Any]:
+    ) -> typing.Dict[str, typing.Any]:
         """Returns the metric values for a particular metric collection (based on loop type)."""
         metric_group = f"metrics/{loop_type}"
         if metric_group in self.metrics:
