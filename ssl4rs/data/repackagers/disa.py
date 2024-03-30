@@ -353,7 +353,10 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
                     break
                 expected_md5sum = order_file_info["digests"]["md5"]
                 md5sum = ssl4rs.utils.filesystem.get_file_hash(order_file_path)
-                assert md5sum == expected_md5sum, f"MD5 mismatch for {order_file_path}"
+                if md5sum != expected_md5sum:
+                    logger.info(f"bad order: {order_id}\n\t(md5sum mismatch)")
+                    skip_order = True
+                    break
                 order_file_name = order_file_path.name
                 is_expected = any([order_file_name.endswith(s) for s in self.metadata.psscene_file_names])
                 assert is_expected, f"unexpected order file: {order_file_path}"
