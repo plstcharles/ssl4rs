@@ -626,6 +626,7 @@ class DeepLakeRepackager(ssl4rs.data.repackagers.utils.DeepLakeRepackager):
         for order_idx, order_info in enumerate(orders_info):
             image_metadata[order_idx]["full_id"] = order_info.full_id
             image_metadata[order_idx]["planet_item_id"] = order_info.planet_item_id
+            image_metadata[order_idx]["timestamp"] = order_info.order_timestamp.isoformat()
             image_metadata[order_idx]["raster_centroid"] = shapely.geometry.mapping(order_info.raster_centroid)
             image_metadata[order_idx]["raster_bbox"] = shapely.geometry.mapping(order_info.raster_bbox)
             image_metadata[order_idx]["raster_xml_metadata"] = order_info.raster_xml_metadata
