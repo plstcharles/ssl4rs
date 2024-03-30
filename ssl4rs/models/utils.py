@@ -103,7 +103,6 @@ class BaseModel(pl.LightningModule):
         self.log_train_batch_size_each_step = log_train_batch_size_each_step
         assert sample_count_to_render >= 0, "invalid sample count to render (should be >= 0)"
         self.sample_count_to_render = sample_count_to_render
-        self.example_input_array: typing.Optional[typing.Any] = self._update_example_input_array()
         self.metrics = self._instantiate_metrics(log_metrics_in_loop_types)  # auto-updated + reset
         if not batch_size_hints:
             batch_size_hints = {}
@@ -241,20 +240,16 @@ class BaseModel(pl.LightningModule):
             del output["freeze_no_grad_params"]
         return output
 
-    def _update_example_input_array(self, **kwargs) -> typing.Optional[typing.Dict[str, typing.Any]]:
-        """Wraps the given kwargs inside a fake batch dict to be used as the example input array.
+    @property
+    def example_input_array(self) -> typing.Optional[typing.Dict[str, typing.Any]]:
+        """Updates the Lightning Module's "example input array" with customized contents.
 
-        If no kwargs are passed, then no `example_input_array` will be returned. When defined, this
-        attribute is used internally by Lightning to offer lots of small debugging/logging
-        features, but remains optional. In short, it is assumed to be an example input that the
-        model can process directly using its `forward` implementation.
+        When defined, this attribute is used internally by Lightning to offer lots of small
+        debugging/logging features, but remains optional. It is assumed to be an example input
+        that the model can process directly using its `forward` call.
         """
-        if not kwargs:  # no example input array provided, it will not be initialized/used
-            self.example_input_array = None
-            return
-        batch_data = dict(**kwargs)  # otherwise, assume the kwargs are elements in the batch dict
-        self.example_input_array = dict(batch=batch_data)
-        return self.example_input_array
+        # this default implementation does not create any tensor, but derived versions might
+        return None
 
     @abc.abstractmethod
     def forward(self, batch: ssl4rs.data.BatchDictType) -> typing.Any:

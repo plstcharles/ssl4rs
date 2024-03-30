@@ -126,6 +126,8 @@ class GenericClassifier(BaseModel):
         if save_hyperparams:
             # this line allows us to access hparams with `self.hparams` + auto-stores them in checkpoints
             self.save_hyperparameters(logger=False)  # logger=False since we don't need duplicated logs
+        self._example_image_shape = example_image_shape
+        self._example_batch_size = 4  # arbitrary, but should be OK
         super().__init__(
             optimization=optimization,
             **kwargs,
@@ -147,15 +149,26 @@ class GenericClassifier(BaseModel):
                 loss_fn = hydra.utils.instantiate(loss_fn)
             assert isinstance(loss_fn, torch.nn.Module), f"incompatible loss_fn type: {type(loss_fn)}"
         self.loss_fn = loss_fn
-        self.example_input_array = None  # this is automatically used by pytorch lightning when not None
-        if example_image_shape is not None and example_image_shape:
-            fake_batch_size = 4
-            self._update_example_input_array(  # for easier tracing/profiling; fake tensors for 'forward'
-                **{
-                    self.input_key: torch.randn(fake_batch_size, self.num_input_channels, *example_image_shape),
-                    "batch_size": fake_batch_size,
-                },
-            )
+
+    @property
+    def example_input_array(self) -> typing.Optional[typing.Dict[str, typing.Any]]:
+        """Updates the Lightning Module's "example input array" with customized contents.
+
+        When defined, this attribute is used internally by Lightning to offer lots of small
+        debugging/logging features, but remains optional. It is assumed to be an example input
+        that the model can process directly using its `forward` call.
+        """
+        return dict(
+            batch={
+                self.input_key: torch.randn(
+                    self._example_batch_size,
+                    self.num_input_channels,
+                    *self._example_image_shape,
+                    device=self.device,
+                ),
+                ssl4rs.data.batch_size_key: self._example_batch_size,
+            }
+        )
 
     def configure_metrics(self) -> torchmetrics.MetricCollection:
         """Configures and returns the metric objects to update when given predictions + labels."""
@@ -243,7 +256,7 @@ class GenericClassifier(BaseModel):
         """
         if self.num_output_classes < 2:
             return None  # not clear how to render here, let's let derived classes handle it
-        assert len(sample_idxs) == len(sample_ids) and len(sample_idxs) > 0
+        assert len(sample_idxs) == len(sample_ids)
         # we'll render the input tensors with their IDs, predicted, and target labels underneath
         pred_idxs, target_idxs = torch.argmax(outputs["preds"], dim=1), outputs["targets"]
         outputs = []
@@ -303,8 +316,6 @@ class GenericSegmenter(GenericClassifier):
     def __init__(
         self,
         model: TorchModuleOrDictConfig,
-        num_output_classes: int,
-        num_input_channels: int,
         example_image_shape: typing.Optional[typing.Tuple[int, int]] = (256, 256),  # height, width
         save_hyperparams: bool = True,  # turn this off in derived classes
         **kwargs,
@@ -358,7 +369,7 @@ class GenericSegmenter(GenericClassifier):
         preds, targets = outputs["preds"], outputs["targets"]
         if self.num_output_classes != 2 or preds.ndim != 4 or targets.dtype != torch.long:
             return None  # not clear how to render here, let's let derived classes handle it
-        assert len(sample_idxs) == len(sample_ids) and len(sample_idxs) > 0
+        assert len(sample_idxs) == len(sample_ids)
         batch_size = ssl4rs.data.get_batch_size(batch)
         assert targets.ndim == 3 and targets.shape[0] == batch_size
         tensor_shape = targets.shape[1:]

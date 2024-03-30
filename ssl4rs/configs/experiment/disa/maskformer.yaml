@@ -15,9 +15,9 @@ experiment_name: disa_with_maskformer # experiment name used in output paths
 
 model: # specified which LightningModule-derived implementation provides the training/inference logic
   _recursive_: False
-  _target_: ssl4rs.models.components.hf.maskformer_wrapper.HFMaskFormerSegmenter
+  _target_: ssl4rs.models.components.hf.maskformer.MaskFormerSegmenter
   model:
-    _target_: ssl4rs.models.components.hf.maskformer_wrapper.create_maskformer_model_from_pretrained
+    _target_: ssl4rs.models.components.hf.maskformer.create_maskformer_model_from_pretrained
     pretrained_model_name_or_path: "facebook/maskformer-swin-base-ade"
     id2label: # tied the the field_boundary_mask target defined below
       0: notboundary
@@ -35,9 +35,9 @@ model: # specified which LightningModule-derived implementation provides the tra
   metrics:
   num_output_classes: ${data.num_classes}
   num_input_channels: ${data.num_input_ch}
-  orig_image_key: ${data.input_image_key}
-  orig_mask_key: ${data.target_mask_key}
   ignore_index: ${data.ignore_index}
+  input_key: ${data.input_image_key}
+  label_key: ${data.target_mask_key}
   example_image_shape: ${data.example_image_shape}
 
 data:
@@ -51,9 +51,10 @@ data:
         collate_fn:
           # the maskformer requires a custom preprocessor applied in the collate function to work
           _partial_: false
-          _target_: ssl4rs.models.components.hf.maskformer_wrapper.create_custom_collate_with_preproc
+          _target_: ssl4rs.models.components.hf.maskformer.create_custom_collate_with_preproc
           image_key: ${data.input_image_key}
           mask_key: ${data.target_mask_key}
+          preproc_data_key: preproc_data
           pad_tensor_names_and_values: ${data.tensor_pad_values}
           pad_to_shape: ${data.example_image_shape}
           keys_to_batch_manually: ${data.keys_to_batch_manually}
