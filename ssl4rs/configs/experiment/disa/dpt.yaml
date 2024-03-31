@@ -1,0 +1,88 @@
+# @package _global_
+
+# To execute this experiment, run one of the entrypoints while specifying this config, e.g.:
+#     python train.py experiment=disa/dummy_fast
+# This particular config is made to run fast on CPU for testing purposes!
+
+defaults:
+  - /model/optimization: default.yaml # use default optim settings (adam + step scheduler)
+  - override /data: disa.yaml # defines the datamodule for the AI4H-DISA dataset
+  - override /callbacks: classification.yaml # adds a few useful callbacks for classification tasks
+  - override /logger: tboard_and_csv.yaml
+  - _self_
+
+experiment_name: disa_with_maskformer # experiment name used in output paths
+
+model: # specified which LightningModule-derived implementation provides the training/inference logic
+  _recursive_: False
+  _target_: ssl4rs.models.components.hf.maskformer.MaskFormerSegmenter
+  model:
+    _target_: ssl4rs.models.components.hf.maskformer.create_maskformer_model_from_pretrained
+    pretrained_model_name_or_path: "facebook/maskformer-swin-base-ade"
+    id2label: # tied the the field_boundary_mask target defined below
+      0: notboundary
+      1: boundary
+    ignore_mismatched_sizes: true # will replace the class predictor, which is OK (we retrain it)
+    freeze_encoder: true
+  preprocessor:
+    _target_: transformers.MaskFormerImageProcessor
+    do_resize: false
+    size_divisor: 32 # update me?
+    do_rescale: false
+    do_normalize: false
+    ignore_index: ${data.ignore_index}
+    reduce_labels: false
+  metrics:
+  num_output_classes: ${data.num_classes}
+  num_input_channels: ${data.num_input_ch}
+  ignore_index: ${data.ignore_index}
+  input_key: ${data.input_image_key}
+  label_key: ${data.target_mask_key}
+  example_image_shape: ${data.example_image_shape}
+
+data:
+  target_mask_key: field_boundary_mask # we add a data parser transform below to generate this mask
+  num_classes: 2 # the above mask contains two classes: 'notboundary' (id=0) and 'boundary' (id=1)
+  datamodule:
+    dataloader_configs:
+      _default_: # this group provides shared (but overridable) settings for all data loader types
+        batch_size: 64
+        num_workers: 8 # a good default should be given by ${utils.default_num_workers}
+        collate_fn:
+          # the maskformer requires a custom preprocessor applied in the collate function to work
+          _partial_: false
+          _target_: ssl4rs.models.components.hf.maskformer.create_custom_collate_with_preproc
+          image_key: ${data.input_image_key}
+          mask_key: ${data.target_mask_key}
+          preproc_data_key: preproc_data
+          pad_tensor_names_and_values: ${data.tensor_pad_values}
+          pad_to_shape: ${data.example_image_shape}
+          keys_to_batch_manually: ${data.keys_to_batch_manually}
+          preprocessor: ${model.preprocessor}
+    dataparser_configs:
+      _default_: # this group provides shared (but overridable) settings for all data parser types
+        batch_transforms:
+          - _partial_: true
+            _target_: ssl4rs.data.datamodules.disa.convert_deeplake_tensors_to_pytorch_tensors
+            normalize_input_tensors: true # we toggle this on to be able to actually train our model
+            mask_input_tensors: true # we also zero-out the invalid pixels in input tensors
+          - _partial_: true
+            _target_: ssl4rs.data.datamodules.disa.generate_field_boundary_mask
+
+trainer:
+  precision: 32-true
+  max_epochs: 50
+  log_every_n_steps: 1
+
+target_metric: valid/accuracy # name of the metric we will be targeting for hparam optimization
+target_metric_mode: max # optimization mode of the target metric defined above
+
+utils:
+  print_config: true
+  project_name: ai4h-disa
+
+profiler: # in case we run the data profiler, these are the modified setting to use
+  use_parser: false
+  batch_count:
+  loop_count: 10
+  display_key: # use 'field_boundary_mask' here to show the target masks while profiling

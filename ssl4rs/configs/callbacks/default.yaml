@@ -10,7 +10,7 @@ rich_progress_bar:
   _target_: lightning.pytorch.callbacks.RichProgressBar
   # https://lightning.ai/docs/pytorch/stable/api/lightning.pytorch.callbacks.RichProgressBar.html
   refresh_rate: 1 # frequency (in batches) at which the progress bar gets updated
-
+  leave: true
 # note, as of 2024-03-27: this logs TOO MUCH STUFF and it might become a bottleneck with e.g. Comet
 # device_monitor:
 #   _target_: lightning.pytorch.callbacks.DeviceStatsMonitor
