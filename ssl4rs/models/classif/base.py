@@ -164,7 +164,6 @@ class GenericClassifier(BaseModel):
                     self._example_batch_size,
                     self.num_input_channels,
                     *self._example_image_shape,
-                    device=self.device,
                 ),
                 ssl4rs.data.batch_size_key: self._example_batch_size,
             }

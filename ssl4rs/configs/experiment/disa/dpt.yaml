@@ -11,27 +11,41 @@ defaults:
   - override /logger: tboard_and_csv.yaml
   - _self_
 
-experiment_name: disa_with_maskformer # experiment name used in output paths
+experiment_name: disa_with_dpt # experiment name used in output paths
+dpt_backbone_name: "Intel/dpt-large-ade"
 
 model: # specified which LightningModule-derived implementation provides the training/inference logic
   _recursive_: False
-  _target_: ssl4rs.models.components.hf.maskformer.MaskFormerSegmenter
+  _target_: ssl4rs.models.components.hf.dpt.DPTSegmenter
   model:
-    _target_: ssl4rs.models.components.hf.maskformer.create_maskformer_model_from_pretrained
-    pretrained_model_name_or_path: "facebook/maskformer-swin-base-ade"
-    id2label: # tied the the field_boundary_mask target defined below
-      0: notboundary
-      1: boundary
+    _target_: ssl4rs.models.components.hf.dpt.create_dpt_model_from_pretrained
+    pretrained_model_name_or_path: ${dpt_backbone_name}
     ignore_mismatched_sizes: true # will replace the class predictor, which is OK (we retrain it)
-    freeze_encoder: true
+    freeze_backbone: true
+    freeze_neck: true
+    new_head:
+      _target_: ssl4rs.models.components.simple_cnn.SimpleConvNet
+      in_channels: 256
+      hidden_channels:
+        - 256
+      kernel_sizes:
+        - [3, 3]
+      strides:
+        - [1, 1]
+      paddings:
+        - [1, 1]
+      dropouts:
+        - 0.1
+      with_batch_norm: true
+      with_max_pool: false
+      with_output_upsample: true
+      head_channels: ${data.num_classes}
   preprocessor:
-    _target_: transformers.MaskFormerImageProcessor
-    do_resize: false
-    size_divisor: 32 # update me?
-    do_rescale: false
-    do_normalize: false
+    _target_: transformers.AutoImageProcessor.from_pretrained
+    pretrained_model_name_or_path: ${dpt_backbone_name}
+  loss_fn: # in this case, we'll instantiate the cross-entropy loss module directly
+    _target_: torch.nn.CrossEntropyLoss
     ignore_index: ${data.ignore_index}
-    reduce_labels: false
   metrics:
   num_output_classes: ${data.num_classes}
   num_input_channels: ${data.num_input_ch}
@@ -46,14 +60,13 @@ data:
   datamodule:
     dataloader_configs:
       _default_: # this group provides shared (but overridable) settings for all data loader types
-        batch_size: 64
+        batch_size: 24
         num_workers: 8 # a good default should be given by ${utils.default_num_workers}
         collate_fn:
           # the maskformer requires a custom preprocessor applied in the collate function to work
           _partial_: false
-          _target_: ssl4rs.models.components.hf.maskformer.create_custom_collate_with_preproc
+          _target_: ssl4rs.models.components.hf.base.create_collate_fn_with_preproc
           image_key: ${data.input_image_key}
-          mask_key: ${data.target_mask_key}
           preproc_data_key: preproc_data
           pad_tensor_names_and_values: ${data.tensor_pad_values}
           pad_to_shape: ${data.example_image_shape}
@@ -64,8 +77,8 @@ data:
         batch_transforms:
           - _partial_: true
             _target_: ssl4rs.data.datamodules.disa.convert_deeplake_tensors_to_pytorch_tensors
-            normalize_input_tensors: true # we toggle this on to be able to actually train our model
-            mask_input_tensors: true # we also zero-out the invalid pixels in input tensors
+            normalize_input_tensors: false
+            mask_input_tensors: true
           - _partial_: true
             _target_: ssl4rs.data.datamodules.disa.generate_field_boundary_mask
 

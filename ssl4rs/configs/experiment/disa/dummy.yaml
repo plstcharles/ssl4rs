@@ -8,6 +8,7 @@ defaults:
   - /model/optimization: default.yaml # use default optim settings (adam + step scheduler)
   - override /data: disa.yaml # defines the datamodule for the AI4H-DISA dataset
   - override /callbacks: classification.yaml # adds a few useful callbacks for classification tasks
+  - override /logger: tboard_and_csv.yaml
   - _self_
 
 experiment_name: disa_with_micro_unet # experiment name used in output paths
