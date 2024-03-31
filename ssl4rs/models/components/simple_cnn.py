@@ -72,7 +72,7 @@ class SimpleConvNet(torch.nn.Module):
                 mode="bilinear",
                 align_corners=True,
             )
-            if with_output_upsample is not None
+            if with_output_upsample
             else torch.nn.Identity(),
         )
 
