@@ -162,8 +162,11 @@ class IterableDataset(torch.utils.data.IterableDataset):
         shuffle: specifies whether to shuffle the items inside the internal buffer.
         buffer_size: size of the item buffer to use. The buffer will be filled with up to that many
             items loaded from wrapped dataset arrays, shuffled (if needed), and them emptied one
-            item at a time. Once totally empty, the process is repeated until all items have been
-            returned.
+            item at a time. Once the size is lower or equal to `buffer_refill_threshold`, the
+            buffer is refilled. The process is repeated until all items have been returned.
+        buffer_refill_threshold: the threshold for the number of items in the buffer under which it
+            will be refilled. Defaults to zero, meaning the buffer will always be fully emptied
+            before being refilled.
         shuffle_seed: random seed used to initialize the RNG used for shuffling.
     """
 
@@ -173,7 +176,8 @@ class IterableDataset(torch.utils.data.IterableDataset):
         target_array_keys: typing.List[str],
         constant_copy_keys: typing.Optional[typing.List[str]] = None,
         shuffle: bool = False,
-        buffer_size: int = 0,
+        buffer_size: int = 0,  # in number of dataset array items
+        buffer_refill_threshold: int = 0,  # in number of dataset array items
         shuffle_seed: typing.Optional[int] = None,
     ) -> None:
         """Initializes the dataset wrapper while validating settings."""
@@ -190,6 +194,8 @@ class IterableDataset(torch.utils.data.IterableDataset):
         self.shuffle = shuffle
         assert buffer_size >= 0, f"invalid buffer size: {buffer_size}"
         self.buffer_size = buffer_size
+        assert buffer_refill_threshold >= 0, f"invalid buffer refill threshold: {buffer_refill_threshold}"
+        self.buffer_refill_threshold = buffer_refill_threshold
         self.shuffle_seed = shuffle_seed
         self._reset_iterator()
 
@@ -217,7 +223,7 @@ class IterableDataset(torch.utils.data.IterableDataset):
 
     def __next__(self) -> typing.Dict[str, typing.Any]:
         """Get the next item from the next array of the wrapped dataset."""
-        if not self._buffer:  # time for a refill
+        if len(self._buffer) <= self.buffer_refill_threshold and self._remaining_idxs:  # refill time
             while self._remaining_idxs:  # there are still items to fetch from the dataset
                 curr_idx = self._remaining_idxs.pop(0)
                 curr_items = list(self._yield_items_for_idx(curr_idx))
