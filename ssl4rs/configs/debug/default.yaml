@@ -69,5 +69,6 @@ utils:
   log_installed_pkgs: True # always log all installed packages in the python env to the output dir
   log_runtime_tags: True # always log all runtime tags (e.g. platform name) to the output dir
   log_interpolated_config: True # always log the hydra config with interpolated params
+  log_model_architecture: True # always log the model architecture and param counts
   seed: 1337 # might help make sure the RNG behavior is static
   seed_workers: True # also fix that seed across all data loader workers

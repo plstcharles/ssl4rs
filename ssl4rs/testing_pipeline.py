@@ -63,6 +63,7 @@ def test(config: omegaconf.DictConfig) -> None:
         trainer=trainer,
         callbacks=[],
         loggers=loggers,
+        output_dir=output_dir,
     )
 
     logger.info(f"Done ({exp_name}: {run_name}, '{run_type}', job={job_name})")

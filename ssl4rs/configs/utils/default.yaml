@@ -16,6 +16,7 @@ ignore_warnings: False # used to disable python warnings if they annoy you
 log_installed_pkgs: True # toggles whether to log all installed packages in the python env
 log_runtime_tags: True # toggles whether to log all runtime tags (e.g. platform name)
 log_interpolated_config: True # toggles whether to log the hydra config with interpolated params
+log_model_architecture: True # toggles whether to log the model architecture and param counts
 seed: null # seed for random number generators (null = auto-seed based e.g. on datetime)
 seed_workers: False # toggles whether to initialize data loader workers with the above seed as well
 use_deterministic_algorithms: False # toggles whether to only use deterministic algos in pytorch

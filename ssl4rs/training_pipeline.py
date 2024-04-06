@@ -116,6 +116,7 @@ def train(config: omegaconf.DictConfig) -> typing.Optional[float]:
         trainer=trainer,
         callbacks=callbacks,
         loggers=loggers,
+        output_dir=output_dir,
     )
 
     logger.info(f"Done ({exp_name}: {run_name}, '{run_type}', job={job_name})")

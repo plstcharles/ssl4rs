@@ -241,6 +241,70 @@ def log_installed_packages(
             fd.write(f"{pkg_name}\n")
 
 
+def log_model_architecture(
+    model: torch.nn.Module,
+    output_dir: typing.Union[typing.AnyStr, pathlib.Path],
+    log_extension: typing.AnyStr = ".log",
+) -> None:
+    """Saves detailed information about a PyTorch model's architecture to a log file.
+
+    Note: this may run across multiple processes simultaneously as long as the rank ID is used
+    inside the log file extension.
+
+    Args:
+        model: model whose architecture + parameter counts should be logged.
+        output_dir: the output directory inside which we should be saving the package log.
+        log_extension: extension to use in the log's file name.
+    """
+
+    def _print_model_info(
+        fd: typing.IO[typing.AnyStr],
+        module: torch.nn.Module,
+        layer_prefix: str = "",
+        depth: int = 0,
+    ):
+        """Internal print/log function that recursively applies to all model layers."""
+        param_count, trainable_param_count = 0, 0
+        if depth > 0:
+            parent_prefix = " " + ("| " * (depth - 1)) + "┌─ "
+        else:
+            parent_prefix = "Model:"
+        fd.write(f"{parent_prefix} {layer_prefix}({module.__class__.__name__})\n")
+        known_named_params = []
+        for name, child in module.named_children():
+            child_param_count, child_trainable_param_count, child_named_params = _print_model_info(
+                fd=fd,
+                module=child,
+                layer_prefix=f"{layer_prefix}.{name}",
+                depth=depth + 1,
+            )
+            param_count += child_param_count
+            trainable_param_count += child_trainable_param_count
+            known_named_params.extend(child_named_params)
+        for name, param in module.named_parameters():
+            full_name = f"{layer_prefix}.{name}"
+            if full_name in known_named_params:
+                continue
+            param_trainable = param.requires_grad
+            param_prefix = " " + ("| " * depth)
+            fd.write(f"{param_prefix}   {full_name}: {param.numel()} params, trainable={param_trainable}\n")
+            param_count += param.numel()
+            if param_trainable:
+                trainable_param_count += param.numel()
+            known_named_params.append(full_name)
+        if depth > 0:
+            summary_prefix = " " + ("| " * (depth - 1)) + "└─"
+            fd.write(f"{summary_prefix}> summary: {param_count} params, {trainable_param_count} trainable\n")
+        return param_count, trainable_param_count, known_named_params
+
+    output_dir = pathlib.Path(output_dir).expanduser()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_log_path = output_dir / f"model_info{log_extension}"
+    with open(output_log_path, "w") as fd_:
+        tot_param_count, tot_trainable_param_count, _ = _print_model_info(fd_, model)
+        fd_.write(f"summary: {tot_param_count} params, {tot_trainable_param_count} trainable")
+
+
 def log_interpolated_config(
     config: omegaconf.DictConfig,
     output_dir: typing.Union[typing.AnyStr, pathlib.Path],
@@ -277,8 +341,13 @@ def finalize_logs(
     trainer: pl.Trainer,
     callbacks: typing.List[pl.Callback],
     loggers: typing.List[pl_loggers.Logger],
+    output_dir: typing.Optional[typing.Union[typing.AnyStr, pathlib.Path]] = None,
 ) -> None:
     """Makes sure everything is logged and closed properly before ending the session."""
+    if output_dir is not None:
+        log_extension = get_log_extension_slug(config=config)
+        if config.utils.get("log_model_architecture"):
+            log_model_architecture(model=model, output_dir=output_dir, log_extension=log_extension)
     for lg in loggers:
         if isinstance(lg, pl_loggers.wandb.WandbLogger):
             # without this, sweeps with wandb logger might crash!
