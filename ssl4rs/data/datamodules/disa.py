@@ -272,6 +272,28 @@ def generate_field_boundary_mask(
     batch[output_field_boundary_mask_name] = boundary_mask
     return batch
 
+def generate_distance_from_boundary_mask(
+    batch: ssl4rs.data.BatchDictType,
+    output_distance_mask_name: str = "distance_from_boundary_mask",
+) -> ssl4rs.data.BatchDictType:
+    """Transform used in parser class to generate distance from field boundary (contour) masks."""
+    assert isinstance(batch, dict)
+    assert "field_mask" in batch
+    class_map = batch["field_mask"]
+    unannotated_mask = class_map == 0  # this is the real 'dontcare' which we reapply below
+    distance_mask = ssl4rs.data.transforms.distance_from_boundary.generate_boundary_distance_mask(
+    class_label_map = class_map,
+    target_class_label = 1,  # target the "positive" (field) class inside the binary mask
+    ignore_index = DataModule.metadata.dontcare_label,
+    pad_size = 1
+    )
+    distance_mask[unannotated_mask] = DataModule.metadata.dontcare_label
+    if isinstance(class_map, torch.Tensor):
+        # need to convert the new mask to the same format
+        distance_mask = torch.as_tensor(distance_mask).to(device=class_map.device)
+    batch[output_distance_mask_name] = distance_mask
+    return batch
+
 
 def _local_main(config) -> None:
     import hydra.utils

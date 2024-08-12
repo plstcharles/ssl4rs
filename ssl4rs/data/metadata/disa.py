@@ -182,6 +182,7 @@ tensor_names_to_pad = (
     "location_preview_roi",
     "field_mask",
     "field_boundary_mask",
+    "distance_from_boundary_mask",
     "image_data",
     "image_roi",
     "image_udm2",
@@ -196,6 +197,7 @@ tensor_pad_values = {
     "image_data": 0,
     "image_roi": 0,
     "image_udm2": 0,
+    "distance_from_boundary_mask": dontcare_label,
 }
 """Mapping from tensor names to tensor values to use when padding arrays."""
 

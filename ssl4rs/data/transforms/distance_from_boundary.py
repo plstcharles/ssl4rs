@@ -16,6 +16,7 @@ def generate_boundary_distance_mask(
         class_label_map: typing.Union[np.ndarray, torch.Tensor],
         target_class_label: int,
         ignore_index: typing.Optional[int] = None,
+        contour_dilate_kernel_size: typing.Optional[typing.Tuple[int, int]] = None,
         pad_size: int = 1,  # Pad size to avoid boundary issues
 ) -> np.ndarray:
     """
@@ -59,12 +60,16 @@ def generate_boundary_distance_mask(
     padded_roi_mask = np.pad(roi_mask, pad_size, mode='constant', constant_values=0)
     normalized_distances = np.zeros(padded_roi_mask.shape, dtype=np.float32)
 
+    if contour_dilate_kernel_size is not None:
+        dilate_struct_elem = cv.getStructuringElement(cv.MORPH_CROSS, contour_dilate_kernel_size)
+        padded_roi_mask = cv.dilate(padded_roi_mask, dilate_struct_elem, iterations=1)
+
     # find boundaries/countours
     # todo: do we need to dilate here? I dont think so tbh
     contours, _ = cv.findContours(
         image=padded_roi_mask,
         mode=cv.RETR_EXTERNAL,
-        method=cv.CHAIN_APPROX_SIMPLE,
+        method=cv.CHAIN_APPROX_TC89_L1,
     )
 
     # process contours

@@ -11,6 +11,7 @@ def generate_boundary_mask_from_class_label_map(
     target_class_label: int,
     ignore_index: typing.Optional[int] = None,
     contour_dilate_kernel_size: typing.Optional[typing.Tuple[int, int]] = None,
+    pad_size: int = 1,  # Pad size to avoid boundary issues
 ) -> np.ndarray:
     """Generates a boundary mask from all regions of interest inside a given class label map.
 
@@ -41,11 +42,36 @@ def generate_boundary_mask_from_class_label_map(
         else:
             return dontcare_mask.astype(np.int64) * ignore_index
     roi_mask = roi_mask.astype(np.uint8) * 255  # to prep for opencv input
+
+    roi_mask = np.pad(roi_mask, pad_size, mode='constant', constant_values=0)
+
+
+    if roi_mask.sum().sum() == 0:
+        raise ValueError("no fields detected in roi mask")
+
+    if roi_mask is None or roi_mask.shape == 0:
+        raise ValueError("The input image is empty or not properly loaded")
+
+    if roi_mask.dtype != np.uint8:
+        print("Converting image to uint8.")
+        roi_mask = roi_mask.astype(np.uint8)
+
+    # Converting image to grayscale if not already converted
+    if len(roi_mask.shape) == 3 and roi_mask.shape[2] == 3:
+        roi_mask = cv.cvtColor(roi_mask, cv.COLOR_BGR2GRAY)
+
+    if not roi_mask.flags['C_CONTIGUOUS']:
+        roi_mask = np.ascontiguousarray(roi_mask)
+
+    if np.isnan(roi_mask).any() or np.isinf(roi_mask).any():
+        raise ValueError("Input image contains NaNs or infinite values.")
+
     contours, _ = cv.findContours(
         image=roi_mask,
         mode=cv.RETR_EXTERNAL,
-        method=cv.CHAIN_APPROX_SIMPLE,
+        method=cv.CHAIN_APPROX_TC89_KCOS,
     )
+
     output_mask = np.zeros(roi_mask.shape, dtype=np.uint8)  # temporarily uint8, for opencv
     cv.drawContours(
         image=output_mask,
@@ -57,7 +83,9 @@ def generate_boundary_mask_from_class_label_map(
     if contour_dilate_kernel_size is not None:
         dilate_struct_elem = cv.getStructuringElement(cv.MORPH_CROSS, contour_dilate_kernel_size)
         output_mask = cv.dilate(output_mask, dilate_struct_elem, iterations=1)
+
     # convert back from opencv format to our intended output format
+    output_mask = output_mask[pad_size:-pad_size, pad_size:-pad_size]
     output_mask = output_mask.astype(np.int64) // 255
     if dontcare_mask is not None:
         output_mask[dontcare_mask] = ignore_index
