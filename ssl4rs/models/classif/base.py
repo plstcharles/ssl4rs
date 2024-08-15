@@ -368,3 +368,109 @@ class GenericSegmenter(GenericClassifier):
             self._log_rendered_image(output_image, key=f"{loop_type}/{sample_id}")
             outputs.append(output_image)
         return outputs
+
+
+class MaskedMSELoss(nn.Module):
+    def __init__(self, ignore_index=-1):
+        super(MaskedMSELoss, self).__init__()
+        self.ignore_index = ignore_index
+        self.mse_loss = torch.nn.MSELoss()
+
+    def forward(self, predictions, targets):
+        mask = targets != self.ignore_index
+        valid_predictions = predictions[mask]
+        valid_targets = targets[mask]
+
+        loss = self.mse_loss(valid_predictions, valid_targets)
+        return loss
+
+class MaskedMeanSquaredError(torchmetrics.Metric):
+    def __init__(self, ignore_index=-1, dist_sync_on_step=False):
+        super(MaskedMeanSquaredError, self).__init__(dist_sync_on_step=dist_sync_on_step)
+        self.ignore_index = ignore_index
+        self.mse_metric = torchmetrics.MeanSquaredError()
+
+    def update(self, predictions: torch.Tensor, targets: torch.Tensor):
+        mask = targets != self.ignore_index
+
+        valid_predictions = predictions[mask]
+        valid_targets = targets[mask]
+        self.mse_metric.update(valid_predictions, valid_targets)
+
+    def compute(self):
+        return self.mse_metric.compute()
+
+    def reset(self):
+        self.mse_metric.reset()
+
+
+
+class SegmenterBoundaryDistance(GenericSegmenter):
+    """
+    Creates a segmentation style model that has a regression based head for boundary loss
+    """
+
+    def __init__(
+            self,
+            model: TorchModuleOrDictConfig,
+            optimization: typing.Optional[ssl4rs.utils.DictConfig],
+            num_input_channels: int,
+            # metrics: ssl4rs.utils.DictConfig,
+            input_key: typing.AnyStr = "input",
+            label_key: typing.AnyStr = "label",
+            loss_fn: typing.Optional[TorchModuleOrDictConfig] = None,
+            ignore_index: typing.Optional[int] = None,
+            example_image_shape: typing.Tuple[int, int] = (256, 256),  # height, width
+            save_hyperparams: bool = True,  # turn this off in derived classes
+            **kwargs,
+    ):
+        if save_hyperparams:
+            # this line allows us to access hparams with `self.hparams` + auto-stores them in checkpoints
+            self.save_hyperparameters(logger=False)  # logger=False since we don't need duplicated logs
+
+        super().__init__(
+            model=model,
+            loss_fn=loss_fn,
+            metrics=None, # inits the segmenter base model with None but also overiide the configure metrics method below to allow for masked MSE
+            optimization=optimization,
+            num_output_classes=1, # only one channel as it is a regression objective
+            num_input_channels=num_input_channels,
+            input_key=input_key,
+            label_key=label_key,
+            ignore_index=ignore_index,
+            example_image_shape=example_image_shape,  # height, width
+            save_hyperparams=save_hyperparams,  # turn this off in derived classes
+            **kwargs,
+        )
+
+
+        loss_fn = MaskedMSELoss(ignore_index=ignore_index)
+        assert isinstance(loss_fn, torch.nn.Module), f"incompatible loss_fn type: {type(loss_fn)}"
+        self.loss_fn = loss_fn
+        self.num_output_classes = 1
+
+    def configure_metrics(self):
+        return torchmetrics.MetricCollection({'masked_mse': MaskedMeanSquaredError(ignore_index=-1)})
+
+
+    # def forward(self, batch: ssl4rs.data.BatchDictType) -> torch.Tensor:
+    #     """Forwards batch data through the model, similar to `torch.nn.Module.forward()`."""
+    #     assert self.input_key in batch, f"missing mandatory '{self.input_key}' tensor from batch"
+    #     input_tensor = batch[self.input_key]
+    #     assert input_tensor.ndim == 4, "unexpected 2D image tensor shape (should be BxCxHxW)"
+    #     batch_size, ch, h, w = input_tensor.shape
+    #     assert batch_size == ssl4rs.data.get_batch_size(batch)
+    #     assert ch == self.num_input_channels
+    #     logits = self.model(input_tensor)
+    #     assert isinstance(logits, torch.Tensor)
+    #     assert logits.ndim == 4, "unexpected 2d pred shape (should be BxCxHxW)"
+    #     assert logits.shape[0] == batch_size and logits.shape[1] == self.num_output_classes
+    #     return logits
+
+    # def _generic_step(
+    #     self,
+    #     batch: ssl4rs.data.BatchDictType,
+    #     batch_idx: int,
+    # ) -> typing.Dict[typing.AnyStr, typing.Any]:
+    #     raise NotImplementedError
+
