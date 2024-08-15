@@ -189,7 +189,7 @@ def get_runtime_tags(
         "git_hash": get_git_revision_hash(),
         "time_since_epoch": curr_time,
         "local_timestamp": time.strftime("%Y-%m-%d_%H-%M-%S", curr_local_time),
-        "runtime_hash": hashlib.sha1(str(curr_time).encode(), usedforsecurity=False).hexdigest(),
+        "runtime_hash": hashlib.sha1(str(curr_time).encode()).hexdigest(),
         "sys_argv": sys.argv,
     }
     if with_gpu_info:

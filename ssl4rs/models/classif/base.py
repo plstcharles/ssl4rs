@@ -9,6 +9,7 @@ import omegaconf
 import torch
 import torch.nn.functional
 import torchmetrics
+import torch.nn as nn
 
 import ssl4rs.data
 import ssl4rs.utils

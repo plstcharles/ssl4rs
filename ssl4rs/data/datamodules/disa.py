@@ -291,7 +291,7 @@ def generate_distance_from_boundary_mask(
     if isinstance(class_map, torch.Tensor):
         # need to convert the new mask to the same format
         distance_mask = torch.as_tensor(distance_mask).to(device=class_map.device)
-    batch[output_distance_mask_name] = distance_mask
+    batch[output_distance_mask_name] = distance_mask.unsqueeze(axis = 0)
     return batch
 
 
