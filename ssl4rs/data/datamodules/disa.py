@@ -16,6 +16,7 @@ import ssl4rs.data.metadata.disa
 import ssl4rs.data.parsers.disa
 import ssl4rs.data.repackagers.disa
 import ssl4rs.data.transforms.boundary
+import ssl4rs.data.transforms.composite_bands
 import ssl4rs.utils.config
 import ssl4rs.utils.logging
 
@@ -250,6 +251,15 @@ def convert_deeplake_tensors_to_pytorch_tensors(
         batch[tname] = tval
     return batch
 
+# todo: maybe change so this is not inplace?
+def convert_4_band_to_3_band(
+    batch: ssl4rs.data.BatchDictType,
+) -> ssl4rs.data.BatchDictType:
+    """Transform converts RGB+NIR into a 3-band composite suitable for pretrained backbones"""
+    img_data = batch['image_data']
+    img_transform = ssl4rs.data.transforms.composite_bands.Convert4BandTo3Band()
+    batch['image_data'] = img_transform(img_data)
+    return batch
 
 def generate_field_boundary_mask(
     batch: ssl4rs.data.BatchDictType,
