@@ -453,24 +453,3 @@ class SegmenterBoundaryDistance(GenericSegmenter):
         return torchmetrics.MetricCollection({'masked_mse': MaskedMeanSquaredError(ignore_index=-1)})
 
 
-    # def forward(self, batch: ssl4rs.data.BatchDictType) -> torch.Tensor:
-    #     """Forwards batch data through the model, similar to `torch.nn.Module.forward()`."""
-    #     assert self.input_key in batch, f"missing mandatory '{self.input_key}' tensor from batch"
-    #     input_tensor = batch[self.input_key]
-    #     assert input_tensor.ndim == 4, "unexpected 2D image tensor shape (should be BxCxHxW)"
-    #     batch_size, ch, h, w = input_tensor.shape
-    #     assert batch_size == ssl4rs.data.get_batch_size(batch)
-    #     assert ch == self.num_input_channels
-    #     logits = self.model(input_tensor)
-    #     assert isinstance(logits, torch.Tensor)
-    #     assert logits.ndim == 4, "unexpected 2d pred shape (should be BxCxHxW)"
-    #     assert logits.shape[0] == batch_size and logits.shape[1] == self.num_output_classes
-    #     return logits
-
-    # def _generic_step(
-    #     self,
-    #     batch: ssl4rs.data.BatchDictType,
-    #     batch_idx: int,
-    # ) -> typing.Dict[typing.AnyStr, typing.Any]:
-    #     raise NotImplementedError
-
