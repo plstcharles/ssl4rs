@@ -451,3 +451,47 @@ class SegmenterBoundaryDistance(GenericSegmenter):
 
     def configure_metrics(self):
         return torchmetrics.MetricCollection({'masked_mse': MaskedMeanSquaredError(ignore_index=-1)})
+
+    def _render_and_log_samples(
+            self,
+            loop_type: str,  # 'train', 'valid', or 'test'
+            batch: ssl4rs.data.BatchDictType,
+            batch_idx: int,
+            sample_idxs: typing.List[int],
+            sample_ids: typing.List[typing.Hashable],
+            outputs: typing.Dict[typing.AnyStr, typing.Any],
+            dataloader_idx: int = 0,
+            fill_value: float = 0.9,
+            ignore_idx: int = -1
+    ) -> typing.Any:
+        """Renders and logs specific samples from the current batch using available loggers.
+
+        Note: only available when using binary classification models/masks.
+        """
+        if self.num_output_classes != 1:
+            return None  # not clear how to render here, let's let derived classes handle it
+        assert len(sample_idxs) == len(sample_ids) and len(sample_idxs) > 0
+        batch_size = ssl4rs.data.get_batch_size(batch)
+        preds, targets = outputs["preds"], outputs["targets"]
+        assert targets.ndim == 4 and targets.shape[0] == batch_size and targets.dtype == torch.float32
+        tensor_shape = targets.shape[2:]
+        assert preds.ndim == 4 and preds.shape == (batch_size, self.num_output_classes, *tensor_shape)
+
+        # we'll render the input tensors with a prediction mask and target mask side-by-side
+        outputs = []
+        for sample_idx, sample_id in zip(sample_idxs, sample_ids):
+            input_tensor = batch[self.input_key][sample_idx].cpu()
+            assert input_tensor.ndim == 3
+            assert input_tensor.shape == (self.num_input_channels, *tensor_shape)
+            input_image = ssl4rs.utils.drawing.get_displayable_image(input_tensor.cpu())
+            pred_image = ssl4rs.utils.drawing.get_displayable_image(preds[sample_idx].cpu())
+
+            target_mask = targets[sample_idx].cpu()
+            dontcare_mask = torch.where(target_mask == ignore_idx)
+            target_mask[dontcare_mask] = fill_value
+            target_image = ssl4rs.utils.drawing.get_displayable_image(target_mask.cpu())
+
+            output_image = cv.hconcat([input_image, pred_image, target_image])
+            self._log_rendered_image(output_image, key=f"{loop_type}/{sample_id}")
+            outputs.append(output_image)
+        return outputs
