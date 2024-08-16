@@ -40,20 +40,20 @@ class GenericClassifier(BaseModel):
     """
 
     def __init__(
-        self,
-        encoder: TorchModuleOrDictConfig,
-        head: typing.Optional[TorchModuleOrDictConfig],
-        loss_fn: typing.Optional[TorchModuleOrDictConfig],
-        metrics: typing.Optional[ssl4rs.utils.DictConfig],
-        optimization: typing.Optional[ssl4rs.utils.DictConfig],
-        num_output_classes: int,
-        num_input_channels: int,
-        input_key: typing.AnyStr = "input",
-        label_key: typing.AnyStr = "label",
-        ignore_index: typing.Optional[int] = None,
-        example_image_shape: typing.Tuple[int, int] = (224, 224),  # height, width
-        save_hyperparams: bool = True,  # turn this off in derived classes
-        **kwargs,
+            self,
+            encoder: TorchModuleOrDictConfig,
+            head: typing.Optional[TorchModuleOrDictConfig],
+            loss_fn: typing.Optional[TorchModuleOrDictConfig],
+            metrics: typing.Optional[ssl4rs.utils.DictConfig],
+            optimization: typing.Optional[ssl4rs.utils.DictConfig],
+            num_output_classes: int,
+            num_input_channels: int,
+            input_key: typing.AnyStr = "input",
+            label_key: typing.AnyStr = "label",
+            ignore_index: typing.Optional[int] = None,
+            example_image_shape: typing.Tuple[int, int] = (224, 224),  # height, width
+            save_hyperparams: bool = True,  # turn this off in derived classes
+            **kwargs,
     ):
         """Initializes the LightningModule and its submodules, loss, metrics, and optimizer.
 
@@ -173,9 +173,9 @@ class GenericClassifier(BaseModel):
         return logits
 
     def _generic_step(
-        self,
-        batch: ssl4rs.data.BatchDictType,
-        batch_idx: int,
+            self,
+            batch: ssl4rs.data.BatchDictType,
+            batch_idx: int,
     ) -> typing.Dict[typing.AnyStr, typing.Any]:
         """Runs a generic version of the forward + evaluation step for the train/valid/test loops.
 
@@ -201,14 +201,14 @@ class GenericClassifier(BaseModel):
         }
 
     def _render_and_log_samples(
-        self,
-        loop_type: str,  # 'train', 'valid', or 'test'
-        batch: ssl4rs.data.BatchDictType,
-        batch_idx: int,
-        sample_idxs: typing.List[int],
-        sample_ids: typing.List[typing.Hashable],
-        outputs: typing.Dict[typing.AnyStr, typing.Any],
-        dataloader_idx: int = 0,
+            self,
+            loop_type: str,  # 'train', 'valid', or 'test'
+            batch: ssl4rs.data.BatchDictType,
+            batch_idx: int,
+            sample_idxs: typing.List[int],
+            sample_ids: typing.List[typing.Hashable],
+            outputs: typing.Dict[typing.AnyStr, typing.Any],
+            dataloader_idx: int = 0,
     ) -> typing.Any:
         """Renders and logs specific samples from the current batch using available loggers.
 
@@ -274,19 +274,19 @@ class GenericSegmenter(GenericClassifier):
         return self.encoder
 
     def __init__(
-        self,
-        model: TorchModuleOrDictConfig,
-        loss_fn: typing.Optional[TorchModuleOrDictConfig],
-        metrics: ssl4rs.utils.DictConfig,
-        optimization: typing.Optional[ssl4rs.utils.DictConfig],
-        num_output_classes: int,
-        num_input_channels: int,
-        input_key: typing.AnyStr = "input",
-        label_key: typing.AnyStr = "label",
-        ignore_index: typing.Optional[int] = None,
-        example_image_shape: typing.Tuple[int, int] = (256, 256),  # height, width
-        save_hyperparams: bool = True,  # turn this off in derived classes
-        **kwargs,
+            self,
+            model: TorchModuleOrDictConfig,
+            loss_fn: typing.Optional[TorchModuleOrDictConfig],
+            metrics: ssl4rs.utils.DictConfig,
+            optimization: typing.Optional[ssl4rs.utils.DictConfig],
+            num_output_classes: int,
+            num_input_channels: int,
+            input_key: typing.AnyStr = "input",
+            label_key: typing.AnyStr = "label",
+            ignore_index: typing.Optional[int] = None,
+            example_image_shape: typing.Tuple[int, int] = (256, 256),  # height, width
+            save_hyperparams: bool = True,  # turn this off in derived classes
+            **kwargs,
     ):
         """Initializes the LightningModule and its submodules, loss, metrics, and optimizer.
 
@@ -328,14 +328,14 @@ class GenericSegmenter(GenericClassifier):
         return logits
 
     def _render_and_log_samples(
-        self,
-        loop_type: str,  # 'train', 'valid', or 'test'
-        batch: ssl4rs.data.BatchDictType,
-        batch_idx: int,
-        sample_idxs: typing.List[int],
-        sample_ids: typing.List[typing.Hashable],
-        outputs: typing.Dict[typing.AnyStr, typing.Any],
-        dataloader_idx: int = 0,
+            self,
+            loop_type: str,  # 'train', 'valid', or 'test'
+            batch: ssl4rs.data.BatchDictType,
+            batch_idx: int,
+            sample_idxs: typing.List[int],
+            sample_ids: typing.List[typing.Hashable],
+            outputs: typing.Dict[typing.AnyStr, typing.Any],
+            dataloader_idx: int = 0,
     ) -> typing.Any:
         """Renders and logs specific samples from the current batch using available loggers.
 
@@ -369,7 +369,7 @@ class GenericSegmenter(GenericClassifier):
             outputs.append(output_image)
         return outputs
 
-
+#todo: refactor loss to relevant file
 class MaskedMSELoss(nn.Module):
     def __init__(self, ignore_index=-1):
         super(MaskedMSELoss, self).__init__()
@@ -384,6 +384,7 @@ class MaskedMSELoss(nn.Module):
         loss = self.mse_loss(valid_predictions, valid_targets)
         return loss
 
+#todo: refactor metric to relevant file
 class MaskedMeanSquaredError(torchmetrics.Metric):
     def __init__(self, ignore_index=-1, dist_sync_on_step=False):
         super(MaskedMeanSquaredError, self).__init__(dist_sync_on_step=dist_sync_on_step)
@@ -402,7 +403,6 @@ class MaskedMeanSquaredError(torchmetrics.Metric):
 
     def reset(self):
         self.mse_metric.reset()
-
 
 
 class SegmenterBoundaryDistance(GenericSegmenter):
@@ -431,9 +431,10 @@ class SegmenterBoundaryDistance(GenericSegmenter):
         super().__init__(
             model=model,
             loss_fn=loss_fn,
-            metrics=None, # inits the segmenter base model with None but also overiide the configure metrics method below to allow for masked MSE
+            metrics=None,
+            # inits the segmenter base model with None but also overiide the configure metrics method below to allow for masked MSE
             optimization=optimization,
-            num_output_classes=1, # only one channel as it is a regression objective
+            num_output_classes=1,  # only one channel as it is a regression objective
             num_input_channels=num_input_channels,
             input_key=input_key,
             label_key=label_key,
@@ -443,7 +444,6 @@ class SegmenterBoundaryDistance(GenericSegmenter):
             **kwargs,
         )
 
-
         loss_fn = MaskedMSELoss(ignore_index=ignore_index)
         assert isinstance(loss_fn, torch.nn.Module), f"incompatible loss_fn type: {type(loss_fn)}"
         self.loss_fn = loss_fn
@@ -451,5 +451,3 @@ class SegmenterBoundaryDistance(GenericSegmenter):
 
     def configure_metrics(self):
         return torchmetrics.MetricCollection({'masked_mse': MaskedMeanSquaredError(ignore_index=-1)})
-
-
