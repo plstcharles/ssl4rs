@@ -481,6 +481,9 @@ class SegmenterBoundaryDistance(GenericSegmenter):
         outputs = []
         for sample_idx, sample_id in zip(sample_idxs, sample_ids):
             input_tensor = batch[self.input_key][sample_idx].cpu()
+            img_rgb = batch['location_preview_image'][sample_idx].cpu()
+            input_image_rgb = ssl4rs.utils.drawing.get_displayable_image(img_rgb.cpu())
+
             assert input_tensor.ndim == 3
             assert input_tensor.shape == (self.num_input_channels, *tensor_shape)
             input_image = ssl4rs.utils.drawing.get_displayable_image(input_tensor.cpu())
@@ -489,9 +492,14 @@ class SegmenterBoundaryDistance(GenericSegmenter):
             target_mask = targets[sample_idx].cpu()
             dontcare_mask = torch.where(target_mask == ignore_idx)
             target_mask[dontcare_mask] = fill_value
+            pred_masked = preds[sample_idx].detach().clone().cpu()
+
+            pred_masked[dontcare_mask] *= 1.5
+            pred_masked_image = ssl4rs.utils.drawing.get_displayable_image(pred_masked)
+
             target_image = ssl4rs.utils.drawing.get_displayable_image(target_mask.cpu())
 
-            output_image = cv.hconcat([input_image, pred_image, target_image])
+            output_image = cv.hconcat([input_image, input_image_rgb, pred_image, target_image, pred_masked_image])
             self._log_rendered_image(output_image, key=f"{loop_type}/{sample_id}")
             outputs.append(output_image)
         return outputs
