@@ -304,7 +304,6 @@ def default_collate(
     ), "not all batches have the same sets of keys! (implement your own custom collate fn!)"
     avail_batch_keys = list(batches[0].keys())
     output = dict()
-    # first step: look for the keys that we need to batch manually, and handle those
     default_keys_to_batch_manually = [
         "batch_id",  # should correspond to hashable objects that might hurt torch's default_collate
     ]
@@ -313,28 +312,12 @@ def default_collate(
         if key in avail_batch_keys:
             output[key] = [b[key] for b in batches]
     keys_to_skip_or_already_done = {*keys_to_ignore, *keys_to_batch_manually}
-    # pdb.set_trace()
     output.update(
         torch.utils.data.default_collate(
             [{k: v for k, v in b.items() if k not in keys_to_skip_or_already_done} for b in batches]
         )
     )
 
-
-    # # todo: fix this use of placeholder
-    # output['field_boundary_mask'] = torch.zeros((16, 128, 128))
-    # output["field_boundary_mask"] = output["field_boundary_mask"].long()
-
-    # pdb.set_trace()
-    #output['image_data'] = torch.stack(output['image_data'], axis=0)
-
-    # if isinstance(output['field_mask'], list):
-    #     output['field_mask'] = torch.stack(output['field_mask'], axis=0)
-    # if output['field_mask'].dim() == 3:
-    #     output['field_mask'] = output['field_mask'].unsqueeze(0)
-
-    # pdb.set_trace()
     if batch_size_key not in output:
         output[batch_size_key] = len(batches)
-    # pdb.set_trace()
     return output
