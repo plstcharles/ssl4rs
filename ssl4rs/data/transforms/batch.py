@@ -304,6 +304,7 @@ def default_collate(
     ), "not all batches have the same sets of keys! (implement your own custom collate fn!)"
     avail_batch_keys = list(batches[0].keys())
     output = dict()
+    # first step: look for the keys that we need to batch manually, and handle those
     default_keys_to_batch_manually = [
         "batch_id",  # should correspond to hashable objects that might hurt torch's default_collate
     ]

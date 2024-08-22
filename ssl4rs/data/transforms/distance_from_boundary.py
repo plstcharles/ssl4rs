@@ -13,11 +13,11 @@ def validate_inputs(class_label_map: np.ndarray, target_class_label: int, ignore
 
 
 def generate_boundary_distance_mask(
-        class_label_map: typing.Union[np.ndarray, torch.Tensor],
-        target_class_label: int,
-        ignore_index: typing.Optional[int] = None,
-        contour_dilate_kernel_size: typing.Optional[typing.Tuple[int, int]] = None,
-        pad_size: int = 1,  # Pad size to avoid boundary issues
+    class_label_map: typing.Union[np.ndarray, torch.Tensor],
+    target_class_label: int,
+    ignore_index: typing.Optional[int] = None,
+    contour_dilate_kernel_size: typing.Optional[typing.Tuple[int, int]] = None,
+    pad_size: int = 1,  # Pad size to avoid boundary issues
 ) -> np.ndarray:
     """
     creates a mask from the boundary labels that for each pixel inside a contour/polygon,
@@ -64,7 +64,7 @@ def generate_boundary_distance_mask(
         dilate_struct_elem = cv.getStructuringElement(cv.MORPH_CROSS, contour_dilate_kernel_size)
         padded_roi_mask = cv.dilate(padded_roi_mask, dilate_struct_elem, iterations=1)
 
-    # find boundaries/countours
+    # find boundaries/contours
     # todo: do we need to dilate here? I dont think so tbh
     contours, _ = cv.findContours(
         image=padded_roi_mask,
@@ -99,9 +99,8 @@ def generate_boundary_distance_mask(
         distances_to_centroid = np.sqrt((interior_indices[:, 1] - cx) ** 2 + (interior_indices[:, 0] - cy) ** 2)
         max_distance_to_centroid = distances_to_centroid.max()
 
-        # add distances from boundary and centroid
-        # todo: see if you want to divide instead or smth simimlar
-        # maybe 1 - (dist from bound/ dist from centroid)
+        # Note: In the future we could think about a more balanced way to generate these masks
+        # e.g maybe normalize to 1 - (dist from bound/ dist from centroid)
         if max_distance_to_centroid != 0:
             combined_distances = (1 * distance_transform[interior_indices[:, 0], interior_indices[:, 1]]
                                   + 0 * distances_to_centroid)
