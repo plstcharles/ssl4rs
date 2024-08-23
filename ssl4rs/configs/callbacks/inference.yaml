@@ -1,0 +1,9 @@
+defaults:
+  - default.yaml
+  - training.yaml
+  - classification.yaml
+  - _self_
+
+prediction_writer:
+  _target_: lightning.pytorch.callbacks.BasePredictionWriter
+  write_interval: 'batch'
