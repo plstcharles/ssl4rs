@@ -1,5 +1,6 @@
 """Implements generic classifier modules based on Lightning."""
-
+import os
+import pathlib
 import typing
 
 import cv2 as cv
@@ -10,6 +11,7 @@ import torch
 import torch.nn.functional
 import torchmetrics
 import torch.nn as nn
+import lightning.pytorch.utilities.types as pl_types
 
 import ssl4rs.data
 import ssl4rs.utils
@@ -422,6 +424,8 @@ class SegmenterBoundaryDistance(GenericSegmenter):
         ignore_index: typing.Optional[int] = None,
         example_image_shape: typing.Tuple[int, int] = (256, 256),  # height, width
         save_hyperparams: bool = True,  # turn this off in derived classes
+        predictions_write_interval: int = 20,
+        predictions_output_dir: pathlib.Path = pathlib.Path('./predictions/'),
         **kwargs,
     ):
         if save_hyperparams:
@@ -448,6 +452,10 @@ class SegmenterBoundaryDistance(GenericSegmenter):
         assert isinstance(loss_fn, torch.nn.Module), f"incompatible loss_fn type: {type(loss_fn)}"
         self.loss_fn = loss_fn
         self.num_output_classes = 1
+        self.write_predictions_epoch_interval = predictions_write_interval
+        self.predictions_output_dir = predictions_output_dir
+        if not os.path.exists(self.predictions_output_dir):
+            os.makedirs(self.predictions_output_dir)
 
     def configure_metrics(self):
         return torchmetrics.MetricCollection({'masked_mse': MaskedMeanSquaredError(ignore_index=-1)})
@@ -502,4 +510,102 @@ class SegmenterBoundaryDistance(GenericSegmenter):
             output_image = cv.hconcat([input_image, input_image_rgb, pred_image, target_image, pred_masked_image])
             self._log_rendered_image(output_image, key=f"{loop_type}/{sample_id}")
             outputs.append(output_image)
+        return outputs
+
+    def _log_predictions(
+            self,
+            loop_type: str, # 'train', 'test' or 'val'
+            batch: ssl4rs.data.BatchDictType,
+            predictions: typing.Dict[typing.AnyStr, typing.Any],
+            batch_idx: int,
+            interval_epoch: int = 20,
+            output_dir: pathlib.Path = pathlib.Path('./')
+    ) -> None:
+        """Writes to file the model inputs, targets, predicitons to file
+        """
+        if self.current_epoch != 0 and self.current_epoch % interval_epoch == 0:
+            preds_arr = predictions['preds'].detach().cpu().numpy()
+            target_arr = predictions['targets'].detach().cpu().numpy()
+            np.save(output_dir / f'epoch_{self.current_epoch}_{loop_type}_{batch_idx}_image_data.npy', batch['image_data'])
+            np.save(output_dir / f'epoch_{self.current_epoch}_{loop_type}_{batch_idx}_preds.npy', preds_arr)
+            np.save(output_dir / f'epoch_{self.current_epoch}_{loop_type}_{batch_idx}_targets.npy', target_arr)
+
+    def training_step(
+        self,
+        batch: ssl4rs.data.BatchDictType,
+        batch_idx: int,
+    ) -> pl_types.STEP_OUTPUT:
+        """Runs a forward + evaluation step for the training loop.
+        """
+        outputs = self._generic_step(batch, batch_idx)
+        assert "loss" in outputs, "loss tensor is NOT optional in training step implementation (needed for backprop!)"
+        predictions = {'preds': outputs['preds'], 'targets': outputs['targets']}
+        self._log_predictions(
+            loop_type='train',
+            batch=batch,
+            predictions=predictions,
+            batch_idx=batch_idx,
+            interval_epoch=self.write_predictions_epoch_interval,
+            output_dir= self.predictions_output_dir
+        )
+
+        return outputs
+
+    def validation_step(
+            self,
+            batch: ssl4rs.data.BatchDictType,
+            batch_idx: int,
+            dataloader_idx: int = 0,
+    ) -> typing.Optional[pl_types.STEP_OUTPUT]:
+        """Runs a forward + evaluation step for the validation loop.
+
+        """
+        outputs = self._generic_step(batch, batch_idx)
+        predictions = {'preds': outputs['preds'], 'targets': outputs['targets']}
+        self._log_predictions(
+            loop_type='val',
+            batch=batch,
+            predictions=predictions,
+            batch_idx=batch_idx,
+            interval_epoch=self.write_predictions_epoch_interval,
+            output_dir= self.predictions_output_dir
+        )
+
+        return outputs
+
+    def test_step(
+        self,
+        batch: ssl4rs.data.BatchDictType,
+        batch_idx: int,
+        dataloader_idx: int = 0,
+    ) -> typing.Optional[pl_types.STEP_OUTPUT]:
+        """Runs a forward + evaluation step for the testing loop.
+
+        Note that this step may be happening across multiple devices/nodes. It is recommended to
+        evaluate on a single device to ensure each sample/batch gets evaluated exactly once. This
+        is helpful to make sure benchmarking for research papers is done the right way. Otherwise,
+        in a multi-device setting, samples could occur duplicated when DistributedSampler is used,
+        e.g. with strategy="ddp". It replicates some samples on some devices to make sure all
+        devices have the same batch size in case of uneven inputs.
+
+        Args:
+            batch: a dictionary of batch data loaded by a data loader object.
+            batch_idx: the index of the provided batch in the data loader's current loop.
+            dataloader_idx: the index of the dataloader that's being used (if more than one).
+
+        Returns:
+            The full outputs dictionary that should be reassembled across all potential devices
+            and nodes, and that might be further used in the `on_test_batch_end` function.
+        """
+        outputs = self._generic_step(batch, batch_idx)
+        predictions = {'preds': outputs['preds'], 'targets': outputs['targets']}
+        self._log_predictions(
+            loop_type='test',
+            batch=batch,
+            predictions=predictions,
+            batch_idx=batch_idx,
+            interval_epoch=self.write_predictions_epoch_interval,
+            output_dir= self.predictions_output_dir
+        )
+
         return outputs
