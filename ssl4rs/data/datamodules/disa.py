@@ -16,6 +16,7 @@ import ssl4rs.data.metadata.disa
 import ssl4rs.data.parsers.disa
 import ssl4rs.data.repackagers.disa
 import ssl4rs.data.transforms.boundary
+import ssl4rs.data.transforms.composite_bands
 import ssl4rs.utils.config
 import ssl4rs.utils.logging
 
@@ -173,7 +174,6 @@ class DataModule(ssl4rs.data.datamodules.utils.DataModule):
         assert self.data_test is not None, "parser unavailable, call `setup()` first!"
         return self._create_dataloader(self.data_test, subset_type="test")
 
-
 def custom_collate(
     batches: typing.List[ssl4rs.data.BatchDictType],
     pad_to_shape: typing.Optional[typing.Tuple[int, int]] = None,
@@ -186,6 +186,11 @@ def custom_collate(
             pad_tensor_names_and_values=DataModule.metadata.tensor_pad_values,
             pad_to_shape=pad_to_shape,
         )
+
+    for batch in batches:
+        batch['image_data'] = batch['image_data'].squeeze()
+        batch['field_mask'] = batch['field_mask'].squeeze()
+
     # second, do the actual collate while bypassing torch for the funkier arrays
     output = ssl4rs.data.default_collate(
         batches=batches,
@@ -246,6 +251,15 @@ def convert_deeplake_tensors_to_pytorch_tensors(
         batch[tname] = tval
     return batch
 
+# todo: maybe change so this is not inplace?
+def convert_4_band_to_3_band(
+    batch: ssl4rs.data.BatchDictType,
+) -> ssl4rs.data.BatchDictType:
+    """Transform converts RGB+NIR into a 3-band composite suitable for pretrained backbones"""
+    img_data = batch['image_data']
+    img_transform = ssl4rs.data.transforms.composite_bands.Convert4BandTo3Band()
+    batch['image_data'] = img_transform(img_data)
+    return batch
 
 def generate_field_boundary_mask(
     batch: ssl4rs.data.BatchDictType,
@@ -266,6 +280,28 @@ def generate_field_boundary_mask(
         # need to convert the new mask to the same format
         boundary_mask = torch.as_tensor(boundary_mask).to(device=class_map.device)
     batch[output_field_boundary_mask_name] = boundary_mask
+    return batch
+
+def generate_distance_from_boundary_mask(
+    batch: ssl4rs.data.BatchDictType,
+    output_distance_mask_name: str = "distance_from_boundary_mask",
+) -> ssl4rs.data.BatchDictType:
+    """Transform used in parser class to generate distance from field boundary (contour) masks."""
+    assert isinstance(batch, dict)
+    assert "field_mask" in batch
+    class_map = batch["field_mask"]
+    unannotated_mask = class_map == 0  # this is the real 'dontcare' which we reapply below
+    distance_mask = ssl4rs.data.transforms.distance_from_boundary.generate_boundary_distance_mask(
+    class_label_map = class_map,
+    target_class_label = 1,  # target the "positive" (field) class inside the binary mask
+    ignore_index = DataModule.metadata.dontcare_label,
+    pad_size = 1
+    )
+    distance_mask[unannotated_mask] = DataModule.metadata.dontcare_label
+    if isinstance(class_map, torch.Tensor):
+        # need to convert the new mask to the same format
+        distance_mask = torch.as_tensor(distance_mask).to(device=class_map.device)
+    batch[output_distance_mask_name] = distance_mask.unsqueeze(axis = 0)
     return batch
 
 

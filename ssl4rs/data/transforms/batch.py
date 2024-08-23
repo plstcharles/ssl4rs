@@ -290,7 +290,6 @@ def get_batch_index(
     assert isinstance(batch_index, typing.Hashable), f"invalid batch index type: {type(batch_index)}"
     return batch_index
 
-
 def default_collate(
     batches: typing.List["BatchDictType"],
     keys_to_batch_manually: typing.Sequence[typing.AnyStr] = (),
@@ -319,6 +318,7 @@ def default_collate(
             [{k: v for k, v in b.items() if k not in keys_to_skip_or_already_done} for b in batches]
         )
     )
+
     if batch_size_key not in output:
         output[batch_size_key] = len(batches)
     return output
