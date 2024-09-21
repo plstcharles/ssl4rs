@@ -524,15 +524,15 @@ class SegmenterBoundaryDistance(GenericSegmenter):
         """Writes to file the model inputs, targets, predicitons to file
         """
         if self.current_epoch != 0 and self.current_epoch % interval_epoch == 0:
-            location_id_arr = batch['location_id'].numpy()
+            location_id_arr = np.array(batch['location_id'])
             preds_arr = predictions['preds'].detach().cpu().numpy()
             target_arr = predictions['targets'].detach().cpu().numpy()
-            image_rgb_arr = batch['location_preview_image'].numpy()
+            image_rgb_arr = batch['location_preview_image'].cpu().numpy()
             np.save(output_dir + f'epoch_{self.current_epoch}_{loop_type}_{batch_idx}_image_data.npy', 
                     batch['image_data'].detach().cpu().numpy())
             np.save(output_dir + f'epoch_{self.current_epoch}_{loop_type}_{batch_idx}_preds.npy', preds_arr)
-            np.save(output_dir + f'epoch_{self.current_epoch}_{loop_type}_{batch_idx}_targets.npy', targets_arr)
-            np.save(output_dir + f'epoch_{self.current_epoch}_{loop_type}_{batch_idx}_location_id.npy', location_id)
+            np.save(output_dir + f'epoch_{self.current_epoch}_{loop_type}_{batch_idx}_targets.npy', target_arr)
+            np.save(output_dir + f'epoch_{self.current_epoch}_{loop_type}_{batch_idx}_location_id.npy', location_id_arr)
             np.save(output_dir + f'epoch_{self.current_epoch}_{loop_type}_{batch_idx}_preview_rgb.npy', image_rgb_arr)
 
 
