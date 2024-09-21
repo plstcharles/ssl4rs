@@ -14,6 +14,7 @@ import ssl4rs.data.transforms.wrappers
 import ssl4rs.data.transforms.distance_from_boundary
 import ssl4rs.data.transforms.grab_image_from_stack
 import ssl4rs.data.transforms.composite_bands
+import ssl4rs.data.transforms.compute_ndvi_delta
 
 
 from ssl4rs.data.transforms.batch import (
@@ -35,6 +36,7 @@ from ssl4rs.data.transforms.wrappers import BatchDictToArgsWrapper
 from ssl4rs.data.transforms.distance_from_boundary import generate_boundary_distance_mask
 from ssl4rs.data.transforms.grab_image_from_stack import GrabImageFromStack
 from ssl4rs.data.transforms.composite_bands import Convert4BandTo3Band
+from ssl4rs.data.transforms.compute_ndvi_delta import GetAvgNdviDeltaFromStack
 
 
 BatchDictType = typing.Dict[typing.AnyStr, typing.Any]
